@@ -94,6 +94,66 @@ export type Database = {
           },
         ]
       }
+      bank_connections: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          gc_account_id: string | null
+          iban: string | null
+          id: string
+          institution_id: string
+          institution_name: string | null
+          last_synced_at: string | null
+          reference: string
+          requisition_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          gc_account_id?: string | null
+          iban?: string | null
+          id?: string
+          institution_id: string
+          institution_name?: string | null
+          last_synced_at?: string | null
+          reference: string
+          requisition_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          gc_account_id?: string | null
+          iban?: string | null
+          id?: string
+          institution_id?: string
+          institution_name?: string | null
+          last_synced_at?: string | null
+          reference?: string
+          requisition_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_connections_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_balances"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "bank_connections_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budgets: {
         Row: {
           category_id: string | null

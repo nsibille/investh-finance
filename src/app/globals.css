@@ -1,0 +1,325 @@
+@import "tailwindcss";
+
+/* ============================================================
+   TOKENS — source unique de vérité (DESIGN_SYSTEM.md)
+   Aucun composant ne hardcode couleur/taille/ombre/rayon.
+   ============================================================ */
+:root {
+  /* Couleurs primaires — Indigo Lyra */
+  --color-brand-primary:        #5B5BD6;
+  --color-brand-primary-50:     #EFEFFD;
+  --color-brand-primary-100:    #DEDEFB;
+  --color-brand-primary-200:    #BDBDF7;
+  --color-brand-primary-300:    #9C9CF2;
+  --color-brand-primary-400:    #7B7BEE;
+  --color-brand-primary-500:    #5B5BD6;
+  --color-brand-primary-600:    #4949AB;
+  --color-brand-primary-700:    #373780;
+  --color-brand-primary-800:    #252556;
+  --color-brand-primary-900:    #13132B;
+  --color-brand-dark:           #1A1A2E;
+
+  /* Fonds & surfaces */
+  --color-bg-page:              #FAFAFA;
+  --color-bg-surface:           #FFFFFF;
+  --color-bg-subtle:            #F4F4F5;
+  --color-bg-overlay:           rgba(10, 10, 11, 0.5);
+
+  /* Bordures */
+  --color-border:               #E4E4E7;
+  --color-border-strong:        #D4D4D8;
+  --color-border-focus:         var(--color-brand-primary);
+
+  /* Textes */
+  --color-text-primary:         #0A0A0B;
+  --color-text-secondary:       #3F3F46;
+  --color-text-muted:           #71717A;
+  --color-text-disabled:        #A1A1AA;
+  --color-text-on-brand:        #FFFFFF;
+  --color-text-link:            var(--color-brand-primary-600);
+
+  /* Feedback */
+  --color-success:              #10B981;
+  --color-success-light:        #D1FAE5;
+  --color-success-dark:         #047857;
+  --color-warning:              #F59E0B;
+  --color-warning-light:        #FEF3C7;
+  --color-warning-dark:         #B45309;
+  --color-danger:               #EF4444;
+  --color-danger-light:         #FEE2E2;
+  --color-danger-dark:          #B91C1C;
+  --color-info:                 #3B82F6;
+  --color-info-light:           #DBEAFE;
+  --color-info-dark:            #1D4ED8;
+
+  /* Couleurs métier — finance */
+  --color-finance-revenus:           var(--color-success);
+  --color-finance-revenus-bg:        var(--color-success-light);
+  --color-finance-depenses:          var(--color-danger);
+  --color-finance-depenses-bg:       var(--color-danger-light);
+  --color-finance-neutre:            var(--color-info);
+  --color-finance-investissement:    #8B5CF6;
+  --color-finance-investissement-bg: #EDE9FE;
+  --color-finance-prelevement:       #71717A;
+  --color-finance-frais-fixe:        #F97316;
+  --color-finance-frais-fixe-bg:     #FFEDD5;
+
+  /* Couleurs décoratives — aurora gradient */
+  --color-aurora-1:             #FCE7F3;
+  --color-aurora-2:             #DBEAFE;
+  --color-aurora-3:             #E9D5FF;
+  --color-aurora-4:             #D1FAE5;
+
+  /* Typographie — Geist via next/font */
+  --font-primary:               var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono:                  var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --text-xs:                    0.75rem;
+  --text-sm:                    0.875rem;
+  --text-base:                  1rem;
+  --text-lg:                    1.125rem;
+  --text-xl:                    1.25rem;
+  --text-2xl:                   1.5rem;
+  --text-3xl:                   1.875rem;
+  --text-4xl:                   2.25rem;
+  --text-5xl:                   3rem;
+
+  --fw-light:                   300;
+  --fw-regular:                 400;
+  --fw-medium:                  500;
+  --fw-semibold:                600;
+  --fw-bold:                    700;
+
+  --leading-tight:              1.2;
+  --leading-normal:             1.5;
+  --leading-relaxed:            1.7;
+
+  --tracking-tight:             -0.02em;
+  --tracking-normal:            0;
+  --tracking-wide:              0.025em;
+  --tracking-wider:             0.05em;
+
+  /* Espacements — système 4px */
+  --space-1:                    0.25rem;
+  --space-2:                    0.5rem;
+  --space-3:                    0.75rem;
+  --space-4:                    1rem;
+  --space-5:                    1.25rem;
+  --space-6:                    1.5rem;
+  --space-8:                    2rem;
+  --space-10:                   2.5rem;
+  --space-12:                   3rem;
+  --space-16:                   4rem;
+  --space-20:                   5rem;
+
+  /* Rayons */
+  --radius-sm:                  4px;
+  --radius-md:                  8px;
+  --radius-lg:                  12px;
+  --radius-xl:                  16px;
+  --radius-2xl:                 20px;
+  --radius-full:                9999px;
+
+  /* Ombres */
+  --shadow-xs:                  0 1px 1px rgba(10, 10, 11, 0.04);
+  --shadow-sm:                  0 1px 2px rgba(10, 10, 11, 0.06), 0 1px 1px rgba(10, 10, 11, 0.04);
+  --shadow-md:                  0 4px 6px -1px rgba(10, 10, 11, 0.08), 0 2px 4px -1px rgba(10, 10, 11, 0.04);
+  --shadow-lg:                  0 10px 15px -3px rgba(10, 10, 11, 0.08), 0 4px 6px -2px rgba(10, 10, 11, 0.04);
+  --shadow-xl:                  0 20px 25px -5px rgba(10, 10, 11, 0.10), 0 10px 10px -5px rgba(10, 10, 11, 0.04);
+  --shadow-inner:               inset 0 2px 4px rgba(10, 10, 11, 0.06);
+  --shadow-brand:               0 4px 14px rgba(91, 91, 214, 0.25);
+  --shadow-focus:               0 0 0 3px rgba(91, 91, 214, 0.2);
+
+  /* Z-index */
+  --z-base:                     0;
+  --z-dropdown:                 1000;
+  --z-sticky:                   1020;
+  --z-fixed:                    1030;
+  --z-modal-backdrop:           1040;
+  --z-modal:                    1050;
+  --z-popover:                  1060;
+  --z-tooltip:                  1070;
+  --z-toast:                    1080;
+
+  /* Transitions */
+  --transition-fast:            120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base:            200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:            320ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring:          400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ================================================================
+   DARK MODE — préparé pour V2 (light only en V1)
+   ================================================================ */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="dark"] {
+    --color-bg-page:            #0A0A0B;
+    --color-bg-surface:         #18181B;
+    --color-bg-subtle:          #27272A;
+    --color-bg-overlay:         rgba(0, 0, 0, 0.7);
+    --color-border:             #27272A;
+    --color-border-strong:      #3F3F46;
+    --color-text-primary:       #FAFAFA;
+    --color-text-secondary:     #D4D4D8;
+    --color-text-muted:         #A1A1AA;
+    --color-text-disabled:      #52525B;
+    --color-aurora-1:           rgba(252, 231, 243, 0.08);
+    --color-aurora-2:           rgba(219, 234, 254, 0.08);
+    --color-aurora-3:           rgba(233, 213, 255, 0.08);
+    --color-aurora-4:           rgba(209, 250, 229, 0.08);
+    --shadow-xs:                0 1px 1px rgba(0, 0, 0, 0.25);
+    --shadow-sm:                0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md:                0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg:                0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-xl:                0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ================================================================
+   THEME — exposer les tokens aux utilities Tailwind v4 (inline = via var)
+   ================================================================ */
+@theme inline {
+  --color-brand-primary:     var(--color-brand-primary);
+  --color-brand-primary-50:  var(--color-brand-primary-50);
+  --color-brand-primary-100: var(--color-brand-primary-100);
+  --color-brand-primary-200: var(--color-brand-primary-200);
+  --color-brand-primary-300: var(--color-brand-primary-300);
+  --color-brand-primary-400: var(--color-brand-primary-400);
+  --color-brand-primary-500: var(--color-brand-primary-500);
+  --color-brand-primary-600: var(--color-brand-primary-600);
+  --color-brand-primary-700: var(--color-brand-primary-700);
+  --color-brand-primary-800: var(--color-brand-primary-800);
+  --color-brand-primary-900: var(--color-brand-primary-900);
+  --color-bg-page:           var(--color-bg-page);
+  --color-bg-surface:        var(--color-bg-surface);
+  --color-bg-subtle:         var(--color-bg-subtle);
+  --color-border:            var(--color-border);
+  --color-border-strong:     var(--color-border-strong);
+  --color-text-primary:      var(--color-text-primary);
+  --color-text-secondary:    var(--color-text-secondary);
+  --color-text-muted:        var(--color-text-muted);
+  --color-text-disabled:     var(--color-text-disabled);
+  --color-text-on-brand:     var(--color-text-on-brand);
+  --color-success:           var(--color-success);
+  --color-warning:           var(--color-warning);
+  --color-danger:            var(--color-danger);
+  --color-info:              var(--color-info);
+
+  --font-sans:               var(--font-primary);
+  --font-mono:               var(--font-mono);
+
+  --text-xs:                 var(--text-xs);
+  --text-sm:                 var(--text-sm);
+  --text-base:               var(--text-base);
+  --text-lg:                 var(--text-lg);
+  --text-xl:                 var(--text-xl);
+  --text-2xl:                var(--text-2xl);
+  --text-3xl:                var(--text-3xl);
+  --text-4xl:                var(--text-4xl);
+  --text-5xl:                var(--text-5xl);
+
+  --radius-sm:               var(--radius-sm);
+  --radius-md:               var(--radius-md);
+  --radius-lg:               var(--radius-lg);
+  --radius-xl:               var(--radius-xl);
+  --radius-2xl:              var(--radius-2xl);
+
+  --shadow-xs:               var(--shadow-xs);
+  --shadow-sm:               var(--shadow-sm);
+  --shadow-md:               var(--shadow-md);
+  --shadow-lg:               var(--shadow-lg);
+  --shadow-xl:               var(--shadow-xl);
+}
+
+/* ================================================================
+   BASE
+   ================================================================ */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* ================================================================
+   KEYFRAMES partagés (spinners, skeletons, modals, toasts)
+   ================================================================ */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ================================================================
+   TOASTS — slugs toast-success / toast-error / toast-warning / toast-info
+   ================================================================ */
+.toast-viewport {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  z-index: var(--z-toast);
+}
+.toast-success,
+.toast-error,
+.toast-warning,
+.toast-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 280px;
+  max-width: 480px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  animation: slideInRight var(--transition-spring);
+}
+.toast-success { border-left-color: var(--color-success); }
+.toast-error   { border-left-color: var(--color-danger); }
+.toast-warning { border-left-color: var(--color-warning); }
+.toast-info    { border-left-color: var(--color-info); }
+.toast-success > svg { color: var(--color-success); }
+.toast-error > svg   { color: var(--color-danger); }
+.toast-warning > svg { color: var(--color-warning); }
+.toast-info > svg    { color: var(--color-info); }
+.toast-message { flex: 1; }
+.toast-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.toast-dismiss:hover { color: var(--color-text-primary); background: var(--color-bg-subtle); }

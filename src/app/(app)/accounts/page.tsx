@@ -1,11 +1,19 @@
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ComingSoon } from "@/components/layout/ComingSoon";
+import { AccountsManager } from "@/components/accounts/AccountsManager";
+import { getAccountsWithBalances } from "@/lib/accounts/queries";
 
-export default function AccountsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AccountsPage() {
+  const accounts = await getAccountsWithBalances();
+
   return (
     <>
-      <PageHeader title="Comptes" />
-      <ComingSoon feature="La gestion des comptes" />
+      <PageHeader
+        title="Comptes"
+        subtitle="Gère tes comptes et suis leurs soldes consolidés."
+      />
+      <AccountsManager accounts={accounts} />
     </>
   );
 }

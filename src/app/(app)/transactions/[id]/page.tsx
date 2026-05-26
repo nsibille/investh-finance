@@ -4,6 +4,7 @@ import { TransactionDetail } from "@/components/transactions/TransactionDetail";
 import { getTransaction } from "@/lib/transactions/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getTags, getTagsForTransaction } from "@/lib/tags/queries";
+import { getAttachments } from "@/lib/attachments/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,14 @@ export default async function TransactionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [tx, subcategoryOptions, tags, allTags] = await Promise.all([
-    getTransaction(id),
-    getSubcategoryOptions(),
-    getTagsForTransaction(id),
-    getTags(),
-  ]);
+  const [tx, subcategoryOptions, tags, allTags, attachments] =
+    await Promise.all([
+      getTransaction(id),
+      getSubcategoryOptions(),
+      getTagsForTransaction(id),
+      getTags(),
+      getAttachments(id),
+    ]);
 
   if (!tx) notFound();
 
@@ -36,6 +39,7 @@ export default async function TransactionDetailPage({
           subcategoryOptions={subcategoryOptions}
           tags={tags}
           allTags={allTags}
+          attachments={attachments}
         />
       </div>
     </>

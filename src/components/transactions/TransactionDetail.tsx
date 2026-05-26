@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "./CategorySelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { TagPicker } from "@/components/tags/TagPicker";
+import { AttachmentManager } from "@/components/attachments/AttachmentManager";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import {
@@ -24,6 +25,7 @@ import {
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { Tag } from "@/lib/tags/queries";
+import type { AttachmentView } from "@/lib/attachments/types";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -41,11 +43,13 @@ export function TransactionDetail({
   subcategoryOptions,
   tags,
   allTags,
+  attachments,
 }: {
   tx: TransactionRow;
   subcategoryOptions: SubcategoryOption[];
   tags: Tag[];
   allTags: Tag[];
+  attachments: AttachmentView[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -119,6 +123,10 @@ export function TransactionDetail({
 
           <FormField label="Tags">
             <TagPicker transactionId={tx.id} tags={tags} allTags={allTags} />
+          </FormField>
+
+          <FormField label="Justificatifs">
+            <AttachmentManager transactionId={tx.id} attachments={attachments} />
           </FormField>
 
           <FormField label="Note">

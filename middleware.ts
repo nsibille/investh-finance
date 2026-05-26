@@ -6,6 +6,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Run on the Node.js runtime (stable since Next 15.5): @supabase/ssr relies
+  // on Node APIs not available in the Edge runtime.
+  runtime: "nodejs",
   matcher: [
     /*
      * Match all request paths except static assets and image optimization.

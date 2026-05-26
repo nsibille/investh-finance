@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Amount } from "@/components/ui/Amount";
 import { AccountAvatar } from "@/components/ui/Avatar";
 import { MonthNavigator } from "@/components/dashboard/MonthNavigator";
+import { MissingRecurringAlert } from "@/components/recurring/MissingRecurringAlert";
 import { PieCategories } from "@/components/ui/charts/PieCategories";
 import { BarMonthly } from "@/components/ui/charts/BarMonthly";
 import {
@@ -14,6 +15,7 @@ import {
   getMonthlyTrend,
 } from "@/lib/dashboard/queries";
 import { getAccountsWithBalances } from "@/lib/accounts/queries";
+import { getMissingRecurring } from "@/lib/recurring/queries";
 import { formatCurrency } from "@/lib/format/currency";
 
 export const dynamic = "force-dynamic";
@@ -34,18 +36,21 @@ export default async function DashboardPage({
     : format(new Date(), "yyyy-MM");
   const ref = new Date(`${month}-01T00:00:00`);
 
-  const [kpis, breakdown, trend, accounts] = await Promise.all([
-    getMonthlyKpis(ref),
-    getCategoryBreakdown(ref),
-    getMonthlyTrend(ref),
-    getAccountsWithBalances(),
-  ]);
+  const [kpis, breakdown, trend, accounts, missingRecurring] =
+    await Promise.all([
+      getMonthlyKpis(ref),
+      getCategoryBreakdown(ref),
+      getMonthlyTrend(ref),
+      getAccountsWithBalances(),
+      getMissingRecurring(),
+    ]);
 
   const { current, previous } = kpis;
   const activeAccounts = accounts.filter((a) => !a.is_archived);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <MissingRecurringAlert missing={missingRecurring} />
       <section className="dashboard-hero">
         <div className="deco-aurora-gradient" />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-4)", marginBottom: "var(--space-8)" }}>

@@ -12,6 +12,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "./CategorySelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
+import { TagPicker } from "@/components/tags/TagPicker";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@/server/actions/transactions";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { Tag } from "@/lib/tags/queries";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -37,9 +39,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function TransactionDetail({
   tx,
   subcategoryOptions,
+  tags,
+  allTags,
 }: {
   tx: TransactionRow;
   subcategoryOptions: SubcategoryOption[];
+  tags: Tag[];
+  allTags: Tag[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -109,6 +115,10 @@ export function TransactionDetail({
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           <FormField label="Catégorie">
             <CategorySelect value={subcategoryId} options={subcategoryOptions} onChange={changeCategory} />
+          </FormField>
+
+          <FormField label="Tags">
+            <TagPicker transactionId={tx.id} tags={tags} allTags={allTags} />
           </FormField>
 
           <FormField label="Note">

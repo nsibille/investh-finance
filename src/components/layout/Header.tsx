@@ -1,4 +1,5 @@
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { SearchTrigger } from "@/components/search/SearchTrigger";
 
 interface HeaderProps {
   email: string;
@@ -13,14 +14,7 @@ export function Header({ email, avatarUrl }: HeaderProps) {
   return (
     <header className="nav-header">
       <div className="nav-header__left">
-        <span
-          style={{
-            fontSize: "var(--text-sm)",
-            color: "var(--color-text-muted)",
-          }}
-        >
-          {email}
-        </span>
+        <SearchTrigger />
       </div>
       <div className="nav-header__right">
         <span className="avatar-md" title={email}>

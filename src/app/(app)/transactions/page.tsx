@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TransactionsTabs } from "@/components/transactions/TransactionsTabs";
 import { TransactionFilters } from "@/components/transactions/TransactionFilters";
 import { TransactionsTable } from "@/components/transactions/TransactionsTable";
+import { ExportMenu } from "@/components/transactions/ExportMenu";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getTransactionsPage, countPending } from "@/lib/transactions/queries";
@@ -51,6 +52,11 @@ export default async function TransactionsPage({
       <PageHeader
         title="Transactions"
         subtitle="Filtre, catégorise et valide tes opérations."
+        actions={
+          <Suspense>
+            <ExportMenu />
+          </Suspense>
+        }
       />
       <Suspense>
         <TransactionsTabs pendingCount={pendingCount} />

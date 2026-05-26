@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnerEmail } from "@/lib/auth/whitelist";
 
@@ -33,6 +34,7 @@ export default async function AppLayout({
         <Header email={user.email ?? ""} avatarUrl={avatarUrl} />
         <main className="app-content">{children}</main>
       </div>
+      <GlobalSearch />
     </div>
   );
 }

@@ -1,14 +1,13 @@
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+// Next 16: proxy.ts replaces middleware.ts. It always runs on the Node.js
+// runtime (not configurable), which @supabase/ssr requires.
+export async function proxy(request: NextRequest) {
   return updateSession(request);
 }
 
 export const config = {
-  // Run on the Node.js runtime (stable since Next 15.5): @supabase/ssr relies
-  // on Node APIs not available in the Edge runtime.
-  runtime: "nodejs",
   matcher: [
     /*
      * Match all request paths except static assets and image optimization.

@@ -1,11 +1,80 @@
+import { Suspense } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ComingSoon } from "@/components/layout/ComingSoon";
+import { TransactionsTabs } from "@/components/transactions/TransactionsTabs";
+import { TransactionFilters } from "@/components/transactions/TransactionFilters";
+import { TransactionsTable } from "@/components/transactions/TransactionsTable";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { getTransactionsPage, countPending } from "@/lib/transactions/queries";
+import { getAccountOptions } from "@/lib/rules/queries";
+import { getSubcategoryOptions } from "@/lib/categories/queries";
+import type { TransactionStatus } from "@/lib/transactions/types";
 
-export default function TransactionsPage() {
+export const dynamic = "force-dynamic";
+
+const STATUSES = ["pending", "validated", "ignored"] as const;
+
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const status = STATUSES.includes(sp.status as TransactionStatus)
+    ? (sp.status as TransactionStatus)
+    : undefined;
+
+  const [data, pendingCount, accountOptions, subcategoryOptions] =
+    await Promise.all([
+      getTransactionsPage({
+        accountId: sp.account,
+        status,
+        subcategoryId: sp.subcategory,
+        search: sp.q,
+        from: sp.from,
+        to: sp.to,
+        sort: sp.sort as
+          | "date_desc"
+          | "date_asc"
+          | "amount_desc"
+          | "amount_asc"
+          | undefined,
+        page: Number(sp.page) || 1,
+      }),
+      countPending(),
+      getAccountOptions(),
+      getSubcategoryOptions(),
+    ]);
+
   return (
     <>
-      <PageHeader title="Transactions" />
-      <ComingSoon feature="La liste des transactions" />
+      <PageHeader
+        title="Transactions"
+        subtitle="Filtre, catégorise et valide tes opérations."
+      />
+      <Suspense>
+        <TransactionsTabs pendingCount={pendingCount} />
+        <TransactionFilters
+          accountOptions={accountOptions}
+          subcategoryOptions={subcategoryOptions}
+        />
+        {data.rows.length === 0 ? (
+          <Card>
+            <EmptyState
+              title="Aucune transaction"
+              description="Ajuste les filtres ou importe un relevé pour commencer."
+            />
+          </Card>
+        ) : (
+          <TransactionsTable
+            rows={data.rows}
+            total={data.total}
+            page={data.page}
+            perPage={data.perPage}
+            subcategoryOptions={subcategoryOptions}
+          />
+        )}
+      </Suspense>
     </>
   );
 }

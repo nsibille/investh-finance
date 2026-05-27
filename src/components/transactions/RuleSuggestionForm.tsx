@@ -57,12 +57,6 @@ export function RuleSuggestionForm({
   const [matchType, setMatchType] = useState<"regex" | "contains" | "exact">("regex");
   const [pattern, setPattern] = useState(suggestPattern(rawLabel));
   const [subcategoryId, setSubcategoryId] = useState(defaultSubcategoryId ?? "");
-
-  // Reflect the category selected when the popup was opened (the freshly saved
-  // one), even if the form instance is reused across openings.
-  useEffect(() => {
-    setSubcategoryId(defaultSubcategoryId ?? "");
-  }, [defaultSubcategoryId]);
   const [autoValidate, setAutoValidate] = useState(true);
   const [scopeToAccount, setScopeToAccount] = useState(true);
   const [matchCount, setMatchCount] = useState<number | null>(null);

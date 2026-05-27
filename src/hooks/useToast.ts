@@ -1,13 +1,17 @@
 "use client";
 
-import { useUIStore } from "@/stores/ui";
+import { useUIStore, type ToastOptions } from "@/stores/ui";
 
 export function useToast() {
   const pushToast = useUIStore((s) => s.pushToast);
   return {
-    success: (message: string) => pushToast("success", message),
-    error: (message: string) => pushToast("error", message),
-    warning: (message: string) => pushToast("warning", message),
-    info: (message: string) => pushToast("info", message),
+    success: (message: string, options?: ToastOptions) =>
+      pushToast("success", message, options),
+    error: (message: string, options?: ToastOptions) =>
+      pushToast("error", message, options),
+    warning: (message: string, options?: ToastOptions) =>
+      pushToast("warning", message, options),
+    info: (message: string, options?: ToastOptions) =>
+      pushToast("info", message, options),
   };
 }

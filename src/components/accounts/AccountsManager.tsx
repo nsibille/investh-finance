@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { AccountCard } from "./AccountCard";
 import { AccountForm } from "./AccountForm";
 import { setAccountArchived } from "@/server/actions/accounts";
@@ -29,23 +30,39 @@ export function AccountsManager({
   const [modal, setModal] = useState<ModalState>(null);
   const [showArchived, setShowArchived] = useState(false);
 
+  const [localAccounts, setLocalAccounts] = useState(accounts);
+  const [prevAccounts, setPrevAccounts] = useState(accounts);
+  if (accounts !== prevAccounts) {
+    setPrevAccounts(accounts);
+    setLocalAccounts(accounts);
+  }
+
   const { active, archived } = useMemo(() => {
     return {
-      active: accounts.filter((a) => !a.is_archived),
-      archived: accounts.filter((a) => a.is_archived),
+      active: localAccounts.filter((a) => !a.is_archived),
+      archived: localAccounts.filter((a) => a.is_archived),
     };
-  }, [accounts]);
+  }, [localAccounts]);
 
-  const visible = showArchived ? accounts : active;
+  const visible = showArchived ? localAccounts : active;
 
   async function handleToggleArchive(account: AccountWithBalance) {
-    const res = await setAccountArchived(account.id, !account.is_archived);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+    const snapshot = localAccounts;
+    const res = await runOptimistic({
+      apply: () =>
+        setLocalAccounts(
+          snapshot.map((a) =>
+            a.id === account.id ? { ...a, is_archived: !account.is_archived } : a,
+          ),
+        ),
+      rollback: () => setLocalAccounts(snapshot),
+      run: () => setAccountArchived(account.id, !account.is_archived),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success(account.is_archived ? "Compte désarchivé" : "Compte archivé");
+      router.refresh();
     }
-    toast.success(account.is_archived ? "Compte désarchivé" : "Compte archivé");
-    router.refresh();
   }
 
   return (

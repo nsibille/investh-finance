@@ -309,6 +309,21 @@ body {
 .toast-warning > svg { color: var(--color-warning); }
 .toast-info > svg    { color: var(--color-info); }
 .toast-message { flex: 1; }
+.toast-action {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-brand-primary-600);
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+.toast-action:hover { background: var(--color-brand-primary-50); }
 .toast-dismiss {
   display: inline-flex;
   align-items: center;

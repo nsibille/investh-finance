@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { RuleForm } from "./RuleForm";
 import { setRuleActive, deleteRule } from "@/server/actions/rules";
 import type { Rule, AccountOption } from "@/lib/rules/queries";
@@ -40,7 +41,13 @@ export function RulesManager({
   const toast = useToast();
   const [modal, setModal] = useState<ModalState>(null);
   const [toDelete, setToDelete] = useState<Rule | null>(null);
-  const [deleting, setDeleting] = useState(false);
+
+  const [localRules, setLocalRules] = useState(rules);
+  const [prevRules, setPrevRules] = useState(rules);
+  if (rules !== prevRules) {
+    setPrevRules(rules);
+    setLocalRules(rules);
+  }
 
   const subLabels = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, o.label])),
@@ -52,20 +59,36 @@ export function RulesManager({
   );
 
   async function toggleActive(rule: Rule) {
-    const res = await setRuleActive(rule.id, !rule.is_active);
-    if (!res.ok) return toast.error(res.error);
-    router.refresh();
+    const snapshot = localRules;
+    const res = await runOptimistic({
+      apply: () =>
+        setLocalRules(
+          snapshot.map((r) =>
+            r.id === rule.id ? { ...r, is_active: !rule.is_active } : r,
+          ),
+        ),
+      rollback: () => setLocalRules(snapshot),
+      run: () => setRuleActive(rule.id, !rule.is_active),
+      onError: toast.error,
+    });
+    if (res.ok) router.refresh();
   }
 
   async function handleDelete() {
     if (!toDelete) return;
-    setDeleting(true);
-    const res = await deleteRule(toDelete.id);
-    setDeleting(false);
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Règle supprimée");
+    const target = toDelete;
+    const snapshot = localRules;
     setToDelete(null);
-    router.refresh();
+    const res = await runOptimistic({
+      apply: () => setLocalRules(snapshot.filter((r) => r.id !== target.id)),
+      rollback: () => setLocalRules(snapshot),
+      run: () => deleteRule(target.id),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success("Règle supprimée");
+      router.refresh();
+    }
   }
 
   return (
@@ -82,7 +105,7 @@ export function RulesManager({
         </Button>
       </div>
 
-      {rules.length === 0 ? (
+      {localRules.length === 0 ? (
         <Card>
           <EmptyState
             icon={Wand2}
@@ -110,7 +133,7 @@ export function RulesManager({
             </tr>
           </thead>
           <tbody>
-            {rules.map((rule) => (
+            {localRules.map((rule) => (
               <tr key={rule.id} style={{ opacity: rule.is_active ? 1 : 0.55 }}>
                 <td>
                   <Toggle
@@ -191,7 +214,7 @@ export function RulesManager({
             <Button variant="secondary" onClick={() => setToDelete(null)}>
               Annuler
             </Button>
-            <Button variant="danger" loading={deleting} onClick={handleDelete}>
+            <Button variant="danger" onClick={handleDelete}>
               Supprimer
             </Button>
           </>

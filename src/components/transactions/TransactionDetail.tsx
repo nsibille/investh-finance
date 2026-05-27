@@ -15,6 +15,7 @@ import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { TagPicker } from "@/components/tags/TagPicker";
 import { AttachmentManager } from "@/components/attachments/AttachmentManager";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { formatShortDate } from "@/lib/format/date";
 import {
   setTransactionSubcategory,
@@ -54,25 +55,48 @@ export function TransactionDetail({
   const router = useRouter();
   const toast = useToast();
   const [subcategoryId, setSubcategoryId] = useState(tx.subcategory_id);
+  const [status, setStatus] = useState(tx.status);
   const [note, setNote] = useState(tx.note ?? "");
   const [savingNote, setSavingNote] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
 
   async function changeCategory(subId: string | null) {
-    setSubcategoryId(subId);
-    const res = await setTransactionSubcategory(tx.id, subId);
-    if (!res.ok) return toast.error(res.error);
-    router.refresh();
+    const prev = subcategoryId;
+    const res = await runOptimistic({
+      apply: () => setSubcategoryId(subId),
+      rollback: () => setSubcategoryId(prev),
+      run: () => setTransactionSubcategory(tx.id, subId),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      router.refresh();
+      if (subId) {
+        toast.info("Catégorie mise à jour", {
+          duration: 8000,
+          action: { label: "Créer une règle", onClick: () => setRuleOpen(true) },
+        });
+      }
+    }
   }
 
-  async function changeStatus(status: "pending" | "validated" | "ignored") {
-    const res =
-      status === "validated"
-        ? await validateTransaction(tx.id, subcategoryId)
-        : await setTransactionStatus(tx.id, status);
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Statut mis à jour");
-    router.refresh();
+  async function changeStatus(next: "pending" | "validated" | "ignored") {
+    if (next === "validated" && !subcategoryId) {
+      return toast.error("Choisis une catégorie avant de valider.");
+    }
+    const prev = status;
+    const res = await runOptimistic({
+      apply: () => setStatus(next),
+      rollback: () => setStatus(prev),
+      run: () =>
+        next === "validated"
+          ? validateTransaction(tx.id, subcategoryId)
+          : setTransactionStatus(tx.id, next),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success("Statut mis à jour");
+      router.refresh();
+    }
   }
 
   async function saveNote() {
@@ -90,7 +114,7 @@ export function TransactionDetail({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-4)", marginBottom: "var(--space-5)" }}>
           <div>
             <div style={{ fontSize: "var(--text-lg)", fontWeight: "var(--fw-semibold)" }}>{tx.label}</div>
-            <div style={{ marginTop: "var(--space-2)" }}><StatusBadge status={tx.status} /></div>
+            <div style={{ marginTop: "var(--space-2)" }}><StatusBadge status={status} /></div>
           </div>
           <Amount value={tx.amount} currency={tx.currency} size="xl" />
         </div>
@@ -139,17 +163,17 @@ export function TransactionDetail({
           </div>
 
           <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-4)" }}>
-            {tx.status !== "validated" && (
+            {status !== "validated" && (
               <Button leftIcon={<Check size={16} />} onClick={() => changeStatus("validated")}>
                 Valider
               </Button>
             )}
-            {tx.status !== "ignored" && (
+            {status !== "ignored" && (
               <Button variant="secondary" leftIcon={<Ban size={16} />} onClick={() => changeStatus("ignored")}>
                 Ignorer
               </Button>
             )}
-            {tx.status !== "pending" && (
+            {status !== "pending" && (
               <Button variant="ghost" leftIcon={<RotateCcw size={16} />} onClick={() => changeStatus("pending")}>
                 Remettre à valider
               </Button>

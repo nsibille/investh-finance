@@ -14,6 +14,7 @@ import { suggestPattern } from "@/lib/rules/suggester";
 import {
   createRuleFromTransaction,
   previewRuleMatches,
+  type RuleApplyScope,
 } from "@/server/actions/transactions";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { RuleInput } from "@/lib/rules/schema";
@@ -58,10 +59,11 @@ export function RuleSuggestionForm({
   const [subcategoryId, setSubcategoryId] = useState(defaultSubcategoryId ?? "");
   const [autoValidate, setAutoValidate] = useState(true);
   const [scopeToAccount, setScopeToAccount] = useState(true);
-  const [applyToPending, setApplyToPending] = useState(true);
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingScope, setSubmittingScope] = useState<RuleApplyScope | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -80,14 +82,13 @@ export function RuleSuggestionForm({
     };
   }, [pattern, matchType, scopeToAccount, accountId]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(scope: RuleApplyScope) {
     setError(null);
     if (!subcategoryId) {
       setError("Choisis une sous-catégorie cible.");
       return;
     }
-    setSubmitting(true);
+    setSubmittingScope(scope);
     const input: RuleInput = {
       name,
       match_type: matchType,
@@ -103,20 +104,26 @@ export function RuleSuggestionForm({
     };
     const res = await createRuleFromTransaction(input, {
       transactionId,
-      applyToPending,
+      applyScope: scope,
     });
-    setSubmitting(false);
+    setSubmittingScope(null);
     if (!res.ok) {
       setError(res.error);
       return;
     }
-    toast.success("Règle créée");
+    toast.success(
+      res.applied > 0
+        ? `Règle créée · appliquée à ${res.applied} transaction${res.applied > 1 ? "s" : ""}`
+        : "Règle créée",
+    );
     router.refresh();
     onDone();
   }
 
+  const busy = submittingScope !== null;
+
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       {error && <Alert variant="danger">{error}</Alert>}
 
       <FormField label="Libellé d'origine">
@@ -167,13 +174,41 @@ export function RuleSuggestionForm({
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
         <ToggleField label="Valider automatiquement les transactions matchées" checked={autoValidate} onChange={setAutoValidate} />
         <ToggleField label="Limiter à ce compte" checked={scopeToAccount} onChange={setScopeToAccount} />
-        <ToggleField label="Appliquer aux transactions à valider existantes" checked={applyToPending} onChange={setApplyToPending} />
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)" }}>
-        <Button type="button" variant="secondary" onClick={onDone}>Annuler</Button>
-        <Button type="submit" loading={submitting}>Créer la règle</Button>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-4)" }}>
+        <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Button type="button" variant="ghost" onClick={onDone} disabled={busy}>
+            Annuler
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={submittingScope === "none"}
+            disabled={busy}
+            onClick={() => submit("none")}
+          >
+            Créer la règle
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={submittingScope === "uncategorized"}
+            disabled={busy}
+            onClick={() => submit("uncategorized")}
+          >
+            Créer + appliquer aux non catégorisées
+          </Button>
+          <Button
+            type="button"
+            loading={submittingScope === "all"}
+            disabled={busy}
+            onClick={() => submit("all")}
+          >
+            Créer + appliquer à toutes
+          </Button>
+        </div>
       </div>
-    </form>
+    </div>
   );
 }

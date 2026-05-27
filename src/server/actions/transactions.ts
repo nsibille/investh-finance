@@ -115,12 +115,20 @@ export async function previewRuleMatches(input: {
   return (data ?? []).filter((t) => matchRule(rule, t.raw_label)).length;
 }
 
+/** Where a freshly created rule should be applied retroactively. */
+export type RuleApplyScope = "none" | "uncategorized" | "all";
+
+export type RuleCreateResult =
+  | { ok: true; applied: number }
+  | { ok: false; error: string };
+
 export async function createRuleFromTransaction(
   input: RuleInput,
-  options: { transactionId?: string; applyToPending?: boolean } = {},
-): Promise<ActionResult> {
+  options: { transactionId?: string; applyScope?: RuleApplyScope } = {},
+): Promise<RuleCreateResult> {
   const parsed = ruleSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalide");
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalide" };
 
   const supabase = await createClient();
   const { data: rule, error } = await supabase
@@ -131,17 +139,21 @@ export async function createRuleFromTransaction(
     })
     .select("*")
     .single();
-  if (error || !rule) return fail(error?.message ?? "Création impossible");
+  if (error || !rule)
+    return { ok: false, error: error?.message ?? "Création impossible" };
 
-  if (options.applyToPending) {
+  let applied = 0;
+  const scope = options.applyScope ?? "none";
+
+  if (scope !== "none") {
     let q = supabase
       .from("transactions")
-      .select("id, raw_label, amount, account_id")
-      .eq("status", "pending");
+      .select("id, raw_label, amount, account_id");
     if (rule.account_id) q = q.eq("account_id", rule.account_id);
-    const { data: pending } = await q;
+    if (scope === "uncategorized") q = q.is("subcategory_id", null);
+    const { data: candidates } = await q;
 
-    const matched = (pending ?? []).filter((t) => {
+    const matched = (candidates ?? []).filter((t) => {
       if (rule.amount_min != null && Number(t.amount) < Number(rule.amount_min))
         return false;
       if (rule.amount_max != null && Number(t.amount) > Number(rule.amount_max))
@@ -151,6 +163,11 @@ export async function createRuleFromTransaction(
 
     if (matched.length > 0) {
       const now = new Date().toISOString();
+      // Never downgrade an already-validated transaction: only touch status
+      // when the rule auto-validates.
+      const statusPatch = rule.auto_validate
+        ? { status: "validated" as const, validated_at: now }
+        : {};
       await Promise.all(
         matched.map((t) =>
           supabase
@@ -158,8 +175,7 @@ export async function createRuleFromTransaction(
             .update({
               subcategory_id: rule.subcategory_id,
               applied_rule_id: rule.id,
-              status: rule.auto_validate ? "validated" : "pending",
-              validated_at: rule.auto_validate ? now : null,
+              ...statusPatch,
             })
             .eq("id", t.id),
         ),
@@ -168,10 +184,11 @@ export async function createRuleFromTransaction(
         .from("categorization_rules")
         .update({ hit_count: rule.hit_count + matched.length, last_hit_at: now })
         .eq("id", rule.id);
+      applied = matched.length;
     }
   }
 
   revalidate();
   revalidatePath("/rules");
-  return { ok: true };
+  return { ok: true, applied };
 }

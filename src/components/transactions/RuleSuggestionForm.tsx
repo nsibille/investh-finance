@@ -6,6 +6,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Checkbox";
+import { CategorySelect } from "./CategorySelect";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
@@ -155,12 +156,12 @@ export function RuleSuggestionForm({
       </div>
 
       <FormField label="Sous-catégorie cible">
-        <Select value={subcategoryId} onChange={(e) => setSubcategoryId(e.target.value)}>
-          <option value="">Choisir…</option>
-          {subcategoryOptions.map((o) => (
-            <option key={o.id} value={o.id}>{o.label}</option>
-          ))}
-        </Select>
+        <CategorySelect
+          value={subcategoryId || null}
+          options={subcategoryOptions}
+          placeholder="Choisir une catégorie…"
+          onChange={(id) => setSubcategoryId(id ?? "")}
+        />
       </FormField>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>

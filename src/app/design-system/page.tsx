@@ -39,7 +39,19 @@ import { FileDropzone } from "@/components/ui/FileDropzone";
 import { MonthPicker } from "@/components/ui/MonthPicker";
 import { PieCategories } from "@/components/ui/charts/PieCategories";
 import { BarMonthly } from "@/components/ui/charts/BarMonthly";
+import { CategorySelect } from "@/components/transactions/CategorySelect";
+import type { SubcategoryOption } from "@/lib/categories/types";
 import { useToast } from "@/hooks/useToast";
+
+const DEMO_CATEGORY_OPTIONS: SubcategoryOption[] = [
+  { id: "1", typeName: "Revenus", categoryName: "Salaire", subName: null, categoryColor: "#10B981", label: "Revenus / Salaire" },
+  { id: "2", typeName: "Revenus", categoryName: "Loyers", subName: null, categoryColor: "#10B981", label: "Revenus / Loyers" },
+  { id: "3", typeName: "Dépenses", categoryName: "Alimentation", subName: "Courses", categoryColor: "#EF4444", label: "Dépenses / Alimentation / Courses" },
+  { id: "4", typeName: "Dépenses", categoryName: "Alimentation", subName: "Restaurants", categoryColor: "#EF4444", label: "Dépenses / Alimentation / Restaurants" },
+  { id: "5", typeName: "Dépenses", categoryName: "Transport", subName: "Essence", categoryColor: "#F97316", label: "Dépenses / Transport / Essence" },
+  { id: "6", typeName: "Dépenses", categoryName: "Transport", subName: "Péages", categoryColor: "#F97316", label: "Dépenses / Transport / Péages" },
+  { id: "7", typeName: "Dépenses", categoryName: "Loisirs", subName: null, categoryColor: "#8B5CF6", label: "Dépenses / Loisirs" },
+];
 
 function Section({
   title,
@@ -70,6 +82,7 @@ export default function DesignSystemPage() {
   const [tab, setTab] = useState("a");
   const [modalOpen, setModalOpen] = useState(false);
   const [month, setMonth] = useState(new Date());
+  const [demoCategory, setDemoCategory] = useState<string | null>("4");
   const toast = useToast();
 
   return (
@@ -117,6 +130,33 @@ export default function DesignSystemPage() {
         <div style={{ width: 260 }}>
           <FormField label="Libellé" error="Ce champ est requis">
             <Input invalid defaultValue="" />
+          </FormField>
+        </div>
+      </Section>
+
+      <Section title="Sélecteur de catégorie — input-category-combobox">
+        <div style={{ width: 280 }}>
+          <FormField label="Catégorie (recherche + arborescence)">
+            <CategorySelect
+              value={demoCategory}
+              options={DEMO_CATEGORY_OPTIONS}
+              onChange={setDemoCategory}
+            />
+          </FormField>
+        </div>
+        <div style={{ width: 240 }}>
+          <FormField label="Variante filtre">
+            <CategorySelect
+              value={null}
+              options={DEMO_CATEGORY_OPTIONS}
+              placeholder="Toutes catégories"
+              onChange={() => {}}
+            />
+          </FormField>
+        </div>
+        <div style={{ width: 240 }}>
+          <FormField label="Désactivé">
+            <CategorySelect value="1" options={DEMO_CATEGORY_OPTIONS} onChange={() => {}} disabled />
           </FormField>
         </div>
       </Section>

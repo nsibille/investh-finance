@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { SearchInput, DateInput } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { CategorySelect } from "./CategorySelect";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 
@@ -58,13 +59,13 @@ export function TransactionFilters({
           <option value="ignored">Ignorées</option>
         </Select>
       </div>
-      <div style={{ width: 200 }}>
-        <Select value={params.get("subcategory") ?? ""} onChange={(e) => setParam("subcategory", e.target.value)}>
-          <option value="">Toutes catégories</option>
-          {subcategoryOptions.map((o) => (
-            <option key={o.id} value={o.id}>{o.label}</option>
-          ))}
-        </Select>
+      <div style={{ width: 220 }}>
+        <CategorySelect
+          value={params.get("subcategory")}
+          options={subcategoryOptions}
+          placeholder="Toutes catégories"
+          onChange={(id) => setParam("subcategory", id ?? "")}
+        />
       </div>
       <div style={{ width: 150 }}>
         <DateInput value={params.get("from") ?? ""} onChange={(e) => setParam("from", e.target.value)} aria-label="Du" />

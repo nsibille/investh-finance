@@ -72,7 +72,10 @@ export function TransactionsTable({
       if (subId) {
         toast.info("Catégorie mise à jour", {
           duration: 8000,
-          action: { label: "Créer une règle", onClick: () => setRuleFor(merged(row)) },
+          action: {
+            label: "Créer une règle",
+            onClick: () => setRuleFor({ ...row, subcategory_id: subId }),
+          },
         });
       }
     }

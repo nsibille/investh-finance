@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { AccountForm } from "./AccountForm";
 import {
   setAccountArchived,
@@ -25,11 +26,25 @@ export function AccountDetailActions({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [archived, setArchived] = useState(account.is_archived);
+  const [prevArchived, setPrevArchived] = useState(account.is_archived);
+  if (account.is_archived !== prevArchived) {
+    setPrevArchived(account.is_archived);
+    setArchived(account.is_archived);
+  }
+
   async function handleArchive() {
-    const res = await setAccountArchived(account.id, !account.is_archived);
-    if (!res.ok) return toast.error(res.error);
-    toast.success(account.is_archived ? "Compte désarchivé" : "Compte archivé");
-    router.refresh();
+    const next = !archived;
+    const res = await runOptimistic({
+      apply: () => setArchived(next),
+      rollback: () => setArchived(!next),
+      run: () => setAccountArchived(account.id, next),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success(next ? "Compte archivé" : "Compte désarchivé");
+      router.refresh();
+    }
   }
 
   async function handleDelete() {
@@ -53,15 +68,11 @@ export function AccountDetailActions({
       <Button
         variant="secondary"
         leftIcon={
-          account.is_archived ? (
-            <ArchiveRestore size={16} />
-          ) : (
-            <Archive size={16} />
-          )
+          archived ? <ArchiveRestore size={16} /> : <Archive size={16} />
         }
         onClick={handleArchive}
       >
-        {account.is_archived ? "Désarchiver" : "Archiver"}
+        {archived ? "Désarchiver" : "Archiver"}
       </Button>
       <Button
         variant="danger"

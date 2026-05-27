@@ -17,6 +17,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { Dot } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { CategoryForm } from "./CategoryForm";
 import { SubcategoryForm } from "./SubcategoryForm";
 import {
@@ -47,6 +48,13 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
   const [categoryModal, setCategoryModal] = useState<CategoryModal>(null);
   const [subModal, setSubModal] = useState<SubModal>(null);
 
+  const [localTree, setLocalTree] = useState(tree);
+  const [prevTree, setPrevTree] = useState(tree);
+  if (tree !== prevTree) {
+    setPrevTree(tree);
+    setLocalTree(tree);
+  }
+
   function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -57,17 +65,52 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
   }
 
   async function archiveCategory(cat: CategoryNode) {
-    const res = await setCategoryArchived(cat.id, !cat.is_archived);
-    if (!res.ok) return toast.error(res.error);
-    toast.success(cat.is_archived ? "Catégorie désarchivée" : "Catégorie archivée");
-    router.refresh();
+    const snapshot = localTree;
+    const next = !cat.is_archived;
+    const res = await runOptimistic({
+      apply: () =>
+        setLocalTree(
+          snapshot.map((t) => ({
+            ...t,
+            categories: t.categories.map((c) =>
+              c.id === cat.id ? { ...c, is_archived: next } : c,
+            ),
+          })),
+        ),
+      rollback: () => setLocalTree(snapshot),
+      run: () => setCategoryArchived(cat.id, next),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success(cat.is_archived ? "Catégorie désarchivée" : "Catégorie archivée");
+      router.refresh();
+    }
   }
 
   async function archiveSub(sub: Subcategory) {
-    const res = await setSubcategoryArchived(sub.id, !sub.is_archived);
-    if (!res.ok) return toast.error(res.error);
-    toast.success(sub.is_archived ? "Sous-catégorie désarchivée" : "Sous-catégorie archivée");
-    router.refresh();
+    const snapshot = localTree;
+    const next = !sub.is_archived;
+    const res = await runOptimistic({
+      apply: () =>
+        setLocalTree(
+          snapshot.map((t) => ({
+            ...t,
+            categories: t.categories.map((c) => ({
+              ...c,
+              subcategories: c.subcategories.map((s) =>
+                s.id === sub.id ? { ...s, is_archived: next } : s,
+              ),
+            })),
+          })),
+        ),
+      rollback: () => setLocalTree(snapshot),
+      run: () => setSubcategoryArchived(sub.id, next),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success(sub.is_archived ? "Sous-catégorie désarchivée" : "Sous-catégorie archivée");
+      router.refresh();
+    }
   }
 
   return (
@@ -91,7 +134,7 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-        {tree.map((type) => {
+        {localTree.map((type) => {
           const cats = type.categories.filter(
             (c) => showArchived || !c.is_archived,
           );

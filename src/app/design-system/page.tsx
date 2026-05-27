@@ -227,6 +227,17 @@ export default function DesignSystemPage() {
         <Tooltip label="Astuce utile"><Button variant="secondary">Survole-moi</Button></Tooltip>
         <Button variant="secondary" onClick={() => toast.success("Enregistré !")}>Toast succès</Button>
         <Button variant="secondary" onClick={() => toast.error("Une erreur est survenue")}>Toast erreur</Button>
+        <Button
+          variant="secondary"
+          onClick={() =>
+            toast.info("Catégorie mise à jour", {
+              duration: 8000,
+              action: { label: "Créer une règle", onClick: () => toast.success("Action déclenchée") },
+            })
+          }
+        >
+          Toast avec action
+        </Button>
       </Section>
 
       <Section title="Alerts">

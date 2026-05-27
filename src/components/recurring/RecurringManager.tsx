@@ -12,6 +12,7 @@ import { Amount } from "@/components/ui/Amount";
 import { RecurringBadge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { RecurringForm } from "./RecurringForm";
 import { formatShortDate } from "@/lib/format/date";
 import {
@@ -45,6 +46,13 @@ export function RecurringManager({
   const [candidates, setCandidates] = useState<RecurringCandidate[] | null>(null);
   const [detecting, setDetecting] = useState(false);
 
+  const [localPatterns, setLocalPatterns] = useState(patterns);
+  const [prevPatterns, setPrevPatterns] = useState(patterns);
+  if (patterns !== prevPatterns) {
+    setPrevPatterns(patterns);
+    setLocalPatterns(patterns);
+  }
+
   async function detect() {
     setDetecting(true);
     const found = await detectRecurring();
@@ -62,16 +70,33 @@ export function RecurringManager({
   }
 
   async function toggle(p: RecurringPatternView) {
-    const res = await setRecurringActive(p.id, !p.is_active);
-    if (!res.ok) return toast.error(res.error);
-    router.refresh();
+    const snapshot = localPatterns;
+    const res = await runOptimistic({
+      apply: () =>
+        setLocalPatterns(
+          snapshot.map((x) =>
+            x.id === p.id ? { ...x, is_active: !p.is_active } : x,
+          ),
+        ),
+      rollback: () => setLocalPatterns(snapshot),
+      run: () => setRecurringActive(p.id, !p.is_active),
+      onError: toast.error,
+    });
+    if (res.ok) router.refresh();
   }
 
   async function remove(id: string) {
-    const res = await deleteRecurringPattern(id);
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Supprimée");
-    router.refresh();
+    const snapshot = localPatterns;
+    const res = await runOptimistic({
+      apply: () => setLocalPatterns(snapshot.filter((x) => x.id !== id)),
+      rollback: () => setLocalPatterns(snapshot),
+      run: () => deleteRecurringPattern(id),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      toast.success("Supprimée");
+      router.refresh();
+    }
   }
 
   return (
@@ -107,7 +132,7 @@ export function RecurringManager({
         </Card>
       )}
 
-      {patterns.length === 0 ? (
+      {localPatterns.length === 0 ? (
         <Card>
           <EmptyState
             icon={Repeat}
@@ -117,7 +142,7 @@ export function RecurringManager({
         </Card>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "var(--space-4)" }}>
-          {patterns.map((p) => (
+          {localPatterns.map((p) => (
             <div className="card-recurring" key={p.id} style={{ opacity: p.is_active ? 1 : 0.6 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-3)" }}>
                 <div style={{ minWidth: 0 }}>

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { recurringSchema, type RecurringInput } from "@/lib/recurring/schema";
 import { FormField } from "@/components/ui/FormField";
 import { Input, CurrencyInput } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -42,6 +43,7 @@ export function RecurringForm({
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<RecurringInput>({
@@ -91,12 +93,18 @@ export function RecurringForm({
         </div>
         <div style={{ flex: 1 }}>
           <FormField label="Catégorie (optionnel)">
-            <Select {...register("subcategory_id")}>
-              <option value="">—</option>
-              {subcategoryOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </Select>
+            <Controller
+              control={control}
+              name="subcategory_id"
+              render={({ field }) => (
+                <CategorySelect
+                  value={(field.value as string) || null}
+                  options={subcategoryOptions}
+                  placeholder="Aucune catégorie"
+                  onChange={(id) => field.onChange(id ?? "")}
+                />
+              )}
+            />
           </FormField>
         </div>
       </div>

@@ -431,6 +431,25 @@
 ### `input-category-picker`
 **Sélecteur composé Type → Catégorie → Sous-catégorie** : 3× `input-select-md` empilés ou en ligne selon viewport.
 
+### `input-category-combobox`
+**Sélecteur de catégorie avec recherche + arborescence**
+- Usage : **partout où l'on choisit une (sous-)catégorie** — catégorisation d'une transaction (table, détail, validation), filtre « Toutes catégories », sous-catégorie cible d'une règle (`RuleForm`, `RuleSuggestionForm`), catégorie d'une récurrente. Remplace systématiquement le `<select>` natif. Le texte du trigger vide / de la ligne d'effacement est paramétrable (`placeholder` : « Non catégorisée », « Toutes catégories », « Aucune catégorie »…).
+- Composition : trigger (pastille couleur + libellé courant ou « Non catégorisée » + chevron) → panneau flottant (rendu en **portal**, `position: fixed`, z-index `--z-popover`) avec champ recherche (`Search` leading) + liste arborescente Type (header majuscule) → Catégorie (pastille couleur) → Sous-catégorie (indentée, filet vertical).
+- Recherche : insensible casse/accents, multi-tokens (chaque mot doit matcher le chemin complet).
+- États : closed, open, option hover/active (`--color-brand-primary-50`), option sélectionnée (check `--color-brand-primary`), disabled, vide (« Aucune catégorie »).
+- Clavier : ↑/↓ navigue les feuilles sélectionnables, Entrée valide, Échap ferme.
+- Dark mode : auto.
+
+```css
+.cat-combobox { position: relative; width: 100%; }
+.cat-combobox__trigger { /* aligné sur input-select-md : height 40px, border, radius-md */ }
+.cat-combobox__panel { position: fixed; z-index: var(--z-popover); max-height: 320px; box-shadow: var(--shadow-lg); }
+.cat-combobox__type { text-transform: uppercase; font-size: var(--text-xs); color: var(--color-text-muted); }
+.cat-combobox__opt[data-indent="true"] { padding-left: var(--space-6); } /* feuille sous-catégorie */
+.cat-combobox__opt[data-active="true"] { background: var(--color-brand-primary-50); }
+```
+> Implémentation complète dans `src/app/globals.css` (section `input-category-combobox`) et `src/components/transactions/CategorySelect.tsx`.
+
 ### `form-field`
 **Wrapper label + input + erreur + aide**
 ```css
@@ -925,7 +944,7 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 **Row de transaction** — défini dans `table-transactions`.
 
 ### `transaction-filters`
-**Toolbar de filtres** : `input-search-md` + multi-`input-select-md` (compte/cat/période/statut) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`.
+**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`.
 
 ### `file-dropzone`
 **Zone upload fichier (import)**
@@ -961,7 +980,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 **Form modal suggestion règle depuis libellé** :
 - Affiche libellé brut (readonly, `--color-bg-subtle`)
 - `input-text-md` (regex pré-remplie éditable)
-- `input-select-md` (sous-catégorie)
+- `input-category-combobox` (sous-catégorie cible)
 - `input-toggle` (auto-validate)
 - `form-help-text` aperçu "Cette règle aurait matché N transactions existantes"
 
@@ -1072,6 +1091,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `form-field` | Form | Wrapper label+input+erreur | auto |
 | `form-help-text` | Form | Texte d'aide sous un champ | auto |
 | `global-search-modal` | Métier | Recherche Cmd+K | auto |
+| `input-category-combobox` | Form | Sélecteur catégorie avec recherche + arborescence | auto |
 | `input-category-picker` | Form | Picker composé Type→Cat→Sous-cat | auto |
 | `input-checkbox` | Form | Case à cocher | auto |
 | `input-currency-md` | Form | Variante montant | auto |

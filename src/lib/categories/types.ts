@@ -19,4 +19,10 @@ export interface SubcategoryOption {
   /** "Type / Catégorie / Sous-catégorie" */
   label: string;
   categoryColor: string | null;
+  /** Niveau 1 — ex. "Dépenses" */
+  typeName: string;
+  /** Niveau 2 — ex. "Alimentation" */
+  categoryName: string;
+  /** Niveau 3 — `null` quand la sous-catégorie est le placeholder "—" */
+  subName: string | null;
 }

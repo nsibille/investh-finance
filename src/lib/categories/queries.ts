@@ -59,11 +59,15 @@ export async function getSubcategoryOptions(): Promise<SubcategoryOption[]> {
       if (cat.is_archived) continue;
       for (const sub of cat.subcategories) {
         if (sub.is_archived) continue;
-        const subLabel = sub.name === "—" ? "" : ` / ${sub.name}`;
+        const subName = sub.name === "—" ? null : sub.name;
+        const subLabel = subName ? ` / ${subName}` : "";
         options.push({
           id: sub.id,
           label: `${type.name} / ${cat.name}${subLabel}`,
           categoryColor: cat.color,
+          typeName: type.name,
+          categoryName: cat.name,
+          subName,
         });
       }
     }

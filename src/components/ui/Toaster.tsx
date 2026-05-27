@@ -24,14 +24,29 @@ function ToastItem({ toast }: { toast: Toast }) {
   const Icon = ICONS[toast.variant];
 
   useEffect(() => {
-    const timer = setTimeout(() => dismissToast(toast.id), AUTO_DISMISS_MS);
+    const timer = setTimeout(
+      () => dismissToast(toast.id),
+      toast.duration ?? AUTO_DISMISS_MS,
+    );
     return () => clearTimeout(timer);
-  }, [toast.id, dismissToast]);
+  }, [toast.id, toast.duration, dismissToast]);
 
   return (
     <div className={`toast-${toast.variant}`} role="status">
       <Icon size={18} aria-hidden />
       <span className="toast-message">{toast.message}</span>
+      {toast.action && (
+        <button
+          type="button"
+          className="toast-action"
+          onClick={() => {
+            toast.action?.onClick();
+            dismissToast(toast.id);
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
       <button
         type="button"
         className="toast-dismiss"

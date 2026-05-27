@@ -12,6 +12,7 @@ import { Dot } from "@/components/ui/Badge";
 import { CategorySelect } from "./CategorySelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { useToast } from "@/hooks/useToast";
+import { runOptimistic } from "@/lib/optimistic";
 import { formatShortDate } from "@/lib/format/date";
 import {
   validateTransaction,
@@ -33,26 +34,50 @@ export function PendingValidator({
     Object.fromEntries(rows.map((r) => [r.id, r.subcategory_id])),
   );
   const [ruleFor, setRuleFor] = useState<TransactionRow | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+  function hide(id: string) {
+    setHidden((h) => new Set(h).add(id));
+  }
+  function unhide(id: string) {
+    setHidden((h) => {
+      const n = new Set(h);
+      n.delete(id);
+      return n;
+    });
+  }
 
   async function validate(row: TransactionRow) {
-    setBusy(row.id);
-    const res = await validateTransaction(row.id, selected[row.id] ?? null);
-    setBusy(null);
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Validée");
-    router.refresh();
+    const subId = selected[row.id] ?? null;
+    if (!subId) return toast.error("Choisis une catégorie avant de valider.");
+    const res = await runOptimistic({
+      apply: () => hide(row.id),
+      rollback: () => unhide(row.id),
+      run: () => validateTransaction(row.id, subId),
+      onError: toast.error,
+    });
+    if (res.ok) {
+      router.refresh();
+      toast.success("Validée", {
+        duration: 8000,
+        action: { label: "Créer une règle", onClick: () => setRuleFor(row) },
+      });
+    }
   }
 
   async function ignore(row: TransactionRow) {
-    setBusy(row.id);
-    const res = await setTransactionStatus(row.id, "ignored");
-    setBusy(null);
-    if (!res.ok) return toast.error(res.error);
-    router.refresh();
+    const res = await runOptimistic({
+      apply: () => hide(row.id),
+      rollback: () => unhide(row.id),
+      run: () => setTransactionStatus(row.id, "ignored"),
+      onError: toast.error,
+    });
+    if (res.ok) router.refresh();
   }
 
-  if (rows.length === 0) {
+  const visibleRows = rows.filter((r) => !hidden.has(r.id));
+
+  if (visibleRows.length === 0) {
     return (
       <Card>
         <EmptyState
@@ -67,7 +92,7 @@ export function PendingValidator({
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-        {rows.map((row) => (
+        {visibleRows.map((row) => (
           <div className="card-pending-validator" key={row.id}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-4)", flexWrap: "wrap" }}>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -93,7 +118,7 @@ export function PendingValidator({
                   onChange={(subId) => setSelected((s) => ({ ...s, [row.id]: subId }))}
                 />
               </div>
-              <Button size="sm" leftIcon={<Check size={14} />} loading={busy === row.id} onClick={() => validate(row)}>
+              <Button size="sm" leftIcon={<Check size={14} />} onClick={() => validate(row)}>
                 Valider
               </Button>
               <Button variant="ghost" size="sm" leftIcon={<Wand2 size={14} />} onClick={() => setRuleFor(row)}>

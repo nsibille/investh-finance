@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { matchRule, isValidRegex } from "@/lib/rules/matcher";
 import { applyRules, type EngineRule } from "@/lib/rules/engine";
-import { suggestPattern } from "@/lib/rules/suggester";
+import { suggestPattern, fullPattern } from "@/lib/rules/suggester";
 
 describe("matchRule", () => {
   it("matches regex case-insensitively by default", () => {
@@ -150,5 +150,21 @@ describe("suggestPattern", () => {
 
   it("returns empty string for blank input", () => {
     expect(suggestPattern("   ")).toBe("");
+  });
+});
+
+describe("fullPattern", () => {
+  it("anchors and escapes the whole normalised label", () => {
+    expect(fullPattern("PAIEMENT PAR CARTE MONOPRIX 130126")).toBe(
+      "^PAIEMENT PAR CARTE MONOPRIX 130126",
+    );
+  });
+
+  it("collapses runs of whitespace and escapes special characters", () => {
+    expect(fullPattern("  PAYPAL  *SPOTIFY  ")).toBe("^PAYPAL \\*SPOTIFY");
+  });
+
+  it("returns empty string for blank input", () => {
+    expect(fullPattern("   ")).toBe("");
   });
 });

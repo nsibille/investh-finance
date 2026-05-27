@@ -47,3 +47,12 @@ export function suggestPattern(rawLabel: string): string {
   const base = [prefix, merchant].filter(Boolean).join(" ");
   return base ? `^${escapeRegex(base)}` : "";
 }
+
+/**
+ * Builds an anchored regex matching the whole label (whitespace normalised),
+ * used as the default suggestion when creating a rule from a transaction.
+ */
+export function fullPattern(rawLabel: string): string {
+  const cleaned = rawLabel.replace(/\s+/g, " ").trim();
+  return cleaned ? `^${escapeRegex(cleaned)}` : "";
+}

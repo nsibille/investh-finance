@@ -47,8 +47,8 @@ export function PendingValidator({
     });
   }
 
-  async function validate(row: TransactionRow) {
-    const subId = selected[row.id] ?? null;
+  async function validate(row: TransactionRow, subIdArg?: string | null) {
+    const subId = subIdArg ?? selected[row.id] ?? null;
     if (!subId) return toast.error("Choisis une catégorie avant de valider.");
     const res = await runOptimistic({
       apply: () => hide(row.id),
@@ -115,7 +115,11 @@ export function PendingValidator({
                 <CategorySelect
                   value={selected[row.id] ?? null}
                   options={subcategoryOptions}
-                  onChange={(subId) => setSelected((s) => ({ ...s, [row.id]: subId }))}
+                  allowCreate
+                  onChange={(subId) => {
+                    setSelected((s) => ({ ...s, [row.id]: subId }));
+                    if (subId) validate(row, subId);
+                  }}
                 />
               </div>
               <Button size="sm" leftIcon={<Check size={14} />} onClick={() => validate(row)}>

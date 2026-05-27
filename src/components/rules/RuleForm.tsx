@@ -144,6 +144,7 @@ export function RuleForm({
               options={subcategoryOptions}
               placeholder="Choisir une catégorie…"
               invalid={!!errors.subcategory_id}
+              allowCreate
               onChange={(id) => field.onChange(id ?? "")}
             />
           )}

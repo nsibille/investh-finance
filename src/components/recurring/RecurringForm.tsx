@@ -101,6 +101,7 @@ export function RecurringForm({
                   value={(field.value as string) || null}
                   options={subcategoryOptions}
                   placeholder="Aucune catégorie"
+                  allowCreate
                   onChange={(id) => field.onChange(id ?? "")}
                 />
               )}

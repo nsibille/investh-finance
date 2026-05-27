@@ -142,7 +142,7 @@ export function TransactionDetail({
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           <FormField label="Catégorie">
-            <CategorySelect value={subcategoryId} options={subcategoryOptions} onChange={changeCategory} />
+            <CategorySelect value={subcategoryId} options={subcategoryOptions} allowCreate onChange={changeCategory} />
           </FormField>
 
           <FormField label="Tags">

@@ -1,14 +1,16 @@
 /**
  * Feature flag : authentification Google.
  *
- * Activée par défaut (sécurité par défaut). Pour ouvrir le site en libre accès
- * — typiquement en environnement de test — poser la variable à "false".
+ * ⚠️ DÉSACTIVÉE PAR DÉFAUT (mode libre accès / test).
  *
- *   AUTH_ENABLED=false            (recommandé : lue côté serveur à l'exécution)
- *   NEXT_PUBLIC_AUTH_ENABLED=false (tolérée aussi, mais gelée au build)
+ * Le site est ouvert sans connexion tant que la variable n'est pas explicitement
+ * posée à "true". Aucune config requise pour le libre accès.
  *
- * Ce flag n'est consommé que côté serveur (middleware + server components), donc
- * une variable serveur classique suffit : pas besoin du préfixe NEXT_PUBLIC_.
+ *   (rien)            -> libre accès (auth désactivée)
+ *   AUTH_ENABLED=true -> réactive la connexion Google + whitelist
+ *
+ * Ce flag n'est consommé que côté serveur (middleware + server components).
+ * NEXT_PUBLIC_AUTH_ENABLED reste accepté en repli pour la même valeur.
  *
  * Quand l'auth est désactivée :
  *  - le middleware ne redirige plus vers /login ;
@@ -20,4 +22,4 @@
  */
 const flag = process.env.AUTH_ENABLED ?? process.env.NEXT_PUBLIC_AUTH_ENABLED;
 
-export const AUTH_ENABLED = flag !== "false";
+export const AUTH_ENABLED = flag === "true";

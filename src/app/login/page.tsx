@@ -5,12 +5,18 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { signInWithGoogle } from "@/lib/auth/actions";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnerEmail } from "@/lib/auth/whitelist";
+import { AUTH_ENABLED } from "@/lib/auth/config";
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Feature flag : en libre accès, aucune page de connexion à afficher.
+  if (!AUTH_ENABLED) {
+    redirect("/dashboard");
+  }
+
   const { error } = await searchParams;
 
   const supabase = await createClient();

@@ -71,6 +71,40 @@ export async function setCategoryArchived(
   return { ok: true };
 }
 
+/** Réordonne des catégories : `sort_order` = position dans la liste fournie. */
+export async function reorderCategories(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  if (orderedIds.length === 0) return { ok: true };
+  const supabase = await createClient();
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("categories").update({ sort_order: index }).eq("id", id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return fail(failed.error.message);
+  revalidatePath("/categories");
+  return { ok: true };
+}
+
+/** Réordonne des sous-catégories au sein d'une catégorie. */
+export async function reorderSubcategories(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  if (orderedIds.length === 0) return { ok: true };
+  const supabase = await createClient();
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("subcategories").update({ sort_order: index }).eq("id", id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return fail(failed.error.message);
+  revalidatePath("/categories");
+  return { ok: true };
+}
+
 export async function createSubcategory(
   input: SubcategoryInput,
 ): Promise<CreateResult> {

@@ -971,9 +971,20 @@ body {
 .table-top-transactions tbody tr:hover { background: var(--color-bg-subtle); }
 .table-transactions tbody tr[data-selected="true"] { background: var(--color-brand-primary-50); }
 .table-import-preview tr[data-excluded="true"] td { opacity: 0.5; }
-/* Aperçu d'import : largeurs fixes + troncature pour ne jamais scroller horizontalement. */
+/* Aperçu d'import : largeurs fixes, jamais de scroll horizontal. */
 .table-import-preview { table-layout: fixed; }
-.table-import-preview td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-import-preview td { vertical-align: middle; }
+/* Colonnes courtes (date, montant, statut, inclure) : jamais tronquées,
+   dimensionnées pour tenir leur contenu. */
+.table-import-preview td { white-space: nowrap; }
+/* Compte : ellipse si trop long (non critique). */
+.table-import-preview td[data-col="account"] {
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* Libellé : retour à la ligne plutôt que troncature — jamais coupé. */
+.table-import-preview td[data-col="label"] {
+  white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+}
 /* Édition inline de la catégorie dans l'aperçu d'import. */
 .import-cat-edit {
   background: none; border: 1px dashed var(--color-border); border-radius: var(--radius-sm);

@@ -213,13 +213,13 @@ export function StatementImport({
             <table className="table-import-preview">
               <thead>
                 <tr>
-                  <th style={{ width: 92 }}>Date</th>
-                  {preview.multiAccount && <th style={{ width: 110 }}>Compte</th>}
+                  <th style={{ width: 108 }}>Date</th>
+                  {preview.multiAccount && <th style={{ width: 120 }}>Compte</th>}
                   <th>Libellé</th>
-                  <th style={{ width: 200 }}>Catégorie</th>
-                  <th style={{ width: 100, textAlign: "right" }}>Montant</th>
-                  <th style={{ width: 90 }}>Statut</th>
-                  <th style={{ width: 64 }}>Inclure</th>
+                  <th style={{ width: 190 }}>Catégorie</th>
+                  <th style={{ width: 120, textAlign: "right" }}>Montant</th>
+                  <th style={{ width: 96 }}>Statut</th>
+                  <th style={{ width: 72 }}>Inclure</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,13 +229,13 @@ export function StatementImport({
                       data-excluded={!r.include || undefined}
                       data-duplicate={r.duplicateReason === "existing" ? "existing" : undefined}
                     >
-                      <td style={{ whiteSpace: "nowrap" }}>{formatShortDate(r.operation_date)}</td>
+                      <td>{formatShortDate(r.operation_date)}</td>
                       {preview.multiAccount && (
-                        <td style={{ color: "var(--color-text-muted)" }} title={r.connectionLabel}>
+                        <td data-col="account" style={{ color: "var(--color-text-muted)" }} title={r.connectionLabel}>
                           {r.connectionLabel}
                         </td>
                       )}
-                      <td title={r.label}>{r.label}</td>
+                      <td data-col="label">{r.label}</td>
                       <td>
                         {editing === i ? (
                           <Select

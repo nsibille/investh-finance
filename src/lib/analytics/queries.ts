@@ -2,6 +2,7 @@ import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryDisplayMap } from "@/lib/transactions/queries";
+import { getTransferSubcategoryIds } from "@/lib/categories/queries";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -40,14 +41,16 @@ export interface Analytics {
 
 export async function getAnalytics(ref: Date): Promise<Analytics> {
   const supabase = await createClient();
-  const [{ data: txs }, { data: accounts }, categories] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("id, label, amount, operation_date, subcategory_id")
-      .eq("status", "validated"),
-    supabase.from("accounts").select("initial_balance, is_archived"),
-    getCategoryDisplayMap(),
-  ]);
+  const [{ data: txs }, { data: accounts }, categories, transferIds] =
+    await Promise.all([
+      supabase
+        .from("transactions")
+        .select("id, label, amount, operation_date, subcategory_id")
+        .eq("status", "validated"),
+      supabase.from("accounts").select("initial_balance, is_archived"),
+      getCategoryDisplayMap(),
+      getTransferSubcategoryIds(),
+    ]);
 
   const all = (txs ?? []).map((t) => ({
     id: t.id,
@@ -55,6 +58,9 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
     amount: Number(t.amount),
     date: t.operation_date,
     cat: t.subcategory_id ? categories.get(t.subcategory_id) : undefined,
+    // Les virements internes sont exclus des revenus/dépenses mais conservés
+    // pour le patrimoine (ils s'annulent entre comptes).
+    isTransfer: t.subcategory_id ? transferIds.has(t.subcategory_id) : false,
   }));
 
   const monthStart = iso(startOfMonth(ref));
@@ -63,7 +69,7 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
 
   // Top 10 expenses over the last 12 months.
   const topTransactions: TopTransaction[] = all
-    .filter((t) => t.amount < 0 && t.date >= window12Start && t.date <= monthEnd)
+    .filter((t) => !t.isTransfer && t.amount < 0 && t.date >= window12Start && t.date <= monthEnd)
     .sort((a, b) => a.amount - b.amount)
     .slice(0, 10)
     .map((t) => ({
@@ -77,7 +83,7 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
   // Top categories (expenses) over the last 12 months.
   const catTotals = new Map<string, TopCategory>();
   for (const t of all) {
-    if (t.amount >= 0 || !t.cat) continue;
+    if (t.isTransfer || t.amount >= 0 || !t.cat) continue;
     if (t.date < window12Start || t.date > monthEnd) continue;
     const key = t.cat.categoryName;
     const entry = catTotals.get(key) ?? {

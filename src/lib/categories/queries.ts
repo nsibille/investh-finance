@@ -56,6 +56,27 @@ export const getCategoryTree = cache(async function getCategoryTree(): Promise<
   }));
 });
 
+/** Slug du type réservé aux virements internes (exclu des KPIs revenus/dépenses). */
+export const TRANSFER_TYPE_SLUG = "virements";
+
+/**
+ * Ids des sous-catégories de virement interne, dérivés de l'arbre (en cache).
+ * Servent à exclure les virements des agrégats revenus/dépenses (ils ne sont
+ * ni un revenu ni une dépense : l'argent circule entre comptes).
+ */
+export const getTransferSubcategoryIds = cache(
+  async function getTransferSubcategoryIds(): Promise<Set<string>> {
+    const tree = await getCategoryTree();
+    const ids = new Set<string>();
+    for (const type of tree) {
+      if (type.slug !== TRANSFER_TYPE_SLUG) continue;
+      for (const cat of type.categories)
+        for (const sub of cat.subcategories) ids.add(sub.id);
+    }
+    return ids;
+  },
+);
+
 /** Flat options "Type / Catégorie / Sous-catégorie" for pickers. */
 export const getSubcategoryOptions = cache(async function getSubcategoryOptions(): Promise<
   SubcategoryOption[]

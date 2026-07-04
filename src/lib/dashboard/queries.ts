@@ -6,6 +6,7 @@ import {
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
+import { getTransferSubcategoryIds } from "@/lib/categories/queries";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -39,17 +40,21 @@ export async function getMonthlyKpis(ref: Date): Promise<MonthlyKpis> {
   const monthEnd = endOfMonth(ref);
   const prevStart = startOfMonth(subMonths(ref, 1));
 
-  const { data } = await supabase
-    .from("transactions")
-    .select("operation_date, amount")
-    .eq("status", "validated")
-    .gte("operation_date", iso(prevStart))
-    .lte("operation_date", iso(monthEnd));
+  const [{ data }, transferIds] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("operation_date, amount, subcategory_id")
+      .eq("status", "validated")
+      .gte("operation_date", iso(prevStart))
+      .lte("operation_date", iso(monthEnd)),
+    getTransferSubcategoryIds(),
+  ]);
 
   const cur: number[] = [];
   const prev: number[] = [];
   const startStr = iso(monthStart);
   for (const t of data ?? []) {
+    if (t.subcategory_id && transferIds.has(t.subcategory_id)) continue;
     (t.operation_date >= startStr ? cur : prev).push(Number(t.amount));
   }
   return { current: computeKpis(cur), previous: computeKpis(prev) };
@@ -67,18 +72,20 @@ export async function getCategoryBreakdown(
   const supabase = await createClient();
   const monthStart = iso(startOfMonth(ref));
 
-  const [{ data: rows }, { data: cats }] = await Promise.all([
+  const [{ data: rows }, { data: cats }, transferIds] = await Promise.all([
     supabase
       .from("monthly_summary")
-      .select("category_id, category_name, total_amount")
+      .select("category_id, category_name, total_amount, subcategory_id")
       .eq("month", monthStart),
     supabase.from("categories").select("id, color"),
+    getTransferSubcategoryIds(),
   ]);
 
   const colorMap = new Map((cats ?? []).map((c) => [c.id, c.color]));
   const byCategory = new Map<string, CategorySlice>();
 
   for (const r of rows ?? []) {
+    if (r.subcategory_id && transferIds.has(r.subcategory_id)) continue;
     const amount = Number(r.total_amount);
     if (amount >= 0) continue; // expenses only
     const key = r.category_id ?? r.category_name ?? "—";
@@ -110,12 +117,15 @@ export async function getMonthlyTrend(
   const monthEnd = endOfMonth(ref);
   const firstStart = startOfMonth(subMonths(ref, months - 1));
 
-  const { data } = await supabase
-    .from("transactions")
-    .select("operation_date, amount")
-    .eq("status", "validated")
-    .gte("operation_date", iso(firstStart))
-    .lte("operation_date", iso(monthEnd));
+  const [{ data }, transferIds] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("operation_date, amount, subcategory_id")
+      .eq("status", "validated")
+      .gte("operation_date", iso(firstStart))
+      .lte("operation_date", iso(monthEnd)),
+    getTransferSubcategoryIds(),
+  ]);
 
   const buckets = new Map<string, { revenus: number; depenses: number }>();
   for (let i = 0; i < months; i++) {
@@ -124,6 +134,7 @@ export async function getMonthlyTrend(
   }
 
   for (const t of data ?? []) {
+    if (t.subcategory_id && transferIds.has(t.subcategory_id)) continue;
     const key = t.operation_date.slice(0, 7);
     const bucket = buckets.get(key);
     if (!bucket) continue;

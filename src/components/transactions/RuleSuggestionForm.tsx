@@ -97,6 +97,7 @@ export function RuleSuggestionForm({
       amount_min: "",
       amount_max: "",
       account_id: scopeToAccount ? accountId : "",
+      merchant_id: "",
       subcategory_id: subcategoryId,
       auto_validate: autoValidate,
       priority: 100,

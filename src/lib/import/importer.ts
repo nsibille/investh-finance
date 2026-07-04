@@ -77,6 +77,9 @@ export async function importParsedTransactions(
             : "pending"
           : outcome.status;
         const appliedRuleId = overridden ? null : outcome.applied_rule_id;
+        // Enseigne : rattachement automatique quand la règle matchée appartient
+        // à une enseigne (sauf catégorie forcée dans l'aperçu).
+        const merchantId = overridden ? null : outcome.merchant_id;
         return {
           account_id: accountId,
           import_id: importId,
@@ -89,6 +92,7 @@ export async function importParsedTransactions(
           status,
           subcategory_id: subcategoryId,
           applied_rule_id: appliedRuleId,
+          merchant_id: merchantId,
           purchase_id: p.purchase_id ?? null,
           validated_at: status === "validated" ? nowIso : null,
           dedup_hash: computeDedupHash(accountId, p, occurrences[i]),

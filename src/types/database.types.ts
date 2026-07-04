@@ -284,6 +284,7 @@ export type Database = {
           is_active: boolean
           last_hit_at: string | null
           match_type: Database["public"]["Enums"]["rule_match_type"]
+          merchant_id: string | null
           name: string
           pattern: string
           priority: number
@@ -303,6 +304,7 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: Database["public"]["Enums"]["rule_match_type"]
+          merchant_id?: string | null
           name: string
           pattern: string
           priority?: number
@@ -322,6 +324,7 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: Database["public"]["Enums"]["rule_match_type"]
+          merchant_id?: string | null
           name?: string
           pattern?: string
           priority?: number
@@ -348,6 +351,13 @@ export type Database = {
             columns: ["created_from_transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categorization_rules_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
             referencedColumns: ["id"]
           },
           {
@@ -462,37 +472,38 @@ export type Database = {
           },
         ]
       }
-      purchases: {
+      merchants: {
         Row: {
           created_at: string
-          description: string | null
           id: string
-          is_archived: boolean
           name: string
           subcategory_id: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
-          description?: string | null
           id?: string
-          is_archived?: boolean
           name: string
           subcategory_id?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
-          description?: string | null
           id?: string
-          is_archived?: boolean
           name?: string
           subcategory_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "purchases_subcategory_id_fkey"
+            foreignKeyName: "merchants_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_summary"
+            referencedColumns: ["subcategory_id"]
+          },
+          {
+            foreignKeyName: "merchants_subcategory_id_fkey"
             columns: ["subcategory_id"]
             isOneToOne: false
             referencedRelation: "subcategories"
@@ -537,6 +548,68 @@ export type Database = {
             columns: ["purchase_id"]
             isOneToOne: false
             referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_installments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchases: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          merchant_id: string | null
+          name: string
+          subcategory_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          merchant_id?: string | null
+          name: string
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          merchant_id?: string | null
+          name?: string
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_summary"
+            referencedColumns: ["subcategory_id"]
+          },
+          {
+            foreignKeyName: "purchases_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
             referencedColumns: ["id"]
           },
         ]
@@ -735,11 +808,12 @@ export type Database = {
           import_id: string | null
           is_recurring: boolean
           label: string
+          merchant_id: string | null
           note: string | null
           operation_date: string
+          purchase_id: string | null
           raw_label: string
           recurring_pattern_id: string | null
-          purchase_id: string | null
           search_vector: unknown
           status: Database["public"]["Enums"]["transaction_status"]
           subcategory_id: string | null
@@ -758,6 +832,7 @@ export type Database = {
           import_id?: string | null
           is_recurring?: boolean
           label: string
+          merchant_id?: string | null
           note?: string | null
           operation_date: string
           purchase_id?: string | null
@@ -781,11 +856,12 @@ export type Database = {
           import_id?: string | null
           is_recurring?: boolean
           label?: string
+          merchant_id?: string | null
           note?: string | null
           operation_date?: string
+          purchase_id?: string | null
           raw_label?: string
           recurring_pattern_id?: string | null
-          purchase_id?: string | null
           search_vector?: unknown
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory_id?: string | null
@@ -827,6 +903,20 @@ export type Database = {
             columns: ["import_id"]
             isOneToOne: false
             referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
             referencedColumns: ["id"]
           },
           {

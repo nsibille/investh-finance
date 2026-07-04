@@ -31,6 +31,8 @@ export interface PurchaseInput {
   name: string;
   description?: string | null;
   subcategoryId?: string | null;
+  /** Enseigne rattachée (sa catégorie sert de défaut, surchargeable). */
+  merchantId?: string | null;
   /** Plan de mensualités (optionnel : achat direct si absent ou count = 0). */
   installmentPlan?: InstallmentPlan | null;
 }
@@ -45,6 +47,7 @@ export async function createPurchase(input: PurchaseInput): Promise<CreateResult
       name,
       description: input.description?.trim() || null,
       subcategory_id: input.subcategoryId ?? null,
+      merchant_id: input.merchantId ?? null,
     })
     .select("id")
     .single();
@@ -98,6 +101,7 @@ export async function updatePurchase(
       name,
       description: input.description?.trim() || null,
       subcategory_id: subcategoryId,
+      merchant_id: input.merchantId ?? null,
     })
     .eq("id", id);
   if (error) return fail(error.message);

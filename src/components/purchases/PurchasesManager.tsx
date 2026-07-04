@@ -24,6 +24,7 @@ import {
 } from "@/server/actions/purchases";
 import type { PurchaseWithDetails } from "@/lib/purchases/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 type ModalState =
   | { mode: "create" }
@@ -109,9 +110,11 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
 export function PurchasesManager({
   purchases,
   subcategoryOptions,
+  merchantOptions,
 }: {
   purchases: PurchaseWithDetails[];
   subcategoryOptions: SubcategoryOption[];
+  merchantOptions: MerchantOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -238,10 +241,12 @@ export function PurchasesManager({
                     name: modal.purchase.name,
                     description: modal.purchase.description,
                     subcategoryId: modal.purchase.subcategory_id,
+                    merchantId: modal.purchase.merchant_id,
                   }
                 : undefined
             }
             subcategoryOptions={subcategoryOptions}
+            merchantOptions={merchantOptions}
             onDone={() => setModal(null)}
           />
         )}

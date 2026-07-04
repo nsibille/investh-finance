@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Unlink } from "lucide-react";
+import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Store, Unlink } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Amount } from "@/components/ui/Amount";
 import { StatusBadge, Dot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
@@ -24,8 +25,13 @@ import {
   updateTransactionNote,
 } from "@/server/actions/transactions";
 import { detachTransaction } from "@/server/actions/purchases";
+import {
+  attachTransactionToMerchant,
+  detachTransactionFromMerchant,
+} from "@/server/actions/merchants";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 import type { Tag } from "@/lib/tags/queries";
 import type { AttachmentView } from "@/lib/attachments/types";
 
@@ -43,12 +49,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function TransactionDetail({
   tx,
   subcategoryOptions,
+  merchantOptions,
   tags,
   allTags,
   attachments,
 }: {
   tx: TransactionRow;
   subcategoryOptions: SubcategoryOption[];
+  merchantOptions: MerchantOption[];
   tags: Tag[];
   allTags: Tag[];
   attachments: AttachmentView[];
@@ -56,6 +64,7 @@ export function TransactionDetail({
   const router = useRouter();
   const toast = useToast();
   const [subcategoryId, setSubcategoryId] = useState(tx.subcategory_id);
+  const [attachingMerchant, setAttachingMerchant] = useState(false);
   const [status, setStatus] = useState(tx.status);
   const [note, setNote] = useState(tx.note ?? "");
   const [savingNote, setSavingNote] = useState(false);
@@ -104,6 +113,25 @@ export function TransactionDetail({
     const res = await detachTransaction(tx.id);
     if (!res.ok) return toast.error(res.error);
     toast.success("Transaction détachée de l'achat");
+    router.refresh();
+  }
+
+  async function attachMerchant(merchantId: string) {
+    if (!merchantId) return;
+    setAttachingMerchant(true);
+    const res = await attachTransactionToMerchant(tx.id, merchantId);
+    setAttachingMerchant(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Enseigne rattachée");
+    router.refresh();
+  }
+
+  async function detachMerchant() {
+    setAttachingMerchant(true);
+    const res = await detachTransactionFromMerchant(tx.id);
+    setAttachingMerchant(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Enseigne détachée");
     router.refresh();
   }
 
@@ -180,6 +208,48 @@ export function TransactionDetail({
               <CategorySelect value={subcategoryId} options={subcategoryOptions} allowCreate onChange={changeCategory} />
             </FormField>
           )}
+
+          <FormField label="Enseigne">
+            {tx.merchant ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--space-2)",
+                  padding: "var(--space-2) var(--space-3)",
+                  background: "var(--color-bg-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <Store size={15} aria-hidden />
+                  {tx.merchant.name}
+                </span>
+                <Button variant="ghost" size="sm" leftIcon={<Unlink size={14} />} disabled={attachingMerchant} onClick={detachMerchant}>
+                  Détacher
+                </Button>
+              </div>
+            ) : merchantOptions.length > 0 ? (
+              <Select
+                value=""
+                disabled={attachingMerchant}
+                onChange={(e) => attachMerchant(e.target.value)}
+              >
+                <option value="">Rattacher à une enseigne…</option>
+                {merchantOptions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
+                Aucune enseigne. Crées-en dans l&apos;espace « Enseignes ».
+              </p>
+            )}
+          </FormField>
 
           <FormField label="Tags">
             <TagPicker transactionId={tx.id} tags={tags} allTags={allTags} />

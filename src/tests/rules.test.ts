@@ -58,6 +58,7 @@ const baseRule = (over: Partial<EngineRule>): EngineRule => ({
   amount_min: null,
   amount_max: null,
   subcategory_id: "sub",
+  merchant_id: null,
   auto_validate: true,
   priority: 100,
   is_active: true,
@@ -74,7 +75,16 @@ describe("applyRules", () => {
       subcategory_id: null,
       status: "pending",
       applied_rule_id: null,
+      merchant_id: null,
     });
+  });
+
+  it("carries the rule's merchant_id in the outcome on match", () => {
+    const out = applyRules(
+      { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },
+      [baseRule({ id: "m", pattern: "carrefour", merchant_id: "merch-1" })],
+    );
+    expect(out.merchant_id).toBe("merch-1");
   });
 
   it("applies the lowest-priority matching rule and auto-validates", () => {

@@ -37,6 +37,8 @@ export interface TransactionRow {
   category: CategoryDisplay | null;
   /** Achat rattaché (catégorie héritée, verrou sur le sélecteur). */
   purchase?: { id: string; name: string } | null;
+  /** Enseigne rattachée (catégorie par défaut appliquée, surchargeable). */
+  merchant?: { id: string; name: string } | null;
 }
 
 export interface TransactionFilters {

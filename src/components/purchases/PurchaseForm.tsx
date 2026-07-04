@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -11,11 +12,13 @@ import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { useToast } from "@/hooks/useToast";
 import { createPurchase, updatePurchase } from "@/server/actions/purchases";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 export interface PurchaseFormInitial {
   name: string;
   description: string | null;
   subcategoryId: string | null;
+  merchantId: string | null;
 }
 
 export function PurchaseForm({
@@ -23,12 +26,14 @@ export function PurchaseForm({
   id,
   initial,
   subcategoryOptions,
+  merchantOptions,
   onDone,
 }: {
   mode: "create" | "edit";
   id?: string;
   initial?: PurchaseFormInitial;
   subcategoryOptions: SubcategoryOption[];
+  merchantOptions: MerchantOption[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -38,6 +43,18 @@ export function PurchaseForm({
   const [subcategoryId, setSubcategoryId] = useState<string | null>(
     initial?.subcategoryId ?? null,
   );
+  const [merchantId, setMerchantId] = useState<string | null>(
+    initial?.merchantId ?? null,
+  );
+
+  // Choisir une enseigne pré-remplit la catégorie avec sa catégorie par défaut
+  // (surchargeable : l'utilisateur peut ensuite changer la catégorie).
+  function onMerchantChange(value: string) {
+    const next = value || null;
+    setMerchantId(next);
+    const merchant = merchantOptions.find((m) => m.id === next);
+    if (merchant?.subcategoryId) setSubcategoryId(merchant.subcategoryId);
+  }
   // Plan de mensualités (création uniquement) — direct si count vide/0.
   const [count, setCount] = useState("");
   const [startMonth, setStartMonth] = useState("");
@@ -61,8 +78,8 @@ export function PurchaseForm({
     setSaving(true);
     const res =
       mode === "create"
-        ? await createPurchase({ name, description, subcategoryId, installmentPlan })
-        : await updatePurchase(id!, { name, description, subcategoryId });
+        ? await createPurchase({ name, description, subcategoryId, merchantId, installmentPlan })
+        : await updatePurchase(id!, { name, description, subcategoryId, merchantId });
     setSaving(false);
     if (!res.ok) {
       setError(res.error);
@@ -96,6 +113,19 @@ export function PurchaseForm({
           rows={2}
         />
       </FormField>
+
+      {merchantOptions.length > 0 && (
+        <FormField label="Enseigne (optionnel — pré-remplit la catégorie)">
+          <Select value={merchantId ?? ""} onChange={(e) => onMerchantChange(e.target.value)}>
+            <option value="">Aucune</option>
+            {merchantOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      )}
 
       <FormField label="Catégorie (héritée par les transactions rattachées)">
         <CategorySelect

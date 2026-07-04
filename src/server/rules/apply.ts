@@ -16,6 +16,7 @@ export interface ApplicableRule {
   amount_min: number | null;
   amount_max: number | null;
   subcategory_id: string;
+  merchant_id: string | null;
   auto_validate: boolean;
   hit_count: number;
 }
@@ -62,6 +63,8 @@ export async function applyRuleToTransactions(
         .update({
           subcategory_id: rule.subcategory_id,
           applied_rule_id: rule.id,
+          // Rattache aussi l'enseigne si la règle en porte une.
+          ...(rule.merchant_id ? { merchant_id: rule.merchant_id } : {}),
           ...statusPatch,
         })
         .eq("id", t.id),

@@ -7,6 +7,7 @@ export interface EngineRule extends MatchableRule {
   amount_min: number | null;
   amount_max: number | null;
   subcategory_id: string;
+  merchant_id: string | null;
   auto_validate: boolean;
   priority: number;
   is_active: boolean;
@@ -31,6 +32,7 @@ export function toEngineRule(
     amount_min: r.amount_min == null ? null : Number(r.amount_min),
     amount_max: r.amount_max == null ? null : Number(r.amount_max),
     subcategory_id: r.subcategory_id,
+    merchant_id: r.merchant_id,
     auto_validate: r.auto_validate,
     priority: r.priority,
     is_active: r.is_active,
@@ -41,6 +43,8 @@ export interface RuleOutcome {
   subcategory_id: string | null;
   status: Database["public"]["Enums"]["transaction_status"];
   applied_rule_id: string | null;
+  /** Enseigne rattachée automatiquement (règle de l'enseigne matchée). */
+  merchant_id: string | null;
 }
 
 /**
@@ -65,9 +69,15 @@ export function applyRules(
         subcategory_id: rule.subcategory_id,
         status: rule.auto_validate ? "validated" : "pending",
         applied_rule_id: rule.id,
+        merchant_id: rule.merchant_id,
       };
     }
   }
 
-  return { subcategory_id: null, status: "pending", applied_rule_id: null };
+  return {
+    subcategory_id: null,
+    status: "pending",
+    applied_rule_id: null,
+    merchant_id: null,
+  };
 }

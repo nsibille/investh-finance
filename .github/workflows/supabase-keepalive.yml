@@ -1,0 +1,41 @@
+# Garde le projet Supabase (free tier) actif : une requête tous les 3 jours
+# empêche la mise en pause automatique après ~7 jours d'inactivité.
+#
+# La clé utilisée est la clé ANON (publique par conception : elle est protégée
+# par la RLS — un appel anonyme ne voit aucune donnée). Rien de secret ici.
+#
+# Note : GitHub désactive un workflow planifié après 60 jours SANS commit sur
+# le dépôt. Tant que tu pushes de temps en temps, il reste actif.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "0 6 */3 * *" # tous les 3 jours à 06:00 UTC
+  workflow_dispatch: {} # déclenchement manuel possible
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping l'API REST Supabase
+        env:
+          SUPABASE_URL: https://uujmbqwbnztfxuzhnjwp.supabase.co
+          ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1am1icXdibnp0Znh1emhuandwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjkyMzUsImV4cCI6MjA5NTMwNTIzNX0.q89M1dwufWpRLOkBFj9nSq6bKlOTZWxCK3qMYkyfWss
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" \
+              --max-time 30 \
+              "$SUPABASE_URL/rest/v1/accounts?select=id&limit=1" \
+              -H "apikey: $ANON_KEY" \
+              -H "Authorization: Bearer $ANON_KEY") || code="000"
+            echo "Tentative $attempt → HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "✅ Base active."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "⚠️ La base n'a pas répondu 200 (probablement en pause : à restaurer une fois via le dashboard)."
+          exit 1

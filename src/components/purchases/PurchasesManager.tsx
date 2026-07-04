@@ -74,7 +74,7 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
             const startMonth = purchase.installments[0]?.month ?? inst.month;
             const total = purchase.installments.length;
             const occurrence = installmentOccurrence(startMonth, inst.month);
-            // Abonnement sans fin : total inconnu → on affiche juste le n°.
+            // Abonnement sans fin : total inconnu → « N/∞ ».
             const endless = purchase.is_recurring && !purchase.recurrence_end;
             return (
             <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
@@ -82,7 +82,7 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
                 {formatMonthLabel(inst.month)}
                 {(total > 1 || endless) && (
                   <span style={{ marginLeft: 6, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "none", fontFamily: "var(--font-mono)" }}>
-                    {endless ? `n°${occurrence}` : `${occurrence}/${total}`}
+                    {occurrence}/{endless ? "∞" : total}
                   </span>
                 )}
               </span>

@@ -10,6 +10,12 @@ describe("parseRulesText", () => {
     ]);
   });
 
+  it("inclusion implicite : le libellé sans % est pris tel quel", () => {
+    expect(parseRulesText("Resto.Uber\tuber eats")).toEqual([
+      { category: "Resto", subcategory: "Uber", match: "uber eats" },
+    ]);
+  });
+
   it("sous-catégorie « — » par défaut quand une seule partie", () => {
     expect(parseRulesText("Loisirs\t%netflix%")).toEqual([
       { category: "Loisirs", subcategory: "—", match: "netflix" },

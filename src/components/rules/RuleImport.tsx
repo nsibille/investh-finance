@@ -120,9 +120,9 @@ export function RuleImport({
           {!rows ? (
             <>
               <Alert variant="info">
-                Fichier à 2 colonnes : <strong>Catégorie.Sous-catégorie</strong> puis{" "}
-                <strong>%motif%</strong> (inclusion). Séparateur tab, « ; » ou « , ».
-                Les catégories manquantes sont créées.
+                Fichier à 2 colonnes : <strong>Catégorie.Sous-catégorie</strong> puis le{" "}
+                <strong>libellé à inclure</strong> (inclusion implicite — inutile d&apos;ajouter des %).
+                Séparateur tab, « ; » ou « , ». Les catégories manquantes sont créées.
               </Alert>
               <FileDropzone
                 onFile={handleFile}

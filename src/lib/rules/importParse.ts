@@ -13,7 +13,11 @@ function stripQuotes(s: string): string {
   return s.replace(/^"([^]*)"$/, "$1").trim();
 }
 
-/** Retire les % de type LIKE encadrants : `%libellé%` → `libellé`. */
+/**
+ * L'inclusion est implicite (match_type « contient ») : le libellé est utilisé
+ * tel quel. Les % de type LIKE encadrants restent tolérés et sont retirés
+ * (`%libellé%` → `libellé`) pour ceux qui les ajoutent par habitude.
+ */
 function stripPercent(s: string): string {
   return s.replace(/^%+/, "").replace(/%+$/, "").trim();
 }

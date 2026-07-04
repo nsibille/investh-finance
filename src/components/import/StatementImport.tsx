@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
 import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
+import { addMerchantRule } from "@/server/actions/merchants";
 import { createCategoryOnTheFly } from "@/server/actions/categories";
 import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
@@ -97,6 +98,29 @@ export function StatementImport({
       // L'enseigne applique sa catégorie par défaut (surchargeable).
       ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
     });
+    const rawLabel = preview?.rows[index]?.raw_label ?? "";
+    if (rawLabel) {
+      toast.info(`Enseigne « ${option.name} » rattachée`, {
+        duration: 8000,
+        action: {
+          label: "Créer une règle",
+          onClick: () => createMerchantRule(option, rawLabel),
+        },
+      });
+    }
+  }
+
+  async function createMerchantRule(option: MerchantOption, rawLabel: string) {
+    const res = await addMerchantRule(option.id, {
+      pattern: rawLabel,
+      matchType: "contains",
+    });
+    if (!res.ok) return toast.error(res.error);
+    toast.success(
+      res.applied > 0
+        ? `Règle créée · ${res.applied} transaction${res.applied > 1 ? "s" : ""} rattachée${res.applied > 1 ? "s" : ""}`
+        : "Règle créée",
+    );
   }
 
   function detachMerchant(index: number) {

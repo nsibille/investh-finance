@@ -69,6 +69,13 @@ export function TransactionDetail({
   const [note, setNote] = useState(tx.note ?? "");
   const [savingNote, setSavingNote] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  // Enseigne à rattacher par la règle créée (null = règle de catégorie simple).
+  const [ruleMerchant, setRuleMerchant] = useState<{ id: string; name: string } | null>(null);
+
+  function openRule(merchant: { id: string; name: string } | null) {
+    setRuleMerchant(merchant);
+    setRuleOpen(true);
+  }
 
   async function changeCategory(subId: string | null) {
     const prev = subcategoryId;
@@ -83,7 +90,7 @@ export function TransactionDetail({
       if (subId) {
         toast.info("Catégorie mise à jour", {
           duration: 8000,
-          action: { label: "Créer une règle", onClick: () => setRuleOpen(true) },
+          action: { label: "Créer une règle", onClick: () => openRule(null) },
         });
       }
     }
@@ -122,8 +129,18 @@ export function TransactionDetail({
     const res = await attachTransactionToMerchant(tx.id, merchantId);
     setAttachingMerchant(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success("Enseigne rattachée");
+    const merchant = merchantOptions.find((m) => m.id === merchantId);
+    // La catégorie par défaut de l'enseigne vient d'être appliquée côté serveur.
+    if (merchant?.subcategoryId) setSubcategoryId(merchant.subcategoryId);
     router.refresh();
+    toast.info("Enseigne rattachée", {
+      duration: 8000,
+      action: {
+        label: "Créer une règle",
+        onClick: () =>
+          openRule({ id: merchantId, name: merchant?.name ?? "" }),
+      },
+    });
   }
 
   async function detachMerchant() {
@@ -284,7 +301,7 @@ export function TransactionDetail({
                 Remettre à valider
               </Button>
             )}
-            <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => setRuleOpen(true)}>
+            <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => openRule(null)}>
               Créer une règle
             </Button>
           </div>
@@ -298,6 +315,8 @@ export function TransactionDetail({
           accountId={tx.account?.id ?? ""}
           defaultSubcategoryId={subcategoryId}
           subcategoryOptions={subcategoryOptions}
+          merchantId={ruleMerchant?.id ?? null}
+          merchantName={ruleMerchant?.name ?? null}
           onDone={() => setRuleOpen(false)}
         />
       </Modal>

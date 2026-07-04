@@ -42,6 +42,8 @@ export function RuleSuggestionForm({
   accountId,
   defaultSubcategoryId,
   subcategoryOptions,
+  merchantId,
+  merchantName,
   onDone,
 }: {
   transactionId: string;
@@ -49,6 +51,9 @@ export function RuleSuggestionForm({
   accountId: string;
   defaultSubcategoryId: string | null;
   subcategoryOptions: SubcategoryOption[];
+  /** Si fourni, la règle rattache aussi les transactions à cette enseigne. */
+  merchantId?: string | null;
+  merchantName?: string | null;
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -97,7 +102,7 @@ export function RuleSuggestionForm({
       amount_min: "",
       amount_max: "",
       account_id: scopeToAccount ? accountId : "",
-      merchant_id: "",
+      merchant_id: merchantId ?? "",
       subcategory_id: subcategoryId,
       auto_validate: autoValidate,
       priority: 100,
@@ -126,6 +131,13 @@ export function RuleSuggestionForm({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       {error && <Alert variant="danger">{error}</Alert>}
+
+      {merchantId && (
+        <Alert variant="info">
+          Les transactions matchées seront aussi rattachées à l&apos;enseigne
+          {merchantName ? ` « ${merchantName} »` : ""}.
+        </Alert>
+      )}
 
       <FormField label="Libellé d'origine">
         <div

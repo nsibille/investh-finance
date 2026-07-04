@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, ShoppingBag, Store, X } from "lucide-react";
+import { FileText, ShoppingBag, Store, Repeat, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -496,6 +496,12 @@ export function StatementImport({
                       <td data-col="label">
                         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                           <span>{r.label}</span>
+                          {r.recurringName && (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
+                              <Repeat size={12} aria-hidden />
+                              Récurrent · {r.recurringName}
+                            </span>
+                          )}
                           {r.merchantId ? (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                               <Store size={12} aria-hidden />

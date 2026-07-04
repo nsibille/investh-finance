@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { applyRules, toEngineRule } from "@/lib/rules/engine";
+import { matchesPattern } from "@/lib/recurring/checker";
 import { computeDedupHash, dedupeBatch, assignOccurrences, baseKey } from "./dedup";
 import type { ParsedTransaction, ImportSummary } from "./types";
 import type { Database } from "@/types/database.types";
@@ -43,13 +44,17 @@ export async function importParsedTransactions(
   const importId = importRow.id;
 
   try {
-    const { data: ruleRows } = await supabase
-      .from("categorization_rules")
-      .select("*")
-      .eq("is_active", true)
-      .order("priority", { ascending: true });
+    const [{ data: ruleRows }, { data: patternRows }] = await Promise.all([
+      supabase
+        .from("categorization_rules")
+        .select("*")
+        .eq("is_active", true)
+        .order("priority", { ascending: true }),
+      supabase.from("recurring_patterns").select("*").eq("is_active", true),
+    ]);
 
     const rules = (ruleRows ?? []).map(toEngineRule);
+    const patterns = patternRows ?? [];
     const hitBase = new Map(
       (ruleRows ?? []).map((r) => [r.id, r.hit_count]),
     );
@@ -68,15 +73,31 @@ export async function importParsedTransactions(
         // par les règles. On la respecte ; sinon les règles font foi (et leur
         // compteur de hits est mis à jour).
         const overridden = "subcategory_id" in p;
-        const subcategoryId = overridden
+        let subcategoryId = overridden
           ? (p.subcategory_id ?? null)
           : outcome.subcategory_id;
-        const status = overridden
+        let status = overridden
           ? subcategoryId
             ? "validated"
             : "pending"
           : outcome.status;
         const appliedRuleId = overridden ? null : outcome.applied_rule_id;
+
+        // Récurrentes : une transaction qui correspond à un modèle récurrent
+        // (libellé + montant) est marquée récurrente ; si elle n'a pas encore
+        // de catégorie, on applique celle du modèle.
+        const pattern = patterns.find((pat) =>
+          matchesPattern(pat, {
+            account_id: accountId,
+            raw_label: p.raw_label,
+            amount: p.amount,
+            operation_date: p.operation_date,
+          }),
+        );
+        if (pattern && subcategoryId == null && pattern.subcategory_id) {
+          subcategoryId = pattern.subcategory_id;
+          status = "validated";
+        }
         // Enseigne : l'aperçu fait foi quand il fournit `merchant_id` (règle,
         // achat ou choix manuel) ; sinon rattachement automatique par la règle.
         const explicitMerchant =
@@ -101,6 +122,8 @@ export async function importParsedTransactions(
           applied_rule_id: appliedRuleId,
           merchant_id: merchantId,
           purchase_id: p.purchase_id ?? null,
+          is_recurring: Boolean(pattern),
+          recurring_pattern_id: pattern?.id ?? null,
           validated_at: status === "validated" ? nowIso : null,
           dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
         };

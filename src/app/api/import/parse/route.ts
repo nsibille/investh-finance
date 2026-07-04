@@ -14,11 +14,16 @@ import { normalizeConnection } from "@/lib/import/connection";
 import { getInternalTransferSubcategoryId } from "@/lib/import/transfers";
 import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
 import { applyRules, toEngineRule, type EngineRule } from "@/lib/rules/engine";
+import { matchesPattern } from "@/lib/recurring/checker";
 import {
   matchPreviewRowsToPurchases,
   type PreviewRow,
 } from "@/lib/purchases/match";
 import type { ParsedTransaction } from "@/lib/import/types";
+import type { Database } from "@/types/database.types";
+
+type RecurringPattern =
+  Database["public"]["Tables"]["recurring_patterns"]["Row"];
 
 function isCsv(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -107,6 +112,33 @@ async function loadMerchantNames(supabase: Supa): Promise<Map<string, string>> {
   return new Map((data ?? []).map((m) => [m.id, m.name]));
 }
 
+/** Modèles récurrents actifs, pour détecter les récurrences dans l'aperçu. */
+async function loadRecurringPatterns(supabase: Supa): Promise<RecurringPattern[]> {
+  const { data } = await supabase
+    .from("recurring_patterns")
+    .select("*")
+    .eq("is_active", true);
+  return data ?? [];
+}
+
+/** Modèle récurrent correspondant à une transaction (libellé + montant). */
+function matchRecurring(
+  patterns: RecurringPattern[],
+  accountId: string,
+  tx: { raw_label: string; amount: number; operation_date: string },
+): RecurringPattern | null {
+  return (
+    patterns.find((pat) =>
+      matchesPattern(pat, {
+        account_id: accountId,
+        raw_label: tx.raw_label,
+        amount: tx.amount,
+        operation_date: tx.operation_date,
+      }),
+    ) ?? null
+  );
+}
+
 /**
  * Pré-rattache les lignes (hors doublons existants) aux mensualités
  * prévisionnelles d'achats : l'aperçu affiche le rattachement avant l'import.
@@ -188,12 +220,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const [{ data: accounts }, rules, transferSubId, merchantNames] =
+    const [{ data: accounts }, rules, transferSubId, merchantNames, patterns] =
       await Promise.all([
         supabase.from("accounts").select("id, connection_name"),
         loadRules(supabase),
         getInternalTransferSubcategoryId(supabase),
         loadMerchantNames(supabase),
+        loadRecurringPatterns(supabase),
       ]);
     const accountIdByConnection = new Map<string, string>();
     for (const a of accounts ?? []) {
@@ -217,13 +250,13 @@ export async function POST(request: Request) {
     // Catégorie proposée par les règles ; les virements priment (catégorie
     // « Virement interne ») et sont envoyés en override à l'import.
     const withSuggestion = rows.map((r, i) => {
-      const { subcategory_id, merchant_id } = suggestFromRules(
-        rules,
-        targets[i].accountId ?? "",
-        r,
-      );
+      const accId = targets[i].accountId ?? "";
+      const { subcategory_id, merchant_id } = suggestFromRules(rules, accId, r);
+      const pattern = matchRecurring(patterns, accId, r);
       const initialSubcategoryId =
-        transferIdx.has(i) && transferSubId ? transferSubId : subcategory_id;
+        transferIdx.has(i) && transferSubId
+          ? transferSubId
+          : (subcategory_id ?? pattern?.subcategory_id ?? null);
       return {
         ...r,
         suggestedSubcategoryId: subcategory_id,
@@ -232,6 +265,7 @@ export async function POST(request: Request) {
         ...(merchant_id
           ? { merchantId: merchant_id, merchantName: merchantNames.get(merchant_id) ?? null }
           : {}),
+        ...(pattern ? { recurringName: pattern.name } : {}),
       };
     });
 
@@ -290,22 +324,25 @@ export async function POST(request: Request) {
       : null;
 
   const hashes = occurrenceHashes(accountId, transactions);
-  const [existingSet, rules, merchantNames] = await Promise.all([
+  const [existingSet, rules, merchantNames, patterns] = await Promise.all([
     fetchExistingHashes(supabase, hashes),
     loadRules(supabase),
     loadMerchantNames(supabase),
+    loadRecurringPatterns(supabase),
   ]);
   const { rows } = buildPreviewRows(accountId, transactions, existingSet);
   const withSuggestion = rows.map((r) => {
     const { subcategory_id, merchant_id } = suggestFromRules(rules, accountId, r);
+    const pattern = matchRecurring(patterns, accountId, r);
     // Relevé PDF = un seul compte : pas de virement interne détectable ici.
     return {
       ...r,
       suggestedSubcategoryId: subcategory_id,
-      initialSubcategoryId: subcategory_id,
+      initialSubcategoryId: subcategory_id ?? pattern?.subcategory_id ?? null,
       ...(merchant_id
         ? { merchantId: merchant_id, merchantName: merchantNames.get(merchant_id) ?? null }
         : {}),
+      ...(pattern ? { recurringName: pattern.name } : {}),
     };
   });
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;

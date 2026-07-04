@@ -29,6 +29,16 @@ interface Props {
   onDone: () => void;
 }
 
+const FREQ_PRESETS: { label: string; days: number }[] = [
+  { label: "Hebdomadaire", days: 7 },
+  { label: "Toutes les 2 semaines", days: 14 },
+  { label: "Mensuel", days: 30 },
+  { label: "Bimestriel", days: 60 },
+  { label: "Trimestriel", days: 90 },
+  { label: "Semestriel", days: 182 },
+  { label: "Annuel", days: 365 },
+];
+
 export function RecurringForm({
   mode,
   id,
@@ -40,6 +50,10 @@ export function RecurringForm({
   const router = useRouter();
   const toast = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const initialDays = Number(initial?.frequency_days ?? 30) || 30;
+  const [customFreq, setCustomFreq] = useState(
+    !FREQ_PRESETS.some((p) => p.days === initialDays),
+  );
 
   const {
     register,
@@ -125,12 +139,51 @@ export function RecurringForm({
             <Input type="number" {...register("amount_tolerance")} />
           </FormField>
         </div>
-        <div style={{ width: 130 }}>
-          <FormField label="Fréquence (jours)">
-            <Input type="number" {...register("frequency_days")} />
-          </FormField>
-        </div>
       </div>
+
+      <FormField label="Fréquence" error={errors.frequency_days?.message}>
+        <Controller
+          control={control}
+          name="frequency_days"
+          render={({ field }) => {
+            const days = Number(field.value) || 0;
+            return (
+              <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+                <Select
+                  value={customFreq ? "custom" : String(days)}
+                  onChange={(e) => {
+                    if (e.target.value === "custom") {
+                      setCustomFreq(true);
+                    } else {
+                      setCustomFreq(false);
+                      field.onChange(Number(e.target.value));
+                    }
+                  }}
+                  style={{ maxWidth: 240 }}
+                >
+                  {FREQ_PRESETS.map((p) => (
+                    <option key={p.days} value={p.days}>
+                      {p.label} ({p.days} j)
+                    </option>
+                  ))}
+                  <option value="custom">Personnalisé…</option>
+                </Select>
+                {customFreq && (
+                  <Input
+                    type="number"
+                    min={1}
+                    max={400}
+                    value={days || ""}
+                    onChange={(e) => field.onChange(Number(e.target.value))}
+                    placeholder="jours"
+                    style={{ width: 100 }}
+                  />
+                )}
+              </div>
+            );
+          }}
+        />
+      </FormField>
 
       <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)" }}>
         <Toggle {...register("alert_if_missing")} />

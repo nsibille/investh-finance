@@ -10,12 +10,14 @@ import {
   Archive,
   ArchiveRestore,
 } from "lucide-react";
+import { FolderTree } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Dot } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { CategoryForm } from "./CategoryForm";
@@ -111,6 +113,18 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
       toast.success(sub.is_archived ? "Sous-catégorie désarchivée" : "Sous-catégorie archivée");
       router.refresh();
     }
+  }
+
+  if (localTree.length === 0) {
+    return (
+      <Card>
+        <EmptyState
+          icon={FolderTree}
+          title="Aucune catégorie chargée"
+          description="Tes types et catégories existent en base mais l'app ne peut pas les lire. En mode libre accès, renseigne SUPABASE_SERVICE_ROLE_KEY dans .env.local (puis redémarre) pour accéder à tes données sans connexion."
+        />
+      </Card>
+    );
   }
 
   return (

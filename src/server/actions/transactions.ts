@@ -28,6 +28,16 @@ export async function setTransactionSubcategory(
   subcategoryId: string | null,
 ): Promise<ActionResult> {
   const supabase = await createClient();
+  // Catégorie héritée d'un achat : non modifiable tant que la transaction y est
+  // rattachée.
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("purchase_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (tx?.purchase_id) {
+    return fail("Catégorie héritée de l'achat — détache la transaction pour la changer.");
+  }
   const { error } = await supabase
     .from("transactions")
     .update({ subcategory_id: subcategoryId })

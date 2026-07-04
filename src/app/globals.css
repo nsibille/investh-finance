@@ -1011,6 +1011,19 @@ body {
   font: inherit; font-size: var(--text-sm); color: var(--color-text-primary);
 }
 .import-cat-ac input::placeholder { color: var(--color-text-muted); }
+/* Achat rattaché à une ligne d'import. */
+.import-purchase-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 1px var(--space-2); border-radius: var(--radius-full);
+  background: var(--color-brand-primary-50); color: var(--color-brand-primary-700);
+  font-size: var(--text-xs); font-weight: var(--fw-medium); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.import-purchase-chip button {
+  display: inline-flex; border: none; background: none; padding: 0; cursor: pointer;
+  color: inherit; opacity: 0.7;
+}
+.import-purchase-chip button:hover { opacity: 1; }
 
 /* ================================================================
    COMPOSANTS — Feedback (spinner, skeleton, progress, tooltip)

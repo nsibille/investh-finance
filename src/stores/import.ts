@@ -13,6 +13,9 @@ export interface ImportPreviewRow extends ParsedTransaction {
   initialSubcategoryId?: string | null;
   /** Catégorie courante (proposée par les règles, éventuellement modifiée). */
   categoryId: string | null;
+  /** Achat rattaché (la catégorie devient héritée/verrouillée). */
+  purchaseId?: string | null;
+  purchaseName?: string | null;
   include: boolean;
 }
 

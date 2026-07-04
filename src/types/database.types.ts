@@ -462,6 +462,76 @@ export type Database = {
           },
         ]
       }
+      purchases: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          subcategory_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_installments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          month: string
+          note: string | null
+          purchase_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          month: string
+          note?: string | null
+          purchase_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: string
+          note?: string | null
+          purchase_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_installments_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_patterns: {
         Row: {
           account_id: string | null
@@ -660,6 +730,7 @@ export type Database = {
           operation_date: string
           raw_label: string
           recurring_pattern_id: string | null
+          purchase_id: string | null
           search_vector: unknown
           status: Database["public"]["Enums"]["transaction_status"]
           subcategory_id: string | null
@@ -680,6 +751,7 @@ export type Database = {
           label: string
           note?: string | null
           operation_date: string
+          purchase_id?: string | null
           raw_label: string
           recurring_pattern_id?: string | null
           search_vector?: unknown
@@ -704,6 +776,7 @@ export type Database = {
           operation_date?: string
           raw_label?: string
           recurring_pattern_id?: string | null
+          purchase_id?: string | null
           search_vector?: unknown
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory_id?: string | null

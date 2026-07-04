@@ -89,6 +89,7 @@ export async function importParsedTransactions(
           status,
           subcategory_id: subcategoryId,
           applied_rule_id: appliedRuleId,
+          purchase_id: p.purchase_id ?? null,
           validated_at: status === "validated" ? nowIso : null,
           dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
         };

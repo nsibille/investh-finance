@@ -23,6 +23,8 @@ export interface ParsedTransaction {
    * a revu la proposition des règles (override) ; absente ⇒ les règles décident.
    */
   subcategory_id?: string | null;
+  /** Achat rattaché lors de l'import (la catégorie de l'achat prime). */
+  purchase_id?: string | null;
 }
 
 export interface ImportSummary {

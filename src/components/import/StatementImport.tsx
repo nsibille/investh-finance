@@ -2,18 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText } from "lucide-react";
+import { FileText, ShoppingBag, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
 import { Amount } from "@/components/ui/Amount";
 import { ImportRowBadge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Checkbox";
 import { ImportCategoryEditor } from "./ImportCategoryEditor";
+import { PurchaseAttachModal } from "./PurchaseAttachModal";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
@@ -23,13 +25,16 @@ import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { PurchaseOption } from "@/lib/purchases/types";
 
 export function StatementImport({
   accountOptions,
   subcategoryOptions,
+  purchaseOptions,
 }: {
   accountOptions: AccountOption[];
   subcategoryOptions: SubcategoryOption[];
+  purchaseOptions: PurchaseOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -44,6 +49,28 @@ export function StatementImport({
   const [editing, setEditing] = useState<number | null>(null);
   // Catégories créées à la volée pendant cette session d'import.
   const [extraOptions, setExtraOptions] = useState<SubcategoryOption[]>([]);
+  // Achats (dont créés à la volée) + ligne dont on rattache un achat.
+  const [extraPurchases, setExtraPurchases] = useState<PurchaseOption[]>([]);
+  const [purchaseRow, setPurchaseRow] = useState<number | null>(null);
+
+  const allPurchases = useMemo(() => {
+    const seen = new Set(purchaseOptions.map((p) => p.id));
+    return [...purchaseOptions, ...extraPurchases.filter((p) => !seen.has(p.id))];
+  }, [purchaseOptions, extraPurchases]);
+
+  function attachPurchase(index: number, option: PurchaseOption) {
+    setExtraPurchases((prev) => (prev.some((p) => p.id === option.id) ? prev : [...prev, option]));
+    patchRow(index, {
+      purchaseId: option.id,
+      purchaseName: option.name,
+      // La catégorie de l'achat prime (héritée) si elle existe.
+      ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+    });
+  }
+
+  function detachPurchase(index: number) {
+    patchRow(index, { purchaseId: null, purchaseName: null });
+  }
 
   const allOptions = useMemo(() => {
     const seen = new Set(subcategoryOptions.map((o) => o.id));
@@ -201,6 +228,7 @@ export function StatementImport({
       // règles s'appliquent à l'import (et leur compteur de hits est suivi).
       const suggested = r.suggestedSubcategoryId ?? null;
       if (r.categoryId !== suggested) base.subcategory_id = r.categoryId;
+      if (r.purchaseId) base.purchase_id = r.purchaseId;
       return base;
     });
 
@@ -333,7 +361,24 @@ export function StatementImport({
                       )}
                       <td data-col="label">{r.label}</td>
                       <td data-col="category">
-                        {editing === i ? (
+                        {r.purchaseId ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span className="import-purchase-chip">
+                              <ShoppingBag size={12} aria-hidden />
+                              {r.purchaseName}
+                              <button
+                                type="button"
+                                aria-label="Détacher l'achat"
+                                onClick={() => detachPurchase(i)}
+                              >
+                                <X size={12} aria-hidden />
+                              </button>
+                            </span>
+                            <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                              {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Catégorie de l'achat"}
+                            </span>
+                          </div>
+                        ) : editing === i ? (
                           <ImportCategoryEditor
                             options={allOptions}
                             value={r.categoryId}
@@ -345,14 +390,19 @@ export function StatementImport({
                             onClose={() => setEditing(null)}
                           />
                         ) : (
-                          <button
-                            type="button"
-                            className="import-cat-edit"
-                            onClick={() => setEditing(i)}
-                            data-empty={r.categoryId ? undefined : "true"}
-                          >
-                            {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Non catégorisée"}
-                          </button>
+                          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                            <button
+                              type="button"
+                              className="import-cat-edit"
+                              onClick={() => setEditing(i)}
+                              data-empty={r.categoryId ? undefined : "true"}
+                            >
+                              {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Non catégorisée"}
+                            </button>
+                            <IconButton label="Rattacher un achat" onClick={() => setPurchaseRow(i)}>
+                              <ShoppingBag size={15} />
+                            </IconButton>
+                          </div>
                         )}
                       </td>
                       <td style={{ textAlign: "right" }}>
@@ -376,6 +426,15 @@ export function StatementImport({
           </>
         )}
       </div>
+
+      <PurchaseAttachModal
+        open={purchaseRow !== null}
+        onClose={() => setPurchaseRow(null)}
+        purchaseOptions={allPurchases}
+        onAttach={(option) => {
+          if (purchaseRow !== null) attachPurchase(purchaseRow, option);
+        }}
+      />
     </Card>
   );
 }

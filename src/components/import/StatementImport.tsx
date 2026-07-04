@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
 import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
-import { addMerchantRule } from "@/server/actions/merchants";
+import { addMerchantRule, createMerchantRuleFromLabel } from "@/server/actions/merchants";
 import { createCategoryOnTheFly } from "@/server/actions/categories";
 import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
@@ -181,12 +181,56 @@ export function StatementImport({
     const row = useImportStore.getState().preview?.rows[index];
     if (!row) return;
     const pattern = row.label;
+    const label = labelOverride ?? optLabel.get(subcategoryId) ?? "catégorie";
+
+    // Ligne rattachée à une enseigne : la catégorie est héritée par l'enseigne
+    // et la règle créée est rattachée à l'enseigne.
+    if (row.merchantId) {
+      const mres = await createMerchantRuleFromLabel(row.merchantId, pattern, subcategoryId);
+      if (!mres.ok) {
+        toast.error(mres.error);
+        return;
+      }
+      const who = row.merchantName ?? "enseigne";
+      const applyAction = {
+        label: "Appliquer à tout l'import",
+        onClick: () =>
+          applyMerchantEverywhere(
+            { id: row.merchantId!, name: who, subcategoryId },
+            mres.pattern,
+          ),
+      };
+      if (mres.exists) {
+        toast.info(`Catégorie assignée · règle enseigne « ${who} » déjà existante`, {
+          actions: [applyAction],
+        });
+        return;
+      }
+      toast.success(
+        `Règle créée pour l'enseigne « ${who} » : contient « ${mres.pattern} » → ${label}` +
+          (mres.categorySet ? " · catégorie par défaut de l'enseigne définie" : ""),
+        {
+          duration: 10000,
+          actions: [
+            {
+              label: "Annuler",
+              onClick: async () => {
+                await deleteRule(mres.ruleId);
+                toast.info("Règle annulée.");
+              },
+            },
+            applyAction,
+          ],
+        },
+      );
+      return;
+    }
+
     const res = await createRuleFromLabel(pattern, subcategoryId);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    const label = labelOverride ?? optLabel.get(subcategoryId) ?? "catégorie";
     if (res.exists) {
       toast.info(`Catégorie assignée · règle « ${res.pattern} » déjà existante`, {
         actions: [

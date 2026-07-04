@@ -148,6 +148,76 @@ export type MerchantRuleResult =
   | { ok: true; applied: number; ruleId: string; pattern: string }
   | { ok: false; error: string };
 
+export type MerchantRuleFromLabelResult =
+  | { ok: true; ruleId: string; exists: boolean; pattern: string; categorySet: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Catégorise une transaction rattachée à une enseigne : la catégorie devient la
+ * catégorie par défaut de l'enseigne si celle-ci n'en a pas encore, et la règle
+ * créée (« contient » sur le libellé) est rattachée à l'enseigne. Idempotent
+ * (renvoie la règle existante si un doublon enseigne+motif existe).
+ */
+export async function createMerchantRuleFromLabel(
+  merchantId: string,
+  pattern: string,
+  subcategoryId: string,
+): Promise<MerchantRuleFromLabelResult> {
+  const p = pattern.trim();
+  if (!p) return { ok: false, error: "Motif vide" };
+  if (!subcategoryId) return { ok: false, error: "Catégorie manquante" };
+  const supabase = await createClient();
+
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("subcategory_id")
+    .eq("id", merchantId)
+    .maybeSingle();
+  if (!merchant) return { ok: false, error: "Enseigne introuvable" };
+
+  // Backfill : l'enseigne hérite de la catégorie si elle n'en avait pas.
+  let categorySet = false;
+  if (!merchant.subcategory_id) {
+    await supabase
+      .from("merchants")
+      .update({ subcategory_id: subcategoryId })
+      .eq("id", merchantId);
+    categorySet = true;
+  }
+
+  const { data: existing } = await supabase
+    .from("categorization_rules")
+    .select("id")
+    .eq("match_type", "contains")
+    .eq("merchant_id", merchantId)
+    .ilike("pattern", p)
+    .limit(1);
+  if (existing && existing.length > 0) {
+    revalidate();
+    return { ok: true, ruleId: existing[0].id, exists: true, pattern: p, categorySet };
+  }
+
+  const { data, error } = await supabase
+    .from("categorization_rules")
+    .insert({
+      name: p.slice(0, 120),
+      match_type: "contains",
+      pattern: p,
+      case_sensitive: false,
+      subcategory_id: subcategoryId,
+      merchant_id: merchantId,
+      auto_validate: true,
+      priority: 100,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Règle impossible" };
+
+  revalidate();
+  return { ok: true, ruleId: data.id, exists: false, pattern: p, categorySet };
+}
+
 /**
  * Ajoute une règle rattachée à l'enseigne (auto-rattachement à l'enseigne au
  * match). La sous-catégorie de la règle est la catégorie par défaut de

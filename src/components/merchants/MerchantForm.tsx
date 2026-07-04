@@ -6,6 +6,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { useToast } from "@/hooks/useToast";
 import { createMerchant, updateMerchant } from "@/server/actions/merchants";
@@ -14,6 +15,8 @@ import type { SubcategoryOption } from "@/lib/categories/types";
 export interface MerchantFormInitial {
   name: string;
   subcategoryId: string | null;
+  country: string | null;
+  isOnline: boolean;
 }
 
 export function MerchantForm({
@@ -35,6 +38,8 @@ export function MerchantForm({
   const [subcategoryId, setSubcategoryId] = useState<string | null>(
     initial?.subcategoryId ?? null,
   );
+  const [country, setCountry] = useState(initial?.country ?? "");
+  const [isOnline, setIsOnline] = useState(initial?.isOnline ?? false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -48,8 +53,8 @@ export function MerchantForm({
     setSaving(true);
     const res =
       mode === "create"
-        ? await createMerchant({ name, subcategoryId })
-        : await updateMerchant(id!, { name, subcategoryId });
+        ? await createMerchant({ name, subcategoryId, country, isOnline })
+        : await updateMerchant(id!, { name, subcategoryId, country, isOnline });
     setSaving(false);
     if (!res.ok) {
       setError(res.error);
@@ -73,6 +78,21 @@ export function MerchantForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="Carrefour, Amazon, SNCF…"
         />
+      </FormField>
+
+      <FormField label="Localisation">
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <Input
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            placeholder="Pays (ex. France)"
+            disabled={isOnline}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+            <Checkbox checked={isOnline} onChange={(e) => setIsOnline(e.target.checked)} />
+            En ligne (Internet)
+          </label>
+        </div>
       </FormField>
 
       <FormField label="Catégorie par défaut (appliquée aux transactions/achats rattachés, surchargeable)">

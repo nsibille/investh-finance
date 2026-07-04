@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, ShoppingBag, X, Archive, ArchiveRestore, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, ShoppingBag, X, Archive, ArchiveRestore, Check, Repeat } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
@@ -74,13 +74,15 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
             const startMonth = purchase.installments[0]?.month ?? inst.month;
             const total = purchase.installments.length;
             const occurrence = installmentOccurrence(startMonth, inst.month);
+            // Abonnement sans fin : total inconnu → on affiche juste le n°.
+            const endless = purchase.is_recurring && !purchase.recurrence_end;
             return (
             <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
               <span style={{ flex: 1, textTransform: "capitalize" }}>
                 {formatMonthLabel(inst.month)}
-                {total > 1 && (
+                {(total > 1 || endless) && (
                   <span style={{ marginLeft: 6, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "none", fontFamily: "var(--font-mono)" }}>
-                    {occurrence}/{total}
+                    {endless ? `n°${occurrence}` : `${occurrence}/${total}`}
                   </span>
                 )}
               </span>
@@ -190,6 +192,12 @@ export function PurchasesManager({
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
                       <span style={{ fontWeight: "var(--fw-semibold)" }}>{p.name}</span>
+                      {p.is_recurring && (
+                        <span className="badge-status-pending" style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          <Repeat size={11} aria-hidden />
+                          {p.recurrence_end ? "Récurrent" : "Abonnement"}
+                        </span>
+                      )}
                       {p.isFullyPaid && <span className="badge-status-validated">Soldé</span>}
                       {p.is_archived && <span className="badge-status-ignored">Archivé</span>}
                     </div>
@@ -224,7 +232,7 @@ export function PurchasesManager({
                   <span>
                     Payé <Amount value={p.paidAmount} size="sm" tone="neutral" />
                   </span>
-                  {p.remaining > 0 && (
+                  {p.remaining > 0 && !(p.is_recurring && !p.recurrence_end) && (
                     <span>
                       Reste <Amount value={-p.remaining} size="sm" tone="neutral" />
                     </span>

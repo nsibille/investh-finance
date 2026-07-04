@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { generateInstallments } from "@/lib/purchases/installments";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
+import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -12,6 +13,14 @@ export interface InstallmentPlan {
   count: number;
   startMonth: string; // YYYY-MM ou YYYY-MM-DD
   amount: number;
+  label?: string | null;
+}
+
+export interface RecurrencePlan {
+  amount: number;
+  startMonth: string; // YYYY-MM ou YYYY-MM-DD
+  /** Mois de fin (YYYY-MM) ; null/undefined = sans fin (abonnement). */
+  endMonth?: string | null;
   label?: string | null;
 }
 
@@ -35,11 +44,22 @@ export interface PurchaseInput {
   merchantId?: string | null;
   /** Plan de mensualités (optionnel : achat direct si absent ou count = 0). */
   installmentPlan?: InstallmentPlan | null;
+  /** Plan récurrent (abonnement/loyer). Exclusif de `installmentPlan`. */
+  recurrencePlan?: RecurrencePlan | null;
+}
+
+function toMonthDate(ym: string): string {
+  return `${ym.slice(0, 7)}-01`;
 }
 
 export async function createPurchase(input: PurchaseInput): Promise<CreateResult> {
   const name = input.name.trim();
   if (!name || name.length > 120) return fail("Nom invalide (1–120 caractères)");
+  const rec = input.recurrencePlan;
+  const isRecurring = Boolean(
+    rec && rec.startMonth && Number.isFinite(rec.amount),
+  );
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("purchases")
@@ -48,13 +68,31 @@ export async function createPurchase(input: PurchaseInput): Promise<CreateResult
       description: input.description?.trim() || null,
       subcategory_id: input.subcategoryId ?? null,
       merchant_id: input.merchantId ?? null,
+      is_recurring: isRecurring,
+      recurrence_amount: isRecurring ? rec!.amount : null,
+      recurrence_start: isRecurring ? toMonthDate(rec!.startMonth) : null,
+      recurrence_end: isRecurring && rec!.endMonth ? toMonthDate(rec!.endMonth) : null,
+      recurrence_label: isRecurring ? (rec!.label ?? null) : null,
     })
     .select("id")
     .single();
   if (error || !data) return fail(error?.message ?? "Création impossible");
 
+  if (isRecurring) {
+    // Génère les échéances (jusqu'à la fin, ou horizon glissant si sans fin).
+    await ensureRecurringInstallments();
+    // Apparie sur mois + montant aux transactions existantes.
+    await matchPurchaseInstallments(data.id);
+  }
+
   const plan = input.installmentPlan;
-  if (plan && plan.count > 0 && plan.startMonth && Number.isFinite(plan.amount)) {
+  if (
+    !isRecurring &&
+    plan &&
+    plan.count > 0 &&
+    plan.startMonth &&
+    Number.isFinite(plan.amount)
+  ) {
     const rows = generateInstallments(plan).map((i) => ({
       purchase_id: data.id,
       month: i.month,

@@ -8,6 +8,7 @@ import {
 } from "@/lib/import/csvImporter";
 import { detectAndTagInternalTransfers } from "@/lib/import/transfers";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
+import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import type { ParsedTransaction, ImportSummary } from "@/lib/import/types";
 
 type Result =
@@ -37,6 +38,8 @@ export async function confirmImport(
       sourceFilename: filename,
     });
     const transfersDetected = await detectAndTagInternalTransfers();
+    // Étend les échéances récurrentes (nouveaux mois) avant l'appariement.
+    await ensureRecurringInstallments();
     await matchPurchaseInstallments();
     revalidatePath("/transactions");
     revalidatePath("/accounts");
@@ -62,6 +65,8 @@ export async function confirmCsvImport(
   try {
     const summary = await importCsvTransactions(transactions, filename);
     const transfersDetected = await detectAndTagInternalTransfers();
+    // Étend les échéances récurrentes (nouveaux mois) avant l'appariement.
+    await ensureRecurringInstallments();
     await matchPurchaseInstallments();
     revalidatePath("/transactions");
     revalidatePath("/accounts");

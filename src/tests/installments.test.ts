@@ -2,10 +2,39 @@ import { describe, it, expect } from "vitest";
 import {
   generateInstallments,
   installmentOccurrence,
+  addMonthsToYM,
+  enumerateMonths,
   matchInstallmentsToTransactions,
   type MatchableInstallment,
   type MatchableTx,
 } from "@/lib/purchases/installments";
+
+describe("addMonthsToYM", () => {
+  it("ajoute des mois avec passage d'année", () => {
+    expect(addMonthsToYM("2026-01", 2)).toBe("2026-03");
+    expect(addMonthsToYM("2026-11", 3)).toBe("2027-02");
+    expect(addMonthsToYM("2026-03", -4)).toBe("2025-11");
+  });
+});
+
+describe("enumerateMonths", () => {
+  it("liste les mois inclusifs au format YYYY-MM-01", () => {
+    expect(enumerateMonths("2026-05", "2026-08")).toEqual([
+      "2026-05-01",
+      "2026-06-01",
+      "2026-07-01",
+      "2026-08-01",
+    ]);
+  });
+
+  it("renvoie [] si start > end", () => {
+    expect(enumerateMonths("2026-08", "2026-05")).toEqual([]);
+  });
+
+  it("respecte le garde-fou cap", () => {
+    expect(enumerateMonths("2000-01", "2100-01", 5)).toHaveLength(5);
+  });
+});
 
 describe("installmentOccurrence", () => {
   it("compte l'occurrence 1-based depuis le mois de départ", () => {

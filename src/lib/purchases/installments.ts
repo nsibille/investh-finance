@@ -48,6 +48,37 @@ export function installmentOccurrence(startMonth: string, month: string): number
   return (y - ys) * 12 + (m - ms) + 1;
 }
 
+/** "YYYY-MM" (+ n mois) → "YYYY-MM". n peut être négatif. */
+export function addMonthsToYM(ym: string, n: number): string {
+  const [y, m] = parseMonth(ym);
+  const total = (y * 12 + (m - 1)) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12 + 12) % 12;
+  return `${ny}-${String(nm + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Liste les mois "YYYY-MM-01" de `startMonth` à `endMonth` inclus. Renvoie []
+ * si start > end. Borné par `cap` (garde-fou anti-emballement).
+ */
+export function enumerateMonths(
+  startMonth: string,
+  endMonth: string,
+  cap = 600,
+): string[] {
+  const [ys, ms] = parseMonth(startMonth);
+  const [ye, me] = parseMonth(endMonth);
+  const start = ys * 12 + (ms - 1);
+  const end = ye * 12 + (me - 1);
+  const out: string[] = [];
+  for (let t = start; t <= end && out.length < cap; t++) {
+    const y = Math.floor(t / 12);
+    const m = (t % 12) + 1;
+    out.push(`${y}-${String(m).padStart(2, "0")}-01`);
+  }
+  return out;
+}
+
 export interface MatchableInstallment {
   id: string;
   month: string;

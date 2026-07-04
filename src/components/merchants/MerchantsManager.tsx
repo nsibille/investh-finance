@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Store, X, Wand2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Store, X, Wand2, Globe, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
@@ -188,7 +188,16 @@ export function MerchantsManager({
                   </IconButton>
                 </div>
 
-                <div style={{ display: "flex", gap: "var(--space-4)", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "var(--space-4)", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flexWrap: "wrap", alignItems: "center" }}>
+                  {m.is_online ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <Globe size={13} aria-hidden /> En ligne
+                    </span>
+                  ) : m.country ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <MapPin size={13} aria-hidden /> {m.country}
+                    </span>
+                  ) : null}
                   <span>{m.transactionCount} transaction{m.transactionCount > 1 ? "s" : ""}</span>
                   <span>{m.purchaseCount} achat{m.purchaseCount > 1 ? "s" : ""}</span>
                 </div>
@@ -216,6 +225,8 @@ export function MerchantsManager({
                 ? {
                     name: modal.merchant.name,
                     subcategoryId: modal.merchant.subcategory_id,
+                    country: modal.merchant.country,
+                    isOnline: modal.merchant.is_online,
                   }
                 : undefined
             }

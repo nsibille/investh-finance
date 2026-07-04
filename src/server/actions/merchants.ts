@@ -24,15 +24,25 @@ function revalidate() {
 export interface MerchantInput {
   name: string;
   subcategoryId?: string | null;
+  /** Pays de l'enseigne (libre) ; ignoré si `isOnline`. */
+  country?: string | null;
+  /** Enseigne en ligne (Internet). */
+  isOnline?: boolean;
 }
 
 export async function createMerchant(input: MerchantInput): Promise<CreateResult> {
   const name = input.name.trim();
   if (!name || name.length > 120) return fail("Nom invalide (1–120 caractères)");
   const supabase = await createClient();
+  const isOnline = input.isOnline ?? false;
   const { data, error } = await supabase
     .from("merchants")
-    .insert({ name, subcategory_id: input.subcategoryId ?? null })
+    .insert({
+      name,
+      subcategory_id: input.subcategoryId ?? null,
+      is_online: isOnline,
+      country: isOnline ? null : input.country?.trim() || null,
+    })
     .select("id")
     .single();
 
@@ -63,9 +73,15 @@ export async function updateMerchant(
   const name = input.name.trim();
   if (!name || name.length > 120) return fail("Nom invalide (1–120 caractères)");
   const supabase = await createClient();
+  const isOnline = input.isOnline ?? false;
   const { error } = await supabase
     .from("merchants")
-    .update({ name, subcategory_id: input.subcategoryId ?? null })
+    .update({
+      name,
+      subcategory_id: input.subcategoryId ?? null,
+      is_online: isOnline,
+      country: isOnline ? null : input.country?.trim() || null,
+    })
     .eq("id", id);
   if (error) {
     if (error.code === "23505") return fail("Une enseigne porte déjà ce nom.");

@@ -474,22 +474,28 @@ export type Database = {
       }
       merchants: {
         Row: {
+          country: string | null
           created_at: string
           id: string
+          is_online: boolean
           name: string
           subcategory_id: string | null
           updated_at: string
         }
         Insert: {
+          country?: string | null
           created_at?: string
           id?: string
+          is_online?: boolean
           name: string
           subcategory_id?: string | null
           updated_at?: string
         }
         Update: {
+          country?: string | null
           created_at?: string
           id?: string
+          is_online?: boolean
           name?: string
           subcategory_id?: string | null
           updated_at?: string
@@ -565,8 +571,13 @@ export type Database = {
           description: string | null
           id: string
           is_archived: boolean
+          is_recurring: boolean
           merchant_id: string | null
           name: string
+          recurrence_amount: number | null
+          recurrence_end: string | null
+          recurrence_label: string | null
+          recurrence_start: string | null
           subcategory_id: string | null
           updated_at: string
         }
@@ -575,8 +586,13 @@ export type Database = {
           description?: string | null
           id?: string
           is_archived?: boolean
+          is_recurring?: boolean
           merchant_id?: string | null
           name: string
+          recurrence_amount?: number | null
+          recurrence_end?: string | null
+          recurrence_label?: string | null
+          recurrence_start?: string | null
           subcategory_id?: string | null
           updated_at?: string
         }
@@ -585,8 +601,13 @@ export type Database = {
           description?: string | null
           id?: string
           is_archived?: boolean
+          is_recurring?: boolean
           merchant_id?: string | null
           name?: string
+          recurrence_amount?: number | null
+          recurrence_end?: string | null
+          recurrence_label?: string | null
+          recurrence_start?: string | null
           subcategory_id?: string | null
           updated_at?: string
         }

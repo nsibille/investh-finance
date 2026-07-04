@@ -7,7 +7,10 @@ export interface ImportPreviewRow extends ParsedTransaction {
   duplicateReason: DuplicateReason;
   connectionLabel?: string;
   targetAccountExists?: boolean;
+  /** Catégorie proposée par les règles (référence pour décider d'un override). */
   suggestedSubcategoryId?: string | null;
+  /** Catégorie initiale effective (virement interne détecté sinon règle). */
+  initialSubcategoryId?: string | null;
   /** Catégorie courante (proposée par les règles, éventuellement modifiée). */
   categoryId: string | null;
   include: boolean;

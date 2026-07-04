@@ -166,7 +166,8 @@ export function StatementImport({
         dupExisting: data.dupExisting ?? 0,
         rows: data.rows.map((r: ImportPreviewRow) => ({
           ...r,
-          categoryId: r.suggestedSubcategoryId ?? null,
+          // Virement interne détecté (ou règle) appliqué par défaut.
+          categoryId: r.initialSubcategoryId ?? r.suggestedSubcategoryId ?? null,
           include: !r.duplicate,
         })),
       });

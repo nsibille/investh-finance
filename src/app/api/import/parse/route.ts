@@ -11,6 +11,8 @@ import {
   buildCsvPreview,
 } from "@/lib/import/preview";
 import { normalizeConnection } from "@/lib/import/connection";
+import { getInternalTransferSubcategoryId } from "@/lib/import/transfers";
+import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
 import { applyRules, toEngineRule, type EngineRule } from "@/lib/rules/engine";
 import type { ParsedTransaction } from "@/lib/import/types";
 
@@ -58,6 +60,29 @@ function suggestSubcategory(
   ).subcategory_id;
 }
 
+/**
+ * Détecte les virements internes dans le lot analysé (montants opposés, 2
+ * comptes différents, ±4 jours) et renvoie l'ensemble des indices concernés.
+ * Le compte est identifié par `accountKeyOf` (connexion pour un CSV).
+ */
+function detectTransferIndices(
+  transactions: ParsedTransaction[],
+  accountKeyOf: (tx: ParsedTransaction, i: number) => string,
+): Set<number> {
+  const candidates = transactions.map((t, i) => ({
+    id: String(i),
+    account_id: accountKeyOf(t, i),
+    amount: t.amount,
+    operation_date: t.operation_date,
+  }));
+  const idx = new Set<number>();
+  for (const [a, b] of matchInternalTransfers(candidates, 4)) {
+    idx.add(Number(a));
+    idx.add(Number(b));
+  }
+  return idx;
+}
+
 /** Analyse un fichier (PDF ou CSV) et renvoie un aperçu avec doublons flaggés. */
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -93,9 +118,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const [{ data: accounts }, rules] = await Promise.all([
+    const [{ data: accounts }, rules, transferSubId] = await Promise.all([
       supabase.from("accounts").select("id, connection_name"),
       loadRules(supabase),
+      getInternalTransferSubcategoryId(supabase),
     ]);
     const accountIdByConnection = new Map<string, string>();
     for (const a of accounts ?? []) {
@@ -111,11 +137,19 @@ export async function POST(request: Request) {
     const existingSet = await fetchExistingHashes(supabase, knownHashes);
     const { rows, connections } = buildCsvPreview(transactions, targets, existingSet);
 
-    // Catégorie proposée par les règles (compte existant, sinon règles globales).
-    const withSuggestion = rows.map((r, i) => ({
-      ...r,
-      suggestedSubcategoryId: suggestSubcategory(rules, targets[i].accountId ?? "", r),
-    }));
+    // Virements internes : appariés par connexion (2 comptes différents).
+    const transferIdx = transferSubId
+      ? detectTransferIndices(transactions, (t) => normalizeConnection(t.connection_name))
+      : new Set<number>();
+
+    // Catégorie proposée par les règles ; les virements priment (catégorie
+    // « Virement interne ») et sont envoyés en override à l'import.
+    const withSuggestion = rows.map((r, i) => {
+      const suggestedSubcategoryId = suggestSubcategory(rules, targets[i].accountId ?? "", r);
+      const initialSubcategoryId =
+        transferIdx.has(i) && transferSubId ? transferSubId : suggestedSubcategoryId;
+      return { ...r, suggestedSubcategoryId, initialSubcategoryId };
+    });
 
     const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
 
@@ -176,10 +210,11 @@ export async function POST(request: Request) {
     loadRules(supabase),
   ]);
   const { rows } = buildPreviewRows(accountId, transactions, existingSet);
-  const withSuggestion = rows.map((r) => ({
-    ...r,
-    suggestedSubcategoryId: suggestSubcategory(rules, accountId, r),
-  }));
+  const withSuggestion = rows.map((r) => {
+    const suggestedSubcategoryId = suggestSubcategory(rules, accountId, r);
+    // Relevé PDF = un seul compte : pas de virement interne détectable ici.
+    return { ...r, suggestedSubcategoryId, initialSubcategoryId: suggestedSubcategoryId };
+  });
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
 
   return NextResponse.json({

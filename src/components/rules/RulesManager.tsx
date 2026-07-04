@@ -13,6 +13,7 @@ import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RuleForm } from "./RuleForm";
+import { RuleImport } from "./RuleImport";
 import { setRuleActive, deleteRule } from "@/server/actions/rules";
 import type { Rule, AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -97,9 +98,11 @@ export function RulesManager({
         style={{
           display: "flex",
           justifyContent: "flex-end",
+          gap: "var(--space-3)",
           marginBottom: "var(--space-5)",
         }}
       >
+        <RuleImport subcategoryOptions={subcategoryOptions} />
         <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
           Nouvelle règle
         </Button>

@@ -467,6 +467,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_archived: boolean
           name: string
           subcategory_id: string | null
           updated_at: string
@@ -475,6 +476,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_archived?: boolean
           name: string
           subcategory_id?: string | null
           updated_at?: string
@@ -483,6 +485,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_archived?: boolean
           name?: string
           subcategory_id?: string | null
           updated_at?: string
@@ -502,25 +505,31 @@ export type Database = {
           amount: number
           created_at: string
           id: string
+          label: string | null
           month: string
           note: string | null
           purchase_id: string
+          transaction_id: string | null
         }
         Insert: {
           amount: number
           created_at?: string
           id?: string
+          label?: string | null
           month: string
           note?: string | null
           purchase_id: string
+          transaction_id?: string | null
         }
         Update: {
           amount?: number
           created_at?: string
           id?: string
+          label?: string | null
           month?: string
           note?: string | null
           purchase_id?: string
+          transaction_id?: string | null
         }
         Relationships: [
           {

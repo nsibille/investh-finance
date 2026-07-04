@@ -14,6 +14,12 @@ export interface PurchaseWithDetails extends Purchase {
   installments: PurchaseInstallment[];
   /** Somme des mensualités prévisionnelles. */
   forecastAmount: number;
+  /** Nombre de mensualités déjà appariées à une transaction. */
+  matchedInstallments: number;
+  /** Achat soldé : toutes les mensualités appariées (ou direct avec ≥1 tx). */
+  isFullyPaid: boolean;
+  /** Reste à payer (somme des mensualités non appariées). */
+  remaining: number;
 }
 
 export interface PurchaseOption {

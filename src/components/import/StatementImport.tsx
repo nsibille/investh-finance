@@ -431,6 +431,15 @@ export function StatementImport({
         open={purchaseRow !== null}
         onClose={() => setPurchaseRow(null)}
         purchaseOptions={allPurchases}
+        fromTransaction={
+          purchaseRow !== null && preview?.rows[purchaseRow]
+            ? {
+                operationDate: preview.rows[purchaseRow].operation_date,
+                amount: preview.rows[purchaseRow].amount,
+                label: preview.rows[purchaseRow].label,
+              }
+            : null
+        }
         onAttach={(option) => {
           if (purchaseRow !== null) attachPurchase(purchaseRow, option);
         }}

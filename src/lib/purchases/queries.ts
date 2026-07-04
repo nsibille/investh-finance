@@ -47,6 +47,12 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
     const a = agg.get(p.id) ?? { count: 0, sum: 0 };
     const inst = byPurchase.get(p.id) ?? [];
     const cat = p.subcategory_id ? subInfo.get(p.subcategory_id) : null;
+    const matched = inst.filter((i) => i.transaction_id).length;
+    const remaining = inst
+      .filter((i) => !i.transaction_id)
+      .reduce((s, i) => s + Math.abs(Number(i.amount)), 0);
+    const isFullyPaid =
+      inst.length > 0 ? matched === inst.length : a.count > 0;
     return {
       ...p,
       categoryLabel: cat?.label ?? null,
@@ -55,6 +61,9 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
       paidAmount: a.sum,
       installments: inst,
       forecastAmount: inst.reduce((s, i) => s + Number(i.amount), 0),
+      matchedInstallments: matched,
+      isFullyPaid,
+      remaining,
     };
   });
 }

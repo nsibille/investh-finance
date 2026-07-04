@@ -38,6 +38,10 @@ export function PurchaseForm({
   const [subcategoryId, setSubcategoryId] = useState<string | null>(
     initial?.subcategoryId ?? null,
   );
+  // Plan de mensualités (création uniquement) — direct si count vide/0.
+  const [count, setCount] = useState("");
+  const [startMonth, setStartMonth] = useState("");
+  const [monthly, setMonthly] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -48,10 +52,16 @@ export function PurchaseForm({
       setError("Le nom est requis.");
       return;
     }
+    const n = parseInt(count, 10);
+    const amount = parseFloat(monthly.replace(",", "."));
+    const installmentPlan =
+      mode === "create" && n > 0 && startMonth && Number.isFinite(amount)
+        ? { count: n, startMonth, amount: -Math.abs(amount) }
+        : null;
     setSaving(true);
     const res =
       mode === "create"
-        ? await createPurchase({ name, description, subcategoryId })
+        ? await createPurchase({ name, description, subcategoryId, installmentPlan })
         : await updatePurchase(id!, { name, description, subcategoryId });
     setSaving(false);
     if (!res.ok) {
@@ -95,6 +105,36 @@ export function PurchaseForm({
           allowCreate
         />
       </FormField>
+
+      {mode === "create" && (
+        <FormField label="Mensualités (optionnel — laisser vide pour un achat direct)">
+          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            <Input
+              type="number"
+              min={0}
+              value={count}
+              onChange={(e) => setCount(e.target.value)}
+              placeholder="Nombre"
+              style={{ maxWidth: 100 }}
+            />
+            <span style={{ color: "var(--color-text-muted)" }}>×</span>
+            <Input
+              value={monthly}
+              onChange={(e) => setMonthly(e.target.value)}
+              placeholder="Montant /mois"
+              style={{ maxWidth: 130 }}
+            />
+            <span style={{ color: "var(--color-text-muted)" }}>dès</span>
+            <input
+              type="month"
+              value={startMonth}
+              onChange={(e) => setStartMonth(e.target.value)}
+              className="input-text-md"
+              style={{ maxWidth: 150 }}
+            />
+          </div>
+        </FormField>
+      )}
 
       <div
         style={{

@@ -26,20 +26,32 @@ const optStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
 };
 
+/** Transaction d'origine quand on crée un achat depuis une ligne d'import. */
+export interface FromTransaction {
+  operationDate: string; // YYYY-MM-DD
+  amount: number;
+  label: string;
+}
+
 export function PurchaseAttachModal({
   open,
   onClose,
   purchaseOptions,
   onAttach,
+  fromTransaction,
 }: {
   open: boolean;
   onClose: () => void;
   purchaseOptions: PurchaseOption[];
   onAttach: (option: PurchaseOption) => void;
+  /** Si fourni, la création propose un plan de mensualités pré-rempli. */
+  fromTransaction?: FromTransaction | null;
 }) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  // Nombre de mensualités quand on crée depuis une transaction (1 = direct).
+  const [count, setCount] = useState("1");
 
   const filtered = useMemo(() => {
     const q = norm(query);
@@ -50,9 +62,14 @@ export function PurchaseAttachModal({
 
   const exactExists = purchaseOptions.some((p) => norm(p.name) === norm(query));
 
+  function reset() {
+    setQuery("");
+    setCount("1");
+  }
+
   function attach(option: PurchaseOption) {
     onAttach(option);
-    setQuery("");
+    reset();
     onClose();
   }
 
@@ -60,7 +77,20 @@ export function PurchaseAttachModal({
     const name = query.trim();
     if (!name) return;
     setCreating(true);
-    const res = await createPurchase({ name });
+    // Depuis une transaction : montant + date + libellé peuplent les mensualités.
+    let installmentPlan = null;
+    if (fromTransaction) {
+      const n = parseInt(count, 10);
+      if (Number.isFinite(n) && n > 1) {
+        installmentPlan = {
+          count: n,
+          startMonth: fromTransaction.operationDate.slice(0, 7),
+          amount: -Math.abs(fromTransaction.amount),
+          label: fromTransaction.label,
+        };
+      }
+    }
+    const res = await createPurchase({ name, installmentPlan });
     setCreating(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -93,15 +123,43 @@ export function PurchaseAttachModal({
             </button>
           ))}
           {query.trim() && !exactExists && (
-            <button
-              type="button"
-              style={{ ...optStyle, color: "var(--color-brand-primary-600)", fontWeight: "var(--fw-medium)" }}
-              disabled={creating}
-              onClick={createAndAttach}
-            >
-              <Plus size={14} aria-hidden />
-              Créer «&nbsp;{query.trim()}&nbsp;»
-            </button>
+            <>
+              {fromTransaction && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-2)",
+                    padding: "var(--space-2)",
+                    fontSize: "var(--text-sm)",
+                    color: "var(--color-text-secondary)",
+                  }}
+                >
+                  <label htmlFor="attach-count">Mensualités</label>
+                  <Input
+                    id="attach-count"
+                    type="number"
+                    min={1}
+                    value={count}
+                    onChange={(e) => setCount(e.target.value)}
+                    style={{ maxWidth: 80 }}
+                  />
+                  <span style={{ color: "var(--color-text-muted)" }}>
+                    × {Math.abs(fromTransaction.amount).toFixed(2).replace(".", ",")} € dès{" "}
+                    {fromTransaction.operationDate.slice(0, 7)}
+                  </span>
+                </div>
+              )}
+              <button
+                type="button"
+                style={{ ...optStyle, color: "var(--color-brand-primary-600)", fontWeight: "var(--fw-medium)" }}
+                disabled={creating}
+                onClick={createAndAttach}
+              >
+                <Plus size={14} aria-hidden />
+                Créer «&nbsp;{query.trim()}&nbsp;»
+              </button>
+            </>
           )}
           {filtered.length === 0 && !query.trim() && (
             <div style={{ padding: "var(--space-3)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>

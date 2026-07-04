@@ -7,6 +7,7 @@ import {
   type CsvImportSummary,
 } from "@/lib/import/csvImporter";
 import { detectAndTagInternalTransfers } from "@/lib/import/transfers";
+import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import type { ParsedTransaction, ImportSummary } from "@/lib/import/types";
 
 type Result =
@@ -36,8 +37,10 @@ export async function confirmImport(
       sourceFilename: filename,
     });
     const transfersDetected = await detectAndTagInternalTransfers();
+    await matchPurchaseInstallments();
     revalidatePath("/transactions");
     revalidatePath("/accounts");
+    revalidatePath("/achats");
     return { ok: true, summary, transfersDetected };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erreur d'import" };
@@ -59,8 +62,10 @@ export async function confirmCsvImport(
   try {
     const summary = await importCsvTransactions(transactions, filename);
     const transfersDetected = await detectAndTagInternalTransfers();
+    await matchPurchaseInstallments();
     revalidatePath("/transactions");
     revalidatePath("/accounts");
+    revalidatePath("/achats");
     return { ok: true, summary, transfersDetected };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erreur d'import" };

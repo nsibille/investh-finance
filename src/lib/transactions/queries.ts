@@ -16,6 +16,10 @@ const DEFAULT_PER_PAGE = 50;
 const LIST_COLUMNS =
   "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring" as const;
 
+/** Colonnes du détail : ajoute `purchase_id` (pour verrouiller la catégorie). */
+const DETAIL_COLUMNS =
+  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id" as const;
+
 type TransactionRecord = Pick<
   Transaction,
   | "id"
@@ -155,12 +159,21 @@ export async function getTransaction(
 ): Promise<TransactionRow | null> {
   const supabase = await createClient();
   const [{ data }, accounts, categories] = await Promise.all([
-    supabase.from("transactions").select(LIST_COLUMNS).eq("id", id).maybeSingle(),
+    supabase.from("transactions").select(DETAIL_COLUMNS).eq("id", id).maybeSingle(),
     getAccountDisplayMap(),
     getCategoryDisplayMap(),
   ]);
   if (!data) return null;
-  return enrich(data, accounts, categories);
+  const row = enrich(data, accounts, categories);
+  if (data.purchase_id) {
+    const { data: purchase } = await supabase
+      .from("purchases")
+      .select("id, name")
+      .eq("id", data.purchase_id)
+      .maybeSingle();
+    if (purchase) row.purchase = { id: purchase.id, name: purchase.name };
+  }
+  return row;
 }
 
 export async function countPending(): Promise<number> {

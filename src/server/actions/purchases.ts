@@ -2,9 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { generateInstallments } from "@/lib/purchases/installments";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
+
+export interface InstallmentPlan {
+  count: number;
+  startMonth: string; // YYYY-MM ou YYYY-MM-DD
+  amount: number;
+  label?: string | null;
+}
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string };
@@ -14,7 +22,7 @@ function fail(message: string): { ok: false; error: string } {
 }
 
 function revalidate() {
-  revalidatePath("/purchases");
+  revalidatePath("/achats");
   revalidatePath("/transactions");
 }
 
@@ -22,6 +30,8 @@ export interface PurchaseInput {
   name: string;
   description?: string | null;
   subcategoryId?: string | null;
+  /** Plan de mensualités (optionnel : achat direct si absent ou count = 0). */
+  installmentPlan?: InstallmentPlan | null;
 }
 
 export async function createPurchase(input: PurchaseInput): Promise<CreateResult> {
@@ -38,8 +48,34 @@ export async function createPurchase(input: PurchaseInput): Promise<CreateResult
     .select("id")
     .single();
   if (error || !data) return fail(error?.message ?? "Création impossible");
+
+  const plan = input.installmentPlan;
+  if (plan && plan.count > 0 && plan.startMonth && Number.isFinite(plan.amount)) {
+    const rows = generateInstallments(plan).map((i) => ({
+      purchase_id: data.id,
+      month: i.month,
+      amount: i.amount,
+      label: i.label,
+    }));
+    if (rows.length > 0) await supabase.from("purchase_installments").insert(rows);
+  }
+
   revalidate();
   return { ok: true, id: data.id };
+}
+
+export async function setPurchaseArchived(
+  id: string,
+  archived: boolean,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("purchases")
+    .update({ is_archived: archived })
+    .eq("id", id);
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
 }
 
 export async function updatePurchase(
@@ -135,7 +171,7 @@ export async function addInstallment(
     note: note?.trim() || null,
   });
   if (error) return fail(error.message);
-  revalidatePath("/purchases");
+  revalidatePath("/achats");
   return { ok: true };
 }
 
@@ -143,6 +179,6 @@ export async function deleteInstallment(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("purchase_installments").delete().eq("id", id);
   if (error) return fail(error.message);
-  revalidatePath("/purchases");
+  revalidatePath("/achats");
   return { ok: true };
 }

@@ -35,6 +35,8 @@ export interface TransactionRow {
   subcategory_id: string | null;
   account: AccountDisplay | null;
   category: CategoryDisplay | null;
+  /** Achat rattaché (catégorie héritée, verrou sur le sélecteur). */
+  purchase?: { id: string; name: string } | null;
 }
 
 export interface TransactionFilters {

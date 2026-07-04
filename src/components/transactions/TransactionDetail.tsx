@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Ban, RotateCcw, Wand2 } from "lucide-react";
+import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Unlink } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Amount } from "@/components/ui/Amount";
 import { StatusBadge, Dot } from "@/components/ui/Badge";
@@ -23,6 +23,7 @@ import {
   validateTransaction,
   updateTransactionNote,
 } from "@/server/actions/transactions";
+import { detachTransaction } from "@/server/actions/purchases";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { Tag } from "@/lib/tags/queries";
@@ -99,6 +100,13 @@ export function TransactionDetail({
     }
   }
 
+  async function detach() {
+    const res = await detachTransaction(tx.id);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Transaction détachée de l'achat");
+    router.refresh();
+  }
+
   async function saveNote() {
     setSavingNote(true);
     const res = await updateTransactionNote(tx.id, note);
@@ -141,9 +149,37 @@ export function TransactionDetail({
 
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          <FormField label="Catégorie">
-            <CategorySelect value={subcategoryId} options={subcategoryOptions} allowCreate onChange={changeCategory} />
-          </FormField>
+          {tx.purchase ? (
+            <FormField label="Catégorie (héritée de l'achat)">
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <CategorySelect value={subcategoryId} options={subcategoryOptions} disabled onChange={changeCategory} />
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "var(--space-2)",
+                    padding: "var(--space-2) var(--space-3)",
+                    background: "var(--color-bg-subtle)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "var(--text-sm)",
+                  }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                    <ShoppingBag size={15} aria-hidden />
+                    Rattachée à l&apos;achat « {tx.purchase.name} »
+                  </span>
+                  <Button variant="ghost" size="sm" leftIcon={<Unlink size={14} />} onClick={detach}>
+                    Détacher
+                  </Button>
+                </div>
+              </div>
+            </FormField>
+          ) : (
+            <FormField label="Catégorie">
+              <CategorySelect value={subcategoryId} options={subcategoryOptions} allowCreate onChange={changeCategory} />
+            </FormField>
+          )}
 
           <FormField label="Tags">
             <TagPicker transactionId={tx.id} tags={tags} allTags={allTags} />

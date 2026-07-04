@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, ShoppingBag, X } from "lucide-react";
+import { Plus, Pencil, Trash2, ShoppingBag, X, Archive, ArchiveRestore, Check } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Alert } from "@/components/ui/Alert";
 import { Amount } from "@/components/ui/Amount";
@@ -17,6 +18,7 @@ import { formatMonthLabel } from "@/lib/format/date";
 import { PurchaseForm } from "./PurchaseForm";
 import {
   deletePurchase,
+  setPurchaseArchived,
   addInstallment,
   deleteInstallment,
 } from "@/server/actions/purchases";
@@ -66,12 +68,18 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
       {purchase.installments.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
           {purchase.installments.map((inst) => (
-            <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)" }}>
+            <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
               <span style={{ flex: 1, textTransform: "capitalize" }}>{formatMonthLabel(inst.month)}</span>
               <Amount value={Number(inst.amount)} size="sm" tone="neutral" />
-              <IconButton label="Supprimer" onClick={() => remove(inst.id)}>
-                <X size={14} />
-              </IconButton>
+              {inst.transaction_id ? (
+                <span title="Appariée à une transaction" style={{ color: "var(--color-success)", display: "inline-flex" }}>
+                  <Check size={15} aria-hidden />
+                </span>
+              ) : (
+                <IconButton label="Supprimer" onClick={() => remove(inst.id)}>
+                  <X size={14} />
+                </IconButton>
+              )}
             </div>
           ))}
         </div>
@@ -109,6 +117,10 @@ export function PurchasesManager({
   const toast = useToast();
   const [modal, setModal] = useState<ModalState>(null);
   const [toDelete, setToDelete] = useState<PurchaseWithDetails | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const visible = purchases.filter((p) => showArchived || !p.is_archived);
+  const archivedCount = purchases.filter((p) => p.is_archived).length;
 
   async function handleDelete() {
     if (!toDelete) return;
@@ -120,15 +132,26 @@ export function PurchasesManager({
     router.refresh();
   }
 
+  async function toggleArchive(p: PurchaseWithDetails) {
+    const res = await setPurchaseArchived(p.id, !p.is_archived);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(p.is_archived ? "Achat désarchivé" : "Achat archivé");
+    router.refresh();
+  }
+
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "var(--space-5)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-5)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", visibility: archivedCount > 0 ? "visible" : "hidden" }}>
+          <Checkbox checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Afficher les archivés ({archivedCount})
+        </label>
         <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
           Nouvel achat
         </Button>
       </div>
 
-      {purchases.length === 0 ? (
+      {visible.length === 0 ? (
         <Card>
           <EmptyState
             icon={ShoppingBag}
@@ -143,12 +166,16 @@ export function PurchasesManager({
         </Card>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "var(--space-4)" }}>
-          {purchases.map((p) => (
+          {visible.map((p) => (
             <Card key={p.id}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", opacity: p.is_archived ? 0.6 : 1 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: "var(--fw-semibold)" }}>{p.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: "var(--fw-semibold)" }}>{p.name}</span>
+                      {p.isFullyPaid && <span className="badge-status-validated">Soldé</span>}
+                      {p.is_archived && <span className="badge-status-ignored">Archivé</span>}
+                    </div>
                     {p.categoryLabel && (
                       <div style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)", fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: 2 }}>
                         <Dot color={p.categoryColor ?? undefined} />
@@ -156,6 +183,9 @@ export function PurchasesManager({
                       </div>
                     )}
                   </div>
+                  <IconButton label={p.is_archived ? "Désarchiver" : "Archiver"} onClick={() => toggleArchive(p)}>
+                    {p.is_archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                  </IconButton>
                   <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", purchase: p })}>
                     <Pencil size={16} />
                   </IconButton>
@@ -170,16 +200,16 @@ export function PurchasesManager({
                   </p>
                 )}
 
-                <div style={{ display: "flex", gap: "var(--space-4)", fontSize: "var(--text-sm)" }}>
+                <div style={{ display: "flex", gap: "var(--space-4)", fontSize: "var(--text-sm)", flexWrap: "wrap" }}>
                   <span style={{ color: "var(--color-text-muted)" }}>
                     {p.transactionCount} transaction{p.transactionCount > 1 ? "s" : ""}
                   </span>
                   <span>
                     Payé <Amount value={p.paidAmount} size="sm" tone="neutral" />
                   </span>
-                  {p.forecastAmount !== 0 && (
+                  {p.remaining > 0 && (
                     <span>
-                      Prév. <Amount value={-Math.abs(p.forecastAmount)} size="sm" tone="neutral" />
+                      Reste <Amount value={-p.remaining} size="sm" tone="neutral" />
                     </span>
                   )}
                 </div>

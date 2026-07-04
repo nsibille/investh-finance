@@ -14,6 +14,10 @@ import { normalizeConnection } from "@/lib/import/connection";
 import { getInternalTransferSubcategoryId } from "@/lib/import/transfers";
 import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
 import { applyRules, toEngineRule, type EngineRule } from "@/lib/rules/engine";
+import {
+  matchPreviewRowsToPurchases,
+  type PreviewRow,
+} from "@/lib/purchases/match";
 import type { ParsedTransaction } from "@/lib/import/types";
 
 function isCsv(file: File): boolean {
@@ -81,6 +85,54 @@ function detectTransferIndices(
     idx.add(Number(b));
   }
   return idx;
+}
+
+type PreviewRowLike = {
+  operation_date: string;
+  amount: number;
+  raw_label: string;
+  duplicateReason?: string | null;
+  initialSubcategoryId?: string | null;
+  purchaseId?: string;
+  purchaseName?: string;
+};
+
+/**
+ * Pré-rattache les lignes (hors doublons existants) aux mensualités
+ * prévisionnelles d'achats : l'aperçu affiche le rattachement avant l'import.
+ */
+async function annotatePurchaseMatches<T extends PreviewRowLike>(
+  supabase: Supa,
+  rows: T[],
+): Promise<T[]> {
+  const candidates: PreviewRow[] = rows
+    .map((r, index) => ({
+      index,
+      operation_date: r.operation_date,
+      amount: r.amount,
+      raw_label: r.raw_label,
+      dup: r.duplicateReason === "existing",
+    }))
+    .filter((r) => !r.dup)
+    .map(({ index, operation_date, amount, raw_label }) => ({
+      index,
+      operation_date,
+      amount,
+      raw_label,
+    }));
+  const matches = await matchPreviewRowsToPurchases(supabase, candidates);
+  if (matches.size === 0) return rows;
+  return rows.map((r, i) => {
+    const m = matches.get(i);
+    if (!m) return r;
+    return {
+      ...r,
+      purchaseId: m.purchaseId,
+      purchaseName: m.purchaseName,
+      // Catégorie héritée de l'achat (surchargeable dans l'aperçu).
+      initialSubcategoryId: m.subcategoryId ?? r.initialSubcategoryId,
+    };
+  });
 }
 
 /** Analyse un fichier (PDF ou CSV) et renvoie un aperçu avec doublons flaggés. */
@@ -152,6 +204,7 @@ export async function POST(request: Request) {
     });
 
     const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
+    const previewRows = await annotatePurchaseMatches(supabase, withSuggestion);
 
     return NextResponse.json({
       ok: true,
@@ -161,7 +214,7 @@ export async function POST(request: Request) {
       warning: null,
       multiAccount: true,
       connections,
-      rows: withSuggestion,
+      rows: previewRows,
       total: rows.length,
       newCount: rows.filter((r) => !r.duplicate).length,
       dupCount: dupExisting,
@@ -216,6 +269,7 @@ export async function POST(request: Request) {
     return { ...r, suggestedSubcategoryId, initialSubcategoryId: suggestedSubcategoryId };
   });
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
+  const previewRows = await annotatePurchaseMatches(supabase, withSuggestion);
 
   return NextResponse.json({
     ok: true,
@@ -225,7 +279,7 @@ export async function POST(request: Request) {
     warning,
     multiAccount: false,
     connections: [],
-    rows: withSuggestion,
+    rows: previewRows,
     total: rows.length,
     newCount: rows.filter((r) => !r.duplicate).length,
     dupCount: dupExisting,

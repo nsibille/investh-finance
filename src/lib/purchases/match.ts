@@ -6,7 +6,93 @@ import {
 } from "./installments";
 import type { Database } from "@/types/database.types";
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
+
+export interface PreviewRow {
+  index: number;
+  operation_date: string;
+  amount: number;
+  raw_label: string;
+}
+export interface PreviewPurchaseMatch {
+  purchaseId: string;
+  purchaseName: string;
+  subcategoryId: string | null;
+}
+
+/**
+ * Aperçu d'import : apparie les lignes analysées aux mensualités prévisionnelles
+ * non réglées des achats (non archivés). Même règle qu'à l'import — mois +
+ * montant, libellé seulement si l'achat a déjà une transaction de référence.
+ * Retourne, par index de ligne, l'achat à pré-rattacher.
+ */
+export async function matchPreviewRowsToPurchases(
+  supabase: SupabaseServerClient,
+  rows: PreviewRow[],
+): Promise<Map<number, PreviewPurchaseMatch>> {
+  if (rows.length === 0) return new Map();
+  const { data: insts } = await supabase
+    .from("purchase_installments")
+    .select("id, purchase_id, month, amount, label")
+    .is("transaction_id", null);
+  if (!insts || insts.length === 0) return new Map();
+
+  const purchaseIds = [...new Set(insts.map((i) => i.purchase_id))];
+  const [{ data: purchases }, { data: attached }] = await Promise.all([
+    supabase
+      .from("purchases")
+      .select("id, name, subcategory_id, is_archived")
+      .in("id", purchaseIds),
+    supabase
+      .from("transactions")
+      .select("purchase_id")
+      .in("purchase_id", purchaseIds),
+  ]);
+  const pInfo = new Map((purchases ?? []).map((p) => [p.id, p]));
+  const hasAttached = new Set(
+    (attached ?? []).map((t) => t.purchase_id).filter((x): x is string => !!x),
+  );
+
+  const items: MatchableInstallment[] = [];
+  const purchaseByInst = new Map<string, string>();
+  for (const i of insts) {
+    const p = pInfo.get(i.purchase_id);
+    if (!p || p.is_archived) continue;
+    items.push({
+      id: i.id,
+      month: i.month,
+      amount: Number(i.amount),
+      // Sans transaction rattachée : aucun libellé de référence fiable.
+      label: hasAttached.has(i.purchase_id) ? i.label : null,
+    });
+    purchaseByInst.set(i.id, i.purchase_id);
+  }
+  if (items.length === 0) return new Map();
+
+  const candidates: MatchableTx[] = rows.map((r) => ({
+    id: String(r.index),
+    operation_date: r.operation_date,
+    amount: r.amount,
+    raw_label: r.raw_label,
+  }));
+
+  const out = new Map<number, PreviewPurchaseMatch>();
+  for (const { installmentId, transactionId } of matchInstallmentsToTransactions(
+    items,
+    candidates,
+  )) {
+    const pid = purchaseByInst.get(installmentId);
+    if (!pid) continue;
+    const p = pInfo.get(pid);
+    out.set(Number(transactionId), {
+      purchaseId: pid,
+      purchaseName: p?.name ?? "",
+      subcategoryId: p?.subcategory_id ?? null,
+    });
+  }
+  return out;
+}
 
 /**
  * Apparie automatiquement les mensualités non réglées aux transactions.

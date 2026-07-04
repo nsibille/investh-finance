@@ -77,9 +77,16 @@ export async function importParsedTransactions(
             : "pending"
           : outcome.status;
         const appliedRuleId = overridden ? null : outcome.applied_rule_id;
-        // Enseigne : rattachement automatique quand la règle matchée appartient
-        // à une enseigne (sauf catégorie forcée dans l'aperçu).
-        const merchantId = overridden ? null : outcome.merchant_id;
+        // Enseigne : l'aperçu fait foi quand il fournit `merchant_id` (règle,
+        // achat ou choix manuel) ; sinon rattachement automatique par la règle.
+        const explicitMerchant =
+          "merchant_id" in p ? (p.merchant_id ?? null) : undefined;
+        const merchantId =
+          explicitMerchant !== undefined
+            ? explicitMerchant
+            : overridden
+              ? null
+              : outcome.merchant_id;
         return {
           account_id: accountId,
           import_id: importId,

@@ -19,6 +19,9 @@ export interface PreviewPurchaseMatch {
   purchaseId: string;
   purchaseName: string;
   subcategoryId: string | null;
+  /** Enseigne de l'achat (imposée à la transaction rattachée). */
+  merchantId: string | null;
+  merchantName: string | null;
 }
 
 /**
@@ -42,7 +45,7 @@ export async function matchPreviewRowsToPurchases(
   const [{ data: purchases }, { data: attached }] = await Promise.all([
     supabase
       .from("purchases")
-      .select("id, name, subcategory_id, is_archived")
+      .select("id, name, subcategory_id, is_archived, merchant_id")
       .in("id", purchaseIds),
     supabase
       .from("transactions")
@@ -53,6 +56,18 @@ export async function matchPreviewRowsToPurchases(
   const hasAttached = new Set(
     (attached ?? []).map((t) => t.purchase_id).filter((x): x is string => !!x),
   );
+
+  const merchantIds = [
+    ...new Set((purchases ?? []).map((p) => p.merchant_id).filter((x): x is string => !!x)),
+  ];
+  const merchantNames = new Map<string, string>();
+  if (merchantIds.length > 0) {
+    const { data: merchants } = await supabase
+      .from("merchants")
+      .select("id, name")
+      .in("id", merchantIds);
+    for (const m of merchants ?? []) merchantNames.set(m.id, m.name);
+  }
 
   const items: MatchableInstallment[] = [];
   const purchaseByInst = new Map<string, string>();
@@ -85,10 +100,13 @@ export async function matchPreviewRowsToPurchases(
     const pid = purchaseByInst.get(installmentId);
     if (!pid) continue;
     const p = pInfo.get(pid);
+    const merchantId = p?.merchant_id ?? null;
     out.set(Number(transactionId), {
       purchaseId: pid,
       purchaseName: p?.name ?? "",
       subcategoryId: p?.subcategory_id ?? null,
+      merchantId,
+      merchantName: merchantId ? (merchantNames.get(merchantId) ?? null) : null,
     });
   }
   return out;

@@ -25,6 +25,11 @@ export interface ParsedTransaction {
   subcategory_id?: string | null;
   /** Achat rattaché lors de l'import (la catégorie de l'achat prime). */
   purchase_id?: string | null;
+  /**
+   * Enseigne rattachée dans l'aperçu (règle, achat ou choix manuel). Présente ⇒
+   * fait foi ; absente ⇒ le moteur de règles décide.
+   */
+  merchant_id?: string | null;
 }
 
 export interface ImportSummary {

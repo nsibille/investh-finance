@@ -97,7 +97,7 @@ export function PurchaseAttachModal({
       return;
     }
     toast.success("Achat créé");
-    attach({ id: res.id, name, subcategoryId: null });
+    attach({ id: res.id, name, subcategoryId: null, merchantId: null, merchantName: null });
   }
 
   return (

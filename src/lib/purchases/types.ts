@@ -26,4 +26,7 @@ export interface PurchaseOption {
   id: string;
   name: string;
   subcategoryId: string | null;
+  /** Enseigne de l'achat (imposée à la transaction rattachée). */
+  merchantId: string | null;
+  merchantName: string | null;
 }

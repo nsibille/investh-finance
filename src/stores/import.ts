@@ -16,6 +16,11 @@ export interface ImportPreviewRow extends ParsedTransaction {
   /** Achat rattaché (la catégorie devient héritée/verrouillée). */
   purchaseId?: string | null;
   purchaseName?: string | null;
+  /** Enseigne rattachée (règle, achat ou choix manuel). */
+  merchantId?: string | null;
+  merchantName?: string | null;
+  /** Enseigne imposée par l'achat rattaché (non éditable). */
+  merchantLocked?: boolean;
   include: boolean;
 }
 

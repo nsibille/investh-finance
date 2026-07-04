@@ -75,11 +75,13 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
   const supabase = await createClient();
   const { data } = await supabase
     .from("purchases")
-    .select("id, name, subcategory_id")
+    .select("id, name, subcategory_id, merchant_id, merchant:merchants(name)")
     .order("name", { ascending: true });
   return (data ?? []).map((p) => ({
     id: p.id,
     name: p.name,
     subcategoryId: p.subcategory_id,
+    merchantId: p.merchant_id,
+    merchantName: p.merchant?.name ?? null,
   }));
 });

@@ -52,16 +52,17 @@ async function loadRules(supabase: Supa): Promise<EngineRule[]> {
   return (data ?? []).map(toEngineRule);
 }
 
-/** Sous-catégorie proposée par les règles pour une transaction d'un compte donné. */
-function suggestSubcategory(
+/** Proposition des règles (catégorie + enseigne) pour une transaction. */
+function suggestFromRules(
   rules: EngineRule[],
   accountId: string,
   tx: ParsedTransaction,
-): string | null {
-  return applyRules(
+): { subcategory_id: string | null; merchant_id: string | null } {
+  const o = applyRules(
     { account_id: accountId, amount: tx.amount, raw_label: tx.raw_label },
     rules,
-  ).subcategory_id;
+  );
+  return { subcategory_id: o.subcategory_id, merchant_id: o.merchant_id };
 }
 
 /**
@@ -95,7 +96,16 @@ type PreviewRowLike = {
   initialSubcategoryId?: string | null;
   purchaseId?: string;
   purchaseName?: string;
+  merchantId?: string | null;
+  merchantName?: string | null;
+  merchantLocked?: boolean;
 };
+
+/** Noms d'enseignes (id → nom) pour annoter l'aperçu. */
+async function loadMerchantNames(supabase: Supa): Promise<Map<string, string>> {
+  const { data } = await supabase.from("merchants").select("id, name");
+  return new Map((data ?? []).map((m) => [m.id, m.name]));
+}
 
 /**
  * Pré-rattache les lignes (hors doublons existants) aux mensualités
@@ -131,6 +141,14 @@ async function annotatePurchaseMatches<T extends PreviewRowLike>(
       purchaseName: m.purchaseName,
       // Catégorie héritée de l'achat (surchargeable dans l'aperçu).
       initialSubcategoryId: m.subcategoryId ?? r.initialSubcategoryId,
+      // L'enseigne de l'achat prime et n'est pas éditable pour cette ligne.
+      ...(m.merchantId
+        ? {
+            merchantId: m.merchantId,
+            merchantName: m.merchantName,
+            merchantLocked: true,
+          }
+        : {}),
     };
   });
 }
@@ -170,11 +188,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const [{ data: accounts }, rules, transferSubId] = await Promise.all([
-      supabase.from("accounts").select("id, connection_name"),
-      loadRules(supabase),
-      getInternalTransferSubcategoryId(supabase),
-    ]);
+    const [{ data: accounts }, rules, transferSubId, merchantNames] =
+      await Promise.all([
+        supabase.from("accounts").select("id, connection_name"),
+        loadRules(supabase),
+        getInternalTransferSubcategoryId(supabase),
+        loadMerchantNames(supabase),
+      ]);
     const accountIdByConnection = new Map<string, string>();
     for (const a of accounts ?? []) {
       if (a.connection_name) {
@@ -197,10 +217,22 @@ export async function POST(request: Request) {
     // Catégorie proposée par les règles ; les virements priment (catégorie
     // « Virement interne ») et sont envoyés en override à l'import.
     const withSuggestion = rows.map((r, i) => {
-      const suggestedSubcategoryId = suggestSubcategory(rules, targets[i].accountId ?? "", r);
+      const { subcategory_id, merchant_id } = suggestFromRules(
+        rules,
+        targets[i].accountId ?? "",
+        r,
+      );
       const initialSubcategoryId =
-        transferIdx.has(i) && transferSubId ? transferSubId : suggestedSubcategoryId;
-      return { ...r, suggestedSubcategoryId, initialSubcategoryId };
+        transferIdx.has(i) && transferSubId ? transferSubId : subcategory_id;
+      return {
+        ...r,
+        suggestedSubcategoryId: subcategory_id,
+        initialSubcategoryId,
+        // Enseigne proposée par la règle matchée (éditable dans l'aperçu).
+        ...(merchant_id
+          ? { merchantId: merchant_id, merchantName: merchantNames.get(merchant_id) ?? null }
+          : {}),
+      };
     });
 
     const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
@@ -258,15 +290,23 @@ export async function POST(request: Request) {
       : null;
 
   const hashes = occurrenceHashes(accountId, transactions);
-  const [existingSet, rules] = await Promise.all([
+  const [existingSet, rules, merchantNames] = await Promise.all([
     fetchExistingHashes(supabase, hashes),
     loadRules(supabase),
+    loadMerchantNames(supabase),
   ]);
   const { rows } = buildPreviewRows(accountId, transactions, existingSet);
   const withSuggestion = rows.map((r) => {
-    const suggestedSubcategoryId = suggestSubcategory(rules, accountId, r);
+    const { subcategory_id, merchant_id } = suggestFromRules(rules, accountId, r);
     // Relevé PDF = un seul compte : pas de virement interne détectable ici.
-    return { ...r, suggestedSubcategoryId, initialSubcategoryId: suggestedSubcategoryId };
+    return {
+      ...r,
+      suggestedSubcategoryId: subcategory_id,
+      initialSubcategoryId: subcategory_id,
+      ...(merchant_id
+        ? { merchantId: merchant_id, merchantName: merchantNames.get(merchant_id) ?? null }
+        : {}),
+    };
   });
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
   const previewRows = await annotatePurchaseMatches(supabase, withSuggestion);

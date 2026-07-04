@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, ShoppingBag, X } from "lucide-react";
+import { FileText, ShoppingBag, Store, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -16,6 +16,7 @@ import { ImportRowBadge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Checkbox";
 import { ImportCategoryEditor } from "./ImportCategoryEditor";
 import { PurchaseAttachModal } from "./PurchaseAttachModal";
+import { MerchantAttachModal } from "./MerchantAttachModal";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
@@ -26,15 +27,18 @@ import type { ParsedTransaction } from "@/lib/import/types";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption } from "@/lib/purchases/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 export function StatementImport({
   accountOptions,
   subcategoryOptions,
   purchaseOptions,
+  merchantOptions,
 }: {
   accountOptions: AccountOption[];
   subcategoryOptions: SubcategoryOption[];
   purchaseOptions: PurchaseOption[];
+  merchantOptions: MerchantOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -52,11 +56,19 @@ export function StatementImport({
   // Achats (dont créés à la volée) + ligne dont on rattache un achat.
   const [extraPurchases, setExtraPurchases] = useState<PurchaseOption[]>([]);
   const [purchaseRow, setPurchaseRow] = useState<number | null>(null);
+  // Enseignes (dont créées à la volée) + ligne dont on rattache une enseigne.
+  const [extraMerchants, setExtraMerchants] = useState<MerchantOption[]>([]);
+  const [merchantRow, setMerchantRow] = useState<number | null>(null);
 
   const allPurchases = useMemo(() => {
     const seen = new Set(purchaseOptions.map((p) => p.id));
     return [...purchaseOptions, ...extraPurchases.filter((p) => !seen.has(p.id))];
   }, [purchaseOptions, extraPurchases]);
+
+  const allMerchants = useMemo(() => {
+    const seen = new Set(merchantOptions.map((m) => m.id));
+    return [...merchantOptions, ...extraMerchants.filter((m) => !seen.has(m.id))];
+  }, [merchantOptions, extraMerchants]);
 
   function attachPurchase(index: number, option: PurchaseOption) {
     setExtraPurchases((prev) => (prev.some((p) => p.id === option.id) ? prev : [...prev, option]));
@@ -65,11 +77,30 @@ export function StatementImport({
       purchaseName: option.name,
       // La catégorie de l'achat prime (héritée) si elle existe.
       ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+      // L'enseigne de l'achat est imposée (non éditable) si l'achat en a une.
+      ...(option.merchantId
+        ? { merchantId: option.merchantId, merchantName: option.merchantName, merchantLocked: true }
+        : {}),
     });
   }
 
   function detachPurchase(index: number) {
-    patchRow(index, { purchaseId: null, purchaseName: null });
+    // L'enseigne imposée par l'achat redevient éditable une fois l'achat détaché.
+    patchRow(index, { purchaseId: null, purchaseName: null, merchantLocked: false });
+  }
+
+  function attachMerchant(index: number, option: MerchantOption) {
+    setExtraMerchants((prev) => (prev.some((m) => m.id === option.id) ? prev : [...prev, option]));
+    patchRow(index, {
+      merchantId: option.id,
+      merchantName: option.name,
+      // L'enseigne applique sa catégorie par défaut (surchargeable).
+      ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+    });
+  }
+
+  function detachMerchant(index: number) {
+    patchRow(index, { merchantId: null, merchantName: null });
   }
 
   const allOptions = useMemo(() => {
@@ -229,6 +260,9 @@ export function StatementImport({
       const suggested = r.suggestedSubcategoryId ?? null;
       if (r.categoryId !== suggested) base.subcategory_id = r.categoryId;
       if (r.purchaseId) base.purchase_id = r.purchaseId;
+      // L'aperçu fait foi pour l'enseigne (règle, achat ou choix manuel), y
+      // compris le détachement explicite (null).
+      base.merchant_id = r.merchantId ?? null;
       return base;
     });
 
@@ -359,7 +393,49 @@ export function StatementImport({
                           {r.connectionLabel}
                         </td>
                       )}
-                      <td data-col="label">{r.label}</td>
+                      <td data-col="label">
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span>{r.label}</span>
+                          {r.merchantId ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                              <Store size={12} aria-hidden />
+                              {r.merchantLocked ? (
+                                <span title="Enseigne de l'achat rattaché">
+                                  {r.merchantName}
+                                  <span style={{ opacity: 0.7 }}> · achat</span>
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setMerchantRow(i)}
+                                    style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
+                                  >
+                                    {r.merchantName}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Détacher l'enseigne"
+                                    onClick={() => detachMerchant(i)}
+                                    style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
+                                  >
+                                    <X size={11} aria-hidden />
+                                  </button>
+                                </>
+                              )}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setMerchantRow(i)}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
+                            >
+                              <Store size={12} aria-hidden />
+                              Enseigne…
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td data-col="category">
                         {r.purchaseId ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -442,6 +518,15 @@ export function StatementImport({
         }
         onAttach={(option) => {
           if (purchaseRow !== null) attachPurchase(purchaseRow, option);
+        }}
+      />
+
+      <MerchantAttachModal
+        open={merchantRow !== null}
+        onClose={() => setMerchantRow(null)}
+        merchantOptions={allMerchants}
+        onAttach={(option) => {
+          if (merchantRow !== null) attachMerchant(merchantRow, option);
         }}
       />
     </Card>

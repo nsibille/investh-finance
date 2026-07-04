@@ -6,6 +6,7 @@ import { getBankConnections } from "@/lib/bank/queries";
 import { getAccountOptions } from "@/lib/rules/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getPurchaseOptions } from "@/lib/purchases/queries";
+import { getMerchantOptions } from "@/lib/merchants/queries";
 import { isGoCardlessConfigured } from "@/lib/gocardless/client";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +26,19 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 export default async function ImportPage() {
-  const [connections, accountOptions, subcategoryOptions, purchaseOptions] =
-    await Promise.all([
-      getBankConnections(),
-      getAccountOptions(),
-      getSubcategoryOptions(),
-      getPurchaseOptions(),
-    ]);
+  const [
+    connections,
+    accountOptions,
+    subcategoryOptions,
+    purchaseOptions,
+    merchantOptions,
+  ] = await Promise.all([
+    getBankConnections(),
+    getAccountOptions(),
+    getSubcategoryOptions(),
+    getPurchaseOptions(),
+    getMerchantOptions(),
+  ]);
   const configured = isGoCardlessConfigured();
 
   return (
@@ -46,6 +53,7 @@ export default async function ImportPage() {
         accountOptions={accountOptions}
         subcategoryOptions={subcategoryOptions}
         purchaseOptions={purchaseOptions}
+        merchantOptions={merchantOptions}
       />
 
       <SectionTitle>Connexions bancaires (GoCardless)</SectionTitle>

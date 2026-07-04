@@ -94,6 +94,7 @@ export function AccountDetailActions({
             name: account.name,
             type: account.type,
             bank: account.bank ?? "",
+            connection_name: account.connection_name ?? "",
             initial_balance: account.initial_balance,
             initial_date: account.initial_date,
             currency: account.currency,

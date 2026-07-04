@@ -11,12 +11,13 @@ export async function createAccount(input: AccountInput): Promise<ActionResult> 
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  const { bank, ...rest } = parsed.data;
+  const { bank, connection_name, ...rest } = parsed.data;
 
   const supabase = await createClient();
   const { error } = await supabase.from("accounts").insert({
     ...rest,
     bank: bank ? bank : null,
+    connection_name: connection_name ? connection_name : null,
   });
 
   if (error) return { ok: false, error: error.message };
@@ -32,12 +33,16 @@ export async function updateAccount(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  const { bank, ...rest } = parsed.data;
+  const { bank, connection_name, ...rest } = parsed.data;
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("accounts")
-    .update({ ...rest, bank: bank ? bank : null })
+    .update({
+      ...rest,
+      bank: bank ? bank : null,
+      connection_name: connection_name ? connection_name : null,
+    })
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };

@@ -15,14 +15,16 @@ import { ImportRowBadge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
-import { confirmImport } from "@/server/actions/import";
+import { confirmImport, confirmCsvImport } from "@/server/actions/import";
 import type { ParsedTransaction } from "@/lib/import/types";
-import type { DuplicateReason } from "@/lib/import/preview";
+import type { DuplicateReason, ConnectionSummary } from "@/lib/import/preview";
 import type { AccountOption } from "@/lib/rules/queries";
 
 interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
   duplicateReason: DuplicateReason;
+  connectionLabel?: string;
+  targetAccountExists?: boolean;
   include: boolean;
 }
 
@@ -31,6 +33,8 @@ interface Preview {
   bankLabel: string;
   sourceFormat: string;
   warning: string | null;
+  multiAccount: boolean;
+  connections: ConnectionSummary[];
   rows: PreviewRow[];
   filename: string;
   dupExisting: number;
@@ -47,10 +51,6 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
   const [preview, setPreview] = useState<Preview | null>(null);
 
   async function handleFile(file: File) {
-    if (!accountId) {
-      setError("Choisis d'abord un compte de destination.");
-      return;
-    }
     setError(null);
     setParsing(true);
     setPreview(null);
@@ -69,6 +69,8 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
         bankLabel: data.bankLabel,
         sourceFormat: data.sourceFormat,
         warning: data.warning ?? null,
+        multiAccount: data.multiAccount ?? false,
+        connections: data.connections ?? [],
         filename: file.name,
         dupExisting: data.dupExisting ?? 0,
         dupInFile: data.dupInFile ?? 0,
@@ -110,21 +112,27 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
       amount: r.amount,
       currency: r.currency,
       external_id: r.external_id,
+      connection_name: r.connection_name,
     }));
-    const res = await confirmImport(
-      accountId,
-      payload,
-      preview.sourceFormat,
-      preview.filename,
-    );
+
+    const res = preview.multiAccount
+      ? await confirmCsvImport(payload, preview.filename)
+      : await confirmImport(accountId, payload, preview.sourceFormat, preview.filename);
+
     setImporting(false);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    toast.success(
-      `${res.summary.rows_imported} importée(s), ${res.summary.rows_duplicates} doublon(s), ${res.summary.rows_auto_validated} auto-validée(s)`,
-    );
+    if ("accounts_created" in res.summary && res.summary.accounts_created > 0) {
+      toast.success(
+        `${res.summary.rows_imported} importée(s) · ${res.summary.accounts_created} compte(s) créé(s) · ${res.summary.rows_duplicates} doublon(s)`,
+      );
+    } else {
+      toast.success(
+        `${res.summary.rows_imported} importée(s), ${res.summary.rows_duplicates} doublon(s), ${res.summary.rows_auto_validated} auto-validée(s)`,
+      );
+    }
     setPreview(null);
     router.refresh();
   }
@@ -132,28 +140,25 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
   const includedCount = preview?.rows.filter((r) => r.include).length ?? 0;
   const dupTotal = preview ? preview.dupExisting + preview.dupInFile : 0;
 
-  if (accountOptions.length === 0) {
-    return (
-      <Alert variant="info">
-        Crée d&apos;abord un compte pour pouvoir y importer un relevé.
-      </Alert>
-    );
-  }
-
   return (
     <Card>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-        <div style={{ maxWidth: 320 }}>
-          <FormField label="Compte de destination">
-            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {accountOptions.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        </div>
+        {accountOptions.length > 0 && (
+          <div style={{ maxWidth: 360 }}>
+            <FormField label="Compte de destination (relevé PDF)">
+              <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                {accountOptions.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
+              Les exports CSV rattachent/créent les comptes automatiquement (colonne « Nom de la connexion »).
+            </p>
+          </div>
+        )}
 
         {error && <Alert variant="danger">{error}</Alert>}
 
@@ -192,6 +197,20 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
               </div>
             </div>
 
+            {preview.multiAccount && preview.connections.length > 0 && (
+              <Alert variant="info">
+                <span>
+                  Comptes détectés :{" "}
+                  {preview.connections
+                    .map(
+                      (c) =>
+                        `${c.label} (${c.exists ? "existant" : "sera créé"}, ${c.count} op.)`,
+                    )
+                    .join(" · ")}
+                </span>
+              </Alert>
+            )}
+
             {preview.warning && <Alert variant="warning">{preview.warning}</Alert>}
 
             {dupTotal > 0 && (
@@ -210,6 +229,7 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                 <thead>
                   <tr>
                     <th>Date</th>
+                    {preview.multiAccount && <th>Compte</th>}
                     <th>Libellé</th>
                     <th style={{ textAlign: "right" }}>Montant</th>
                     <th>Statut</th>
@@ -220,6 +240,11 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                   {preview.rows.map((r, i) => (
                     <tr key={i} data-excluded={!r.include || undefined}>
                       <td style={{ whiteSpace: "nowrap" }}>{formatShortDate(r.operation_date)}</td>
+                      {preview.multiAccount && (
+                        <td style={{ whiteSpace: "nowrap", color: "var(--color-text-muted)" }}>
+                          {r.connectionLabel}
+                        </td>
+                      )}
                       <td>{r.label}</td>
                       <td style={{ textAlign: "right" }}>
                         <Amount value={r.amount} />

@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { parseBankinCsv } from "@/lib/import/parsers/bankinCsv";
-import { buildPreviewRows } from "@/lib/import/preview";
+import {
+  buildPreviewRows,
+  resolveCsvTargets,
+  buildCsvPreview,
+  groupByConnection,
+} from "@/lib/import/preview";
 import { computeDedupHash } from "@/lib/import/dedup";
+import { normalizeConnection } from "@/lib/import/connection";
+import type { ParsedTransaction } from "@/lib/import/types";
 
 const HEADER =
   "Date\tLibellé\tCatégorie\tMontant\tNotes\tN° de chèque\tLabels\tNom du compte\tNom de la connexion";
@@ -47,6 +54,70 @@ describe("parseBankinCsv", () => {
     const { transactions } = parseBankinCsv(text);
     expect(transactions).toHaveLength(1);
     expect(transactions[0].label).toBe("OK");
+  });
+
+  it("extrait le nom de la connexion comme pivot de compte", () => {
+    const text = csv([
+      "31/07/2026\tX\tY\t-5\t\t\t\tNICOLAS SIBILLE\tBforBank",
+    ]);
+    const { transactions } = parseBankinCsv(text);
+    expect(transactions[0].connection_name).toBe("BforBank");
+  });
+
+  it("retombe sur le nom du compte si la connexion est vide", () => {
+    const text = csv(["31/07/2026\tX\tY\t-5\t\t\t\tLivret A\t"]);
+    const { transactions } = parseBankinCsv(text);
+    expect(transactions[0].connection_name).toBe("Livret A");
+  });
+});
+
+describe("groupByConnection", () => {
+  const txs: ParsedTransaction[] = [
+    { operation_date: "2026-07-31", label: "a", raw_label: "a", amount: -5, currency: "EUR", connection_name: "BforBank" },
+    { operation_date: "2026-07-30", label: "b", raw_label: "b", amount: -6, currency: "EUR", connection_name: "bforbank" },
+    { operation_date: "2026-07-29", label: "c", raw_label: "c", amount: -7, currency: "EUR", connection_name: "Boursorama" },
+    { operation_date: "2026-07-28", label: "d", raw_label: "d", amount: -8, currency: "EUR", connection_name: null },
+  ];
+
+  it("regroupe par connexion normalisée (casse ignorée) + défaut si vide", () => {
+    const groups = groupByConnection(txs);
+    expect(groups.get(normalizeConnection("BforBank"))?.txs).toHaveLength(2);
+    expect(groups.get(normalizeConnection("Boursorama"))?.txs).toHaveLength(1);
+    expect(groups.get(normalizeConnection(null))?.label).toBe("Compte importé");
+  });
+});
+
+describe("resolveCsvTargets + buildCsvPreview", () => {
+  const txs: ParsedTransaction[] = [
+    // déjà en base (compte existant)
+    { operation_date: "2026-07-31", label: "a", raw_label: "a", amount: -5, currency: "EUR", connection_name: "BforBank" },
+    // nouveau (compte existant, absent de la base)
+    { operation_date: "2026-07-30", label: "b", raw_label: "b", amount: -6, currency: "EUR", connection_name: "BforBank" },
+    // identique au précédent → doublon dans le fichier
+    { operation_date: "2026-07-30", label: "b", raw_label: "b", amount: -6, currency: "EUR", connection_name: "BforBank" },
+    // connexion inconnue → compte à créer, jamais doublon en base
+    { operation_date: "2026-07-29", label: "c", raw_label: "c", amount: -7, currency: "EUR", connection_name: "Boursorama" },
+  ];
+
+  it("mappe connexions existantes, détecte doublons et récapitule", () => {
+    const accByConn = new Map([[normalizeConnection("BforBank"), "acc-1"]]);
+    const targets = resolveCsvTargets(txs, accByConn);
+    expect(targets[0].accountId).toBe("acc-1");
+    expect(targets[3].accountId).toBeNull();
+
+    const existing = new Set([computeDedupHash("acc-1", txs[0])]);
+    const { rows, connections } = buildCsvPreview(txs, targets, existing);
+
+    expect(rows[0].duplicateReason).toBe("existing");
+    expect(rows[1].duplicateReason).toBeNull();
+    expect(rows[2].duplicateReason).toBe("in_file");
+    expect(rows[3].duplicateReason).toBeNull();
+    expect(rows[3].targetAccountExists).toBe(false);
+
+    const bfor = connections.find((c) => c.label === "BforBank");
+    const bourso = connections.find((c) => c.label === "Boursorama");
+    expect(bfor).toMatchObject({ count: 3, exists: true });
+    expect(bourso).toMatchObject({ count: 1, exists: false });
   });
 });
 

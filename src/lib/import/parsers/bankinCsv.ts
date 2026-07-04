@@ -52,6 +52,12 @@ export function parseBankinCsv(text: string): BankinCsvResult {
     const amount = parseBankinAmount(amountRaw);
     if (!Number.isFinite(amount)) continue;
 
+    // Pivot de compte : « Nom de la connexion », repli sur « Nom du compte ».
+    const connection =
+      (row["Nom de la connexion"] ?? "").trim() ||
+      (row["Nom du compte"] ?? "").trim() ||
+      null;
+
     out.push({
       operation_date: frDateToISO(date),
       value_date: null,
@@ -59,6 +65,7 @@ export function parseBankinCsv(text: string): BankinCsvResult {
       raw_label: label,
       amount,
       currency: "EUR",
+      connection_name: connection,
     });
   }
 

@@ -13,6 +13,11 @@ export interface ParsedTransaction {
   currency: string;
   /** Stable external id from the source (bank transactionId), when available. */
   external_id?: string | null;
+  /**
+   * Nom de la connexion bancaire (export CSV) : sert de pivot pour
+   * rattacher/créer automatiquement le compte de destination.
+   */
+  connection_name?: string | null;
 }
 
 export interface ImportSummary {

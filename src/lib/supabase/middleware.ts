@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
+import { AUTH_ENABLED } from "@/lib/auth/config";
 
 const PUBLIC_PATHS = ["/login", "/auth", "/design-system"];
 
@@ -12,6 +13,12 @@ function isPublicPath(pathname: string) {
 }
 
 export async function updateSession(request: NextRequest) {
+  // Feature flag : libre accès. On ne touche pas à la session et on ne
+  // redirige jamais vers /login.
+  if (!AUTH_ENABLED) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(

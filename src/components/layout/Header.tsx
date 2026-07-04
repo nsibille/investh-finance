@@ -4,13 +4,15 @@ import { SearchTrigger } from "@/components/search/SearchTrigger";
 interface HeaderProps {
   email: string;
   avatarUrl?: string | null;
+  /** Affiche le bouton de déconnexion. Masqué en mode libre accès. */
+  showSignOut?: boolean;
 }
 
 function initialFromEmail(email: string) {
   return email.charAt(0).toUpperCase() || "?";
 }
 
-export function Header({ email, avatarUrl }: HeaderProps) {
+export function Header({ email, avatarUrl, showSignOut = true }: HeaderProps) {
   return (
     <header className="nav-header">
       <div className="nav-header__left">
@@ -25,7 +27,7 @@ export function Header({ email, avatarUrl }: HeaderProps) {
             initialFromEmail(email)
           )}
         </span>
-        <SignOutButton />
+        {showSignOut && <SignOutButton />}
       </div>
     </header>
   );

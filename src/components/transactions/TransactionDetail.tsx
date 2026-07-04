@@ -28,7 +28,9 @@ import { detachTransaction } from "@/server/actions/purchases";
 import {
   attachTransactionToMerchant,
   detachTransactionFromMerchant,
+  addMerchantRule,
 } from "@/server/actions/merchants";
+import { deleteRule } from "@/server/actions/rules";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
@@ -133,14 +135,35 @@ export function TransactionDetail({
     // La catégorie par défaut de l'enseigne vient d'être appliquée côté serveur.
     if (merchant?.subcategoryId) setSubcategoryId(merchant.subcategoryId);
     router.refresh();
-    toast.info("Enseigne rattachée", {
-      duration: 8000,
-      action: {
-        label: "Créer une règle",
-        onClick: () =>
-          openRule({ id: merchantId, name: merchant?.name ?? "" }),
-      },
+
+    // Règle créée automatiquement (comme pour les catégories), avec annulation.
+    if (!merchant?.subcategoryId) {
+      toast.info(
+        "Enseigne rattachée. Définis une catégorie par défaut pour créer une règle automatiquement.",
+      );
+      return;
+    }
+    const ruleRes = await addMerchantRule(merchantId, {
+      pattern: tx.label,
+      matchType: "contains",
     });
+    if (!ruleRes.ok) return toast.error(ruleRes.error);
+    toast.success(
+      ruleRes.applied > 0
+        ? `Règle créée pour « ${merchant.name} » · ${ruleRes.applied} transaction${ruleRes.applied > 1 ? "s" : ""} rattachée${ruleRes.applied > 1 ? "s" : ""}`
+        : `Règle créée pour « ${merchant.name} »`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRule(ruleRes.ruleId);
+            toast.info("Règle annulée.");
+            router.refresh();
+          },
+        },
+      },
+    );
   }
 
   async function detachMerchant() {

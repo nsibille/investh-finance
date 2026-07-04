@@ -145,7 +145,7 @@ export async function detachTransactionFromMerchant(
 }
 
 export type MerchantRuleResult =
-  | { ok: true; applied: number }
+  | { ok: true; applied: number; ruleId: string; pattern: string }
   | { ok: false; error: string };
 
 /**
@@ -196,5 +196,5 @@ export async function addMerchantRule(
     : 0;
 
   revalidate();
-  return { ok: true, applied };
+  return { ok: true, applied, ruleId: rule.id, pattern };
 }

@@ -90,7 +90,9 @@ export function StatementImport({
     patchRow(index, { purchaseId: null, purchaseName: null, merchantLocked: false });
   }
 
-  function attachMerchant(index: number, option: MerchantOption) {
+  // Rattache une enseigne et crée automatiquement sa règle (même logique que
+  // pour les catégories : toaster récap / annuler / appliquer partout).
+  async function attachMerchant(index: number, option: MerchantOption) {
     setExtraMerchants((prev) => (prev.some((m) => m.id === option.id) ? prev : [...prev, option]));
     patchRow(index, {
       merchantId: option.id,
@@ -98,33 +100,63 @@ export function StatementImport({
       // L'enseigne applique sa catégorie par défaut (surchargeable).
       ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
     });
-    const rawLabel = preview?.rows[index]?.raw_label ?? "";
-    if (rawLabel) {
-      toast.info(`Enseigne « ${option.name} » rattachée`, {
-        duration: 8000,
-        action: {
-          label: "Créer une règle",
-          onClick: () => createMerchantRule(option, rawLabel),
-        },
-      });
-    }
-  }
 
-  async function createMerchantRule(option: MerchantOption, rawLabel: string) {
-    const res = await addMerchantRule(option.id, {
-      pattern: rawLabel,
-      matchType: "contains",
-    });
+    const pattern = useImportStore.getState().preview?.rows[index]?.label ?? "";
+    if (!pattern) return;
+    if (!option.subcategoryId) {
+      toast.info(
+        `Enseigne « ${option.name} » rattachée. Définis une catégorie par défaut pour créer une règle automatiquement.`,
+      );
+      return;
+    }
+    // Règle non appliquée aux transactions existantes ici : « Appliquer à tout
+    // l'import » gère l'aperçu courant (comme pour les catégories).
+    const res = await addMerchantRule(option.id, { pattern, matchType: "contains" }, false);
     if (!res.ok) return toast.error(res.error);
-    toast.success(
-      res.applied > 0
-        ? `Règle créée · ${res.applied} transaction${res.applied > 1 ? "s" : ""} rattachée${res.applied > 1 ? "s" : ""}`
-        : "Règle créée",
-    );
+    toast.success(`Règle créée : enseigne « ${option.name} » (contient « ${res.pattern} »)`, {
+      duration: 10000,
+      actions: [
+        {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRule(res.ruleId);
+            toast.info("Règle annulée.");
+          },
+        },
+        {
+          label: "Appliquer à tout l'import",
+          onClick: () => applyMerchantEverywhere(option, res.pattern),
+        },
+      ],
+    });
   }
 
   function detachMerchant(index: number) {
     patchRow(index, { merchantId: null, merchantName: null });
+  }
+
+  // Rattache l'enseigne à toutes les lignes de l'aperçu dont le libellé contient
+  // le motif (hors lignes verrouillées par un achat).
+  function applyMerchantEverywhere(option: MerchantOption, pattern: string) {
+    const state = useImportStore.getState();
+    const cur = state.preview;
+    if (!cur) return;
+    const p = pattern.toLowerCase();
+    let count = 0;
+    const rows = cur.rows.map((r) => {
+      if (!r.merchantLocked && r.raw_label.toLowerCase().includes(p)) {
+        count += 1;
+        return {
+          ...r,
+          merchantId: option.id,
+          merchantName: option.name,
+          ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+        };
+      }
+      return r;
+    });
+    state.setPreview({ ...cur, rows });
+    toast.info(`${count} transaction(s) rattachée(s) à « ${option.name} » dans l'import.`);
   }
 
   const allOptions = useMemo(() => {

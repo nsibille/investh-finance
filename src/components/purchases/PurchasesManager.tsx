@@ -15,6 +15,7 @@ import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { useToast } from "@/hooks/useToast";
 import { formatMonthLabel } from "@/lib/format/date";
+import { installmentOccurrence } from "@/lib/purchases/installments";
 import { PurchaseForm } from "./PurchaseForm";
 import {
   deletePurchase,
@@ -68,9 +69,21 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
       </span>
       {purchase.installments.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-          {purchase.installments.map((inst) => (
+          {purchase.installments.map((inst) => {
+            // Mensualités triées par mois : la 1re est le mois de départ.
+            const startMonth = purchase.installments[0]?.month ?? inst.month;
+            const total = purchase.installments.length;
+            const occurrence = installmentOccurrence(startMonth, inst.month);
+            return (
             <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
-              <span style={{ flex: 1, textTransform: "capitalize" }}>{formatMonthLabel(inst.month)}</span>
+              <span style={{ flex: 1, textTransform: "capitalize" }}>
+                {formatMonthLabel(inst.month)}
+                {total > 1 && (
+                  <span style={{ marginLeft: 6, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "none", fontFamily: "var(--font-mono)" }}>
+                    {occurrence}/{total}
+                  </span>
+                )}
+              </span>
               <Amount value={Number(inst.amount)} size="sm" tone="neutral" />
               {inst.transaction_id ? (
                 <span title="Appariée à une transaction" style={{ color: "var(--color-success)", display: "inline-flex" }}>
@@ -82,7 +95,8 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
                 </IconButton>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>

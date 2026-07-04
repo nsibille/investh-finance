@@ -37,6 +37,17 @@ export function generateInstallments(opts: {
   return out;
 }
 
+/**
+ * Occurrence 1-based d'une mensualité (mois `month`) par rapport au mois de
+ * départ de l'achat (`startMonth`) : ex. juillet pour un achat démarré en mai
+ * → 3. Accepte "YYYY-MM" ou "YYYY-MM-DD".
+ */
+export function installmentOccurrence(startMonth: string, month: string): number {
+  const [ys, ms] = parseMonth(startMonth);
+  const [y, m] = parseMonth(month);
+  return (y - ys) * 12 + (m - ms) + 1;
+}
+
 export interface MatchableInstallment {
   id: string;
   month: string;

@@ -1,10 +1,23 @@
 import { describe, it, expect } from "vitest";
 import {
   generateInstallments,
+  installmentOccurrence,
   matchInstallmentsToTransactions,
   type MatchableInstallment,
   type MatchableTx,
 } from "@/lib/purchases/installments";
+
+describe("installmentOccurrence", () => {
+  it("compte l'occurrence 1-based depuis le mois de départ", () => {
+    expect(installmentOccurrence("2026-05", "2026-05")).toBe(1);
+    expect(installmentOccurrence("2026-05", "2026-07")).toBe(3);
+    expect(installmentOccurrence("2026-05-01", "2026-08-31")).toBe(4);
+  });
+
+  it("franchit le passage d'année", () => {
+    expect(installmentOccurrence("2026-11", "2027-02")).toBe(4);
+  });
+});
 
 describe("generateInstallments", () => {
   it("génère `count` mensualités consécutives à partir du mois de départ", () => {

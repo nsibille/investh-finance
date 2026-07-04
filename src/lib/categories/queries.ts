@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type {
   CategoryTypeNode,
@@ -5,7 +6,12 @@ import type {
   SubcategoryOption,
 } from "./types";
 
-export async function getCategoryTree(): Promise<CategoryTypeNode[]> {
+// `cache()` dédoublonne les appels identiques dans un même rendu serveur :
+// l'arbre des catégories (3 requêtes) n'est chargé qu'une fois par requête,
+// même s'il est consommé par plusieurs helpers (options, display maps…).
+export const getCategoryTree = cache(async function getCategoryTree(): Promise<
+  CategoryTypeNode[]
+> {
   const supabase = await createClient();
 
   const [{ data: types }, { data: categories }, { data: subcategories }] =
@@ -48,10 +54,12 @@ export async function getCategoryTree(): Promise<CategoryTypeNode[]> {
     ...type,
     categories: catsByType.get(type.id) ?? [],
   }));
-}
+});
 
 /** Flat options "Type / Catégorie / Sous-catégorie" for pickers. */
-export async function getSubcategoryOptions(): Promise<SubcategoryOption[]> {
+export const getSubcategoryOptions = cache(async function getSubcategoryOptions(): Promise<
+  SubcategoryOption[]
+> {
   const tree = await getCategoryTree();
   const options: SubcategoryOption[] = [];
   for (const type of tree) {
@@ -73,4 +81,4 @@ export async function getSubcategoryOptions(): Promise<SubcategoryOption[]> {
     }
   }
   return options;
-}
+});

@@ -114,18 +114,24 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
     .filter((a) => !a.is_archived)
     .reduce((s, a) => s + Number(a.initial_balance), 0);
 
-  const netWorth: NetWorthPoint[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const mEnd = endOfMonth(subMonths(ref, i));
-    const mEndStr = iso(mEnd);
-    const cumulative = all
-      .filter((t) => t.date <= mEndStr)
-      .reduce((s, t) => s + t.amount, 0);
-    netWorth.push({
-      month: format(mEnd, "LLL", { locale: fr }),
-      total: baseline + cumulative,
-    });
+  // Une transaction datée d contribue au patrimoine de son premier mois-cible
+  // et de tous les suivants → on ajoute son montant au delta de ce mois, puis
+  // on fait une somme préfixe. Plus d'allocation de 12 tableaux intermédiaires.
+  const monthEnds = Array.from({ length: 12 }, (_, k) => {
+    const mEnd = endOfMonth(subMonths(ref, 11 - k));
+    return { label: format(mEnd, "LLL", { locale: fr }), str: iso(mEnd) };
+  });
+  const delta = new Array<number>(12).fill(0);
+  for (const t of all) {
+    let k = 0;
+    while (k < 12 && monthEnds[k].str < t.date) k++;
+    if (k < 12) delta[k] += t.amount; // au-delà du dernier mois → ignoré
   }
+  let running = 0;
+  const netWorth: NetWorthPoint[] = monthEnds.map((m, k) => {
+    running += delta[k];
+    return { month: m.label, total: baseline + running };
+  });
 
   return { topTransactions, topCategories, comparison, netWorth };
 }

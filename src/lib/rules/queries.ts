@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 
@@ -19,7 +20,9 @@ export interface AccountOption {
   name: string;
 }
 
-export async function getAccountOptions(): Promise<AccountOption[]> {
+export const getAccountOptions = cache(async function getAccountOptions(): Promise<
+  AccountOption[]
+> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("accounts")
@@ -27,4 +30,4 @@ export async function getAccountOptions(): Promise<AccountOption[]> {
     .eq("is_archived", false)
     .order("name", { ascending: true });
   return data ?? [];
-}
+});

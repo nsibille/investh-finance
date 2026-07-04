@@ -13,7 +13,8 @@ import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
-import { createRule, updateRule } from "@/server/actions/rules";
+import { saveRule } from "@/server/actions/rules";
+import type { RuleApplyScope } from "@/server/rules/apply";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { AccountOption } from "@/lib/rules/queries";
 
@@ -57,12 +58,15 @@ export function RuleForm({
   const router = useRouter();
   const toast = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [submittingScope, setSubmittingScope] = useState<RuleApplyScope | null>(
+    null,
+  );
 
   const {
     register,
     control,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<RuleInput>({
     resolver: zodResolver(ruleSchema),
     defaultValues: {
@@ -80,21 +84,31 @@ export function RuleForm({
     },
   });
 
-  async function onSubmit(values: RuleInput) {
+  async function onSubmit(values: RuleInput, scope: RuleApplyScope) {
     setServerError(null);
-    const res =
-      mode === "create"
-        ? await createRule(values)
-        : await updateRule(id!, values);
+    setSubmittingScope(scope);
+    const res = await saveRule(values, {
+      id: mode === "edit" ? id : undefined,
+      applyScope: scope,
+    });
+    setSubmittingScope(null);
     if (!res.ok) return setServerError(res.error);
-    toast.success(mode === "create" ? "Règle créée" : "Règle mise à jour");
+    const base = mode === "create" ? "Règle créée" : "Règle mise à jour";
+    toast.success(
+      res.applied > 0
+        ? `${base} · appliquée à ${res.applied} transaction${res.applied > 1 ? "s" : ""}`
+        : base,
+    );
     router.refresh();
     onDone();
   }
 
+  const busy = submittingScope !== null;
+  const saveVerb = mode === "create" ? "Créer" : "Enregistrer";
+
   return (
     <form
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit((v) => onSubmit(v, "none"))}
       style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
     >
       {serverError && <Alert variant="danger">{serverError}</Alert>}
@@ -130,6 +144,7 @@ export function RuleForm({
               options={subcategoryOptions}
               placeholder="Choisir une catégorie…"
               invalid={!!errors.subcategory_id}
+              allowCreate
               onChange={(id) => field.onChange(id ?? "")}
             />
           )}
@@ -175,12 +190,42 @@ export function RuleForm({
         <ToggleField label="Règle active" {...register("is_active")} />
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)" }}>
-        <Button type="button" variant="secondary" onClick={onDone}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "var(--space-3)",
+          flexWrap: "wrap",
+        }}
+      >
+        <Button type="button" variant="ghost" onClick={onDone} disabled={busy}>
           Annuler
         </Button>
-        <Button type="submit" loading={isSubmitting}>
+        <Button
+          type="button"
+          variant="secondary"
+          loading={submittingScope === "none"}
+          disabled={busy}
+          onClick={handleSubmit((v) => onSubmit(v, "none"))}
+        >
           {mode === "create" ? "Créer la règle" : "Enregistrer"}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          loading={submittingScope === "uncategorized"}
+          disabled={busy}
+          onClick={handleSubmit((v) => onSubmit(v, "uncategorized"))}
+        >
+          {saveVerb} + appliquer aux non catégorisées
+        </Button>
+        <Button
+          type="button"
+          loading={submittingScope === "all"}
+          disabled={busy}
+          onClick={handleSubmit((v) => onSubmit(v, "all"))}
+        >
+          {saveVerb} + appliquer à toutes
         </Button>
       </div>
     </form>

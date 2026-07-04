@@ -10,7 +10,7 @@ import { CategorySelect } from "./CategorySelect";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
-import { suggestPattern } from "@/lib/rules/suggester";
+import { fullPattern } from "@/lib/rules/suggester";
 import {
   createRuleFromTransaction,
   previewRuleMatches,
@@ -55,7 +55,7 @@ export function RuleSuggestionForm({
   const toast = useToast();
   const [name, setName] = useState(rawLabel.slice(0, 60));
   const [matchType, setMatchType] = useState<"regex" | "contains" | "exact">("regex");
-  const [pattern, setPattern] = useState(suggestPattern(rawLabel));
+  const [pattern, setPattern] = useState(fullPattern(rawLabel));
   const [subcategoryId, setSubcategoryId] = useState(defaultSubcategoryId ?? "");
   const [autoValidate, setAutoValidate] = useState(true);
   const [scopeToAccount, setScopeToAccount] = useState(true);
@@ -167,6 +167,7 @@ export function RuleSuggestionForm({
           value={subcategoryId || null}
           options={subcategoryOptions}
           placeholder="Choisir une catégorie…"
+          allowCreate
           onChange={(id) => setSubcategoryId(id ?? "")}
         />
       </FormField>

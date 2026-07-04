@@ -60,21 +60,35 @@ export function TransactionsTable({
   }
 
   async function changeCategory(row: TransactionRow, subId: string | null) {
-    const prev = merged(row).subcategory_id;
+    const current = merged(row);
+    const prevSub = current.subcategory_id;
+    if (!subId) {
+      const res = await runOptimistic({
+        apply: () => patch(row.id, { subcategory_id: null }),
+        rollback: () => patch(row.id, { subcategory_id: prevSub }),
+        run: () => setTransactionSubcategory(row.id, null),
+        onError: toast.error,
+      });
+      if (res.ok) router.refresh();
+      return;
+    }
+    const prevStatus = current.status;
     const res = await runOptimistic({
-      apply: () => patch(row.id, { subcategory_id: subId }),
-      rollback: () => patch(row.id, { subcategory_id: prev }),
-      run: () => setTransactionSubcategory(row.id, subId),
+      apply: () => patch(row.id, { subcategory_id: subId, status: "validated" }),
+      rollback: () =>
+        patch(row.id, { subcategory_id: prevSub, status: prevStatus }),
+      run: () => validateTransaction(row.id, subId),
       onError: toast.error,
     });
     if (res.ok) {
       router.refresh();
-      if (subId) {
-        toast.info("Catégorie mise à jour", {
-          duration: 8000,
-          action: { label: "Créer une règle", onClick: () => setRuleFor(merged(row)) },
-        });
-      }
+      toast.success("Validée", {
+        duration: 8000,
+        action: {
+          label: "Créer une règle",
+          onClick: () => setRuleFor({ ...row, subcategory_id: subId }),
+        },
+      });
     }
   }
 
@@ -150,6 +164,7 @@ export function TransactionsTable({
                   <CategorySelect
                     value={r.subcategory_id}
                     options={subcategoryOptions}
+                    allowCreate
                     onChange={(subId) => changeCategory(row, subId)}
                   />
                 </td>

@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import { matchRule } from "@/lib/rules/matcher";
+import {
+  applyRuleToTransactions,
+  type RuleApplyScope,
+} from "@/server/rules/apply";
+
+export type { RuleApplyScope };
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -115,9 +121,6 @@ export async function previewRuleMatches(input: {
   return (data ?? []).filter((t) => matchRule(rule, t.raw_label)).length;
 }
 
-/** Where a freshly created rule should be applied retroactively. */
-export type RuleApplyScope = "none" | "uncategorized" | "all";
-
 export type RuleCreateResult =
   | { ok: true; applied: number }
   | { ok: false; error: string };
@@ -142,51 +145,11 @@ export async function createRuleFromTransaction(
   if (error || !rule)
     return { ok: false, error: error?.message ?? "Création impossible" };
 
-  let applied = 0;
-  const scope = options.applyScope ?? "none";
-
-  if (scope !== "none") {
-    let q = supabase
-      .from("transactions")
-      .select("id, raw_label, amount, account_id");
-    if (rule.account_id) q = q.eq("account_id", rule.account_id);
-    if (scope === "uncategorized") q = q.is("subcategory_id", null);
-    const { data: candidates } = await q;
-
-    const matched = (candidates ?? []).filter((t) => {
-      if (rule.amount_min != null && Number(t.amount) < Number(rule.amount_min))
-        return false;
-      if (rule.amount_max != null && Number(t.amount) > Number(rule.amount_max))
-        return false;
-      return matchRule(rule, t.raw_label);
-    });
-
-    if (matched.length > 0) {
-      const now = new Date().toISOString();
-      // Never downgrade an already-validated transaction: only touch status
-      // when the rule auto-validates.
-      const statusPatch = rule.auto_validate
-        ? { status: "validated" as const, validated_at: now }
-        : {};
-      await Promise.all(
-        matched.map((t) =>
-          supabase
-            .from("transactions")
-            .update({
-              subcategory_id: rule.subcategory_id,
-              applied_rule_id: rule.id,
-              ...statusPatch,
-            })
-            .eq("id", t.id),
-        ),
-      );
-      await supabase
-        .from("categorization_rules")
-        .update({ hit_count: rule.hit_count + matched.length, last_hit_at: now })
-        .eq("id", rule.id);
-      applied = matched.length;
-    }
-  }
+  const applied = await applyRuleToTransactions(
+    supabase,
+    rule,
+    options.applyScope ?? "none",
+  );
 
   revalidate();
   revalidatePath("/rules");

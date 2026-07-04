@@ -438,6 +438,8 @@
 - Recherche : insensible casse/accents, multi-tokens (chaque mot doit matcher le chemin complet).
 - États : closed, open, option hover/active (`--color-brand-primary-50`), option sélectionnée (check `--color-brand-primary`), disabled, vide (« Aucune catégorie »).
 - Clavier : ↑/↓ navigue les feuilles sélectionnables, Entrée valide, Échap ferme.
+- Focus : à l'ouverture le champ recherche est focus automatiquement (`autoFocus` sur l'input remonté à chaque ouverture).
+- **Création inline** (`allowCreate`) : pied de panneau « Créer une catégorie » + raccourci « Créer «&nbsp;query&nbsp;» » quand la recherche ne renvoie rien. Bascule le panneau en mode création (segment Sous-catégorie / Catégorie → `<select>` du parent → nom → couleur si catégorie). À la création, la nouvelle (sous-)catégorie est sélectionnée (`onChange`) et la liste rafraîchie. Activé sur les sélecteurs de (sous-)catégorie, pas sur le filtre « Toutes catégories ».
 - Dark mode : auto.
 
 ```css

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { matchRule, isValidRegex } from "@/lib/rules/matcher";
 import { applyRules, type EngineRule } from "@/lib/rules/engine";
-import { suggestPattern } from "@/lib/rules/suggester";
+import { suggestPattern, fullPattern } from "@/lib/rules/suggester";
 
 describe("matchRule", () => {
   it("matches regex case-insensitively by default", () => {
@@ -124,7 +124,47 @@ describe("suggestPattern", () => {
     expect(suggestPattern("PAYPAL *SPOTIFY")).toBe("^PAYPAL \\*SPOTIFY");
   });
 
+  it("skips the generic card-payment boilerplate to capture the merchant", () => {
+    expect(
+      suggestPattern(
+        "PAIEMENT PAR CARTE MC DONALDS FRNEUILLY SUR 220126 000000 8336 503071",
+      ),
+    ).toBe("^PAIEMENT PAR CARTE MC DONALDS FRNEUILLY");
+  });
+
+  it("handles the WEB variant of the boilerplate prefix", () => {
+    expect(
+      suggestPattern("PAIEMENT PAR CARTE WEB DELIVEROO FRPARIS 09 210126 000000"),
+    ).toBe("^PAIEMENT PAR CARTE WEB DELIVEROO FRPARIS");
+  });
+
+  it("does not collapse two different merchants to the same generic pattern", () => {
+    const monoprix = suggestPattern(
+      "PAIEMENT PAR CARTE MONOPRIX FR75PARIS03SC 130126 000000",
+    );
+    const mcdo = suggestPattern(
+      "PAIEMENT PAR CARTE MC DONALDS FRNEUILLY SUR 220126 000000",
+    );
+    expect(monoprix).not.toBe(mcdo);
+  });
+
   it("returns empty string for blank input", () => {
     expect(suggestPattern("   ")).toBe("");
+  });
+});
+
+describe("fullPattern", () => {
+  it("anchors and escapes the whole normalised label", () => {
+    expect(fullPattern("PAIEMENT PAR CARTE MONOPRIX 130126")).toBe(
+      "^PAIEMENT PAR CARTE MONOPRIX 130126",
+    );
+  });
+
+  it("collapses runs of whitespace and escapes special characters", () => {
+    expect(fullPattern("  PAYPAL  *SPOTIFY  ")).toBe("^PAYPAL \\*SPOTIFY");
+  });
+
+  it("returns empty string for blank input", () => {
+    expect(fullPattern("   ")).toBe("");
   });
 });

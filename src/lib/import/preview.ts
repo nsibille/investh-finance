@@ -1,4 +1,4 @@
-import { computeDedupHash, normalizeLabel } from "./dedup";
+import { computeDedupHash, assignOccurrences, baseKey } from "./dedup";
 import { connectionLabel, normalizeConnection } from "./connection";
 import type { ParsedTransaction } from "./types";
 
@@ -10,25 +10,33 @@ export interface PreviewRow extends ParsedTransaction {
   duplicateReason: DuplicateReason;
 }
 
+/** Hash de dédup (indexé par occurrence) pour chaque transaction d'un compte. */
+export function occurrenceHashes(
+  accountId: string,
+  transactions: ParsedTransaction[],
+): string[] {
+  const occ = assignOccurrences(transactions, (t) => baseKey(t));
+  return transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
+}
+
 /**
- * Marque chaque transaction comme doublon selon la clé date | libellé | montant :
- * - `existing` : déjà présente en base pour ce compte ;
- * - `in_file`  : répétée plus haut dans le fichier importé.
- * Décochée par défaut côté UI, l'utilisateur garde le dernier mot.
+ * Marque chaque transaction selon la clé date | libellé | montant :
+ * - `existing` : déjà présente en base pour ce compte (ré-import) ;
+ * - `in_file`  : occurrence répétée dans le fichier (doublon potentiel).
+ * Décochée par défaut côté UI ; un `in_file` reste ré-importable (occurrence
+ * distincte), un `existing` ne peut pas l'être (déjà en base).
  */
 export function buildPreviewRows(
   accountId: string,
   transactions: ParsedTransaction[],
   existingHashes: Set<string>,
 ): { rows: PreviewRow[]; hashes: string[] } {
-  const hashes = transactions.map((t) => computeDedupHash(accountId, t));
-  const seen = new Set<string>();
+  const occ = assignOccurrences(transactions, (t) => baseKey(t));
+  const hashes = transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
 
   const rows = transactions.map((t, i) => {
-    const h = hashes[i];
-    const existing = existingHashes.has(h);
-    const inFile = !existing && seen.has(h);
-    seen.add(h);
+    const existing = existingHashes.has(hashes[i]);
+    const inFile = !existing && occ[i] >= 1;
     const reason: DuplicateReason = existing
       ? "existing"
       : inFile
@@ -64,6 +72,8 @@ export interface CsvTarget {
   key: string;
   /** Compte existant rattaché, ou null si à créer. */
   accountId: string | null;
+  /** Indice d'occurrence dans le groupe (connexion + contenu identique). */
+  occurrence: number;
   /** Hash de dédup (uniquement si un compte existe déjà). */
   hash: string | null;
 }
@@ -81,12 +91,18 @@ export interface ConnectionSummary {
   exists: boolean;
 }
 
-/** Résout, pour chaque transaction, le compte cible (existant) et son hash. */
+/** Résout, pour chaque transaction, le compte cible (existant), l'occurrence et le hash. */
 export function resolveCsvTargets(
   transactions: ParsedTransaction[],
   accountIdByConnection: Map<string, string>,
 ): CsvTarget[] {
-  return transactions.map((t) => {
+  // Occurrence par groupe (connexion + contenu identique) : deux opérations
+  // identiques d'une même connexion reçoivent des indices distincts.
+  const occ = assignOccurrences(
+    transactions,
+    (t) => `${normalizeConnection(t.connection_name)}|${baseKey(t)}`,
+  );
+  return transactions.map((t, i) => {
     const label = connectionLabel(t.connection_name);
     const key = normalizeConnection(t.connection_name);
     const accountId = accountIdByConnection.get(key) ?? null;
@@ -94,7 +110,8 @@ export function resolveCsvTargets(
       label,
       key,
       accountId,
-      hash: accountId ? computeDedupHash(accountId, t) : null,
+      occurrence: occ[i],
+      hash: accountId ? computeDedupHash(accountId, t, occ[i]) : null,
     };
   });
 }
@@ -109,13 +126,10 @@ export function buildCsvPreview(
   targets: CsvTarget[],
   existingHashes: Set<string>,
 ): { rows: CsvPreviewRow[]; connections: ConnectionSummary[] } {
-  const seen = new Set<string>();
   const rows = transactions.map((t, i) => {
     const tg = targets[i];
     const existing = tg.hash ? existingHashes.has(tg.hash) : false;
-    const inFileKey = `${tg.key}|${t.operation_date}|${t.amount.toFixed(2)}|${normalizeLabel(t.raw_label)}`;
-    const inFile = !existing && seen.has(inFileKey);
-    seen.add(inFileKey);
+    const inFile = !existing && tg.occurrence >= 1;
     const reason: DuplicateReason = existing
       ? "existing"
       : inFile

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -19,12 +19,16 @@ import { confirmImport, confirmCsvImport } from "@/server/actions/import";
 import type { ParsedTransaction } from "@/lib/import/types";
 import type { DuplicateReason, ConnectionSummary } from "@/lib/import/preview";
 import type { AccountOption } from "@/lib/rules/queries";
+import type { SubcategoryOption } from "@/lib/categories/types";
 
 interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
   duplicateReason: DuplicateReason;
   connectionLabel?: string;
   targetAccountExists?: boolean;
+  suggestedSubcategoryId?: string | null;
+  /** Catégorie courante (proposée par les règles, éventuellement modifiée). */
+  categoryId: string | null;
   include: boolean;
 }
 
@@ -41,7 +45,13 @@ interface Preview {
   dupInFile: number;
 }
 
-export function StatementImport({ accountOptions }: { accountOptions: AccountOption[] }) {
+export function StatementImport({
+  accountOptions,
+  subcategoryOptions,
+}: {
+  accountOptions: AccountOption[];
+  subcategoryOptions: SubcategoryOption[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [accountId, setAccountId] = useState(accountOptions[0]?.id ?? "");
@@ -49,11 +59,18 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);
+
+  const optLabel = useMemo(
+    () => new Map(subcategoryOptions.map((o) => [o.id, o.label])),
+    [subcategoryOptions],
+  );
 
   async function handleFile(file: File) {
     setError(null);
     setParsing(true);
     setPreview(null);
+    setEditing(null);
     try {
       const fd = new FormData();
       fd.append("accountId", accountId);
@@ -74,7 +91,11 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
         filename: file.name,
         dupExisting: data.dupExisting ?? 0,
         dupInFile: data.dupInFile ?? 0,
-        rows: data.rows.map((r: PreviewRow) => ({ ...r, include: !r.duplicate })),
+        rows: data.rows.map((r: PreviewRow) => ({
+          ...r,
+          categoryId: r.suggestedSubcategoryId ?? null,
+          include: !r.duplicate,
+        })),
       });
     } catch {
       setError("Échec de l'analyse du fichier.");
@@ -83,15 +104,10 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
     }
   }
 
-  function toggleRow(index: number) {
+  function patchRow(index: number, patch: Partial<PreviewRow>) {
     setPreview((prev) =>
       prev
-        ? {
-            ...prev,
-            rows: prev.rows.map((r, i) =>
-              i === index ? { ...r, include: !r.include } : r,
-            ),
-          }
+        ? { ...prev, rows: prev.rows.map((r, i) => (i === index ? { ...r, ...patch } : r)) }
         : prev,
     );
   }
@@ -104,16 +120,23 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
       return;
     }
     setImporting(true);
-    const payload: ParsedTransaction[] = included.map((r) => ({
-      operation_date: r.operation_date,
-      value_date: r.value_date,
-      label: r.label,
-      raw_label: r.raw_label,
-      amount: r.amount,
-      currency: r.currency,
-      external_id: r.external_id,
-      connection_name: r.connection_name,
-    }));
+    const payload: ParsedTransaction[] = included.map((r) => {
+      const base: ParsedTransaction = {
+        operation_date: r.operation_date,
+        value_date: r.value_date,
+        label: r.label,
+        raw_label: r.raw_label,
+        amount: r.amount,
+        currency: r.currency,
+        external_id: r.external_id,
+        connection_name: r.connection_name,
+      };
+      // N'envoie la catégorie que si l'utilisateur l'a modifiée : sinon les
+      // règles s'appliquent à l'import (et leur compteur de hits est suivi).
+      const suggested = r.suggestedSubcategoryId ?? null;
+      if (r.categoryId !== suggested) base.subcategory_id = r.categoryId;
+      return base;
+    });
 
     const res = preview.multiAccount
       ? await confirmCsvImport(payload, preview.filename)
@@ -124,15 +147,15 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
       toast.error(res.error);
       return;
     }
+    const parts = [`${res.summary.rows_imported} importée(s)`];
     if ("accounts_created" in res.summary && res.summary.accounts_created > 0) {
-      toast.success(
-        `${res.summary.rows_imported} importée(s) · ${res.summary.accounts_created} compte(s) créé(s) · ${res.summary.rows_duplicates} doublon(s)`,
-      );
-    } else {
-      toast.success(
-        `${res.summary.rows_imported} importée(s), ${res.summary.rows_duplicates} doublon(s), ${res.summary.rows_auto_validated} auto-validée(s)`,
-      );
+      parts.push(`${res.summary.accounts_created} compte(s) créé(s)`);
     }
+    if (res.transfersDetected > 0) {
+      parts.push(`${res.transfersDetected} virement(s) interne(s)`);
+    }
+    parts.push(`${res.summary.rows_duplicates} doublon(s)`);
+    toast.success(parts.join(" · "));
     setPreview(null);
     router.refresh();
   }
@@ -202,10 +225,7 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                 <span>
                   Comptes détectés :{" "}
                   {preview.connections
-                    .map(
-                      (c) =>
-                        `${c.label} (${c.exists ? "existant" : "sera créé"}, ${c.count} op.)`,
-                    )
+                    .map((c) => `${c.label} (${c.exists ? "existant" : "sera créé"}, ${c.count} op.)`)
                     .join(" · ")}
                 </span>
               </Alert>
@@ -215,12 +235,10 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
 
             {dupTotal > 0 && (
               <Alert variant="warning">
-                {dupTotal} doublon{dupTotal > 1 ? "s" : ""} détecté
-                {dupTotal > 1 ? "s" : ""} sur la clé date · libellé · montant
-                {preview.dupExisting > 0 && ` — ${preview.dupExisting} déjà en base`}
+                {dupTotal} doublon{dupTotal > 1 ? "s" : ""} sur la clé date · libellé · montant
+                {preview.dupExisting > 0 && ` — ${preview.dupExisting} déjà en base (ignoré${preview.dupExisting > 1 ? "s" : ""})`}
                 {preview.dupInFile > 0 && ` — ${preview.dupInFile} répété${preview.dupInFile > 1 ? "s" : ""} dans le fichier`}
-                . Décoché{dupTotal > 1 ? "s" : ""} par défaut ; ces lignes ne
-                seront pas ré-importées même si tu les coches.
+                . Décochés par défaut ; recoche un doublon « fichier » si c&apos;est bien une opération distincte.
               </Alert>
             )}
 
@@ -231,6 +249,7 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                     <th>Date</th>
                     {preview.multiAccount && <th>Compte</th>}
                     <th>Libellé</th>
+                    <th>Catégorie</th>
                     <th style={{ textAlign: "right" }}>Montant</th>
                     <th>Statut</th>
                     <th>Inclure</th>
@@ -238,7 +257,17 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                 </thead>
                 <tbody>
                   {preview.rows.map((r, i) => (
-                    <tr key={i} data-excluded={!r.include || undefined}>
+                    <tr
+                      key={i}
+                      data-excluded={!r.include || undefined}
+                      data-duplicate={
+                        r.duplicateReason === "in_file"
+                          ? "file"
+                          : r.duplicateReason === "existing"
+                            ? "existing"
+                            : undefined
+                      }
+                    >
                       <td style={{ whiteSpace: "nowrap" }}>{formatShortDate(r.operation_date)}</td>
                       {preview.multiAccount && (
                         <td style={{ whiteSpace: "nowrap", color: "var(--color-text-muted)" }}>
@@ -246,6 +275,35 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                         </td>
                       )}
                       <td>{r.label}</td>
+                      <td style={{ minWidth: 180 }}>
+                        {editing === i ? (
+                          <Select
+                            autoFocus
+                            value={r.categoryId ?? ""}
+                            onChange={(e) => {
+                              patchRow(i, { categoryId: e.target.value || null });
+                              setEditing(null);
+                            }}
+                            onBlur={() => setEditing(null)}
+                          >
+                            <option value="">Non catégorisée</option>
+                            {subcategoryOptions.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <button
+                            type="button"
+                            className="import-cat-edit"
+                            onClick={() => setEditing(i)}
+                            data-empty={r.categoryId ? undefined : "true"}
+                          >
+                            {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Non catégorisée"}
+                          </button>
+                        )}
+                      </td>
                       <td style={{ textAlign: "right" }}>
                         <Amount value={r.amount} />
                       </td>
@@ -263,7 +321,8 @@ export function StatementImport({ accountOptions }: { accountOptions: AccountOpt
                       <td>
                         <Toggle
                           checked={r.include}
-                          onChange={() => toggleRow(i)}
+                          disabled={r.duplicateReason === "existing"}
+                          onChange={() => patchRow(i, { include: !r.include })}
                           aria-label="Inclure"
                         />
                       </td>

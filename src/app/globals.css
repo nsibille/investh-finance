@@ -797,7 +797,9 @@ body {
   white-space: nowrap;
 }
 .amount-positive { color: var(--color-finance-revenus); }
-.amount-negative { color: var(--color-finance-depenses); }
+/* Dépenses : ton neutre et lisible (le signe − suffit à indiquer le débit) ;
+   seuls les revenus sont mis en couleur. Plus calme qu'un rouge d'alerte. */
+.amount-negative { color: var(--color-text-primary); }
 .amount-neutral  { color: var(--color-text-primary); }
 .amount-sm { font-size: var(--text-sm); }
 .amount-md { font-size: var(--text-base); }
@@ -969,6 +971,18 @@ body {
 .table-top-transactions tbody tr:hover { background: var(--color-bg-subtle); }
 .table-transactions tbody tr[data-selected="true"] { background: var(--color-brand-primary-50); }
 .table-import-preview tr[data-excluded="true"] td { opacity: 0.5; }
+/* Doublon potentiel (répété dans le fichier) : rouge léger, mais ré-importable. */
+.table-import-preview tr[data-duplicate="file"] td { background: var(--color-danger-light); }
+.table-import-preview tr[data-duplicate="file"]:hover td { background: var(--color-danger-light); }
+/* Édition inline de la catégorie dans l'aperçu d'import. */
+.import-cat-edit {
+  background: none; border: 1px dashed var(--color-border); border-radius: var(--radius-sm);
+  padding: 2px var(--space-2); font: inherit; font-size: var(--text-sm);
+  color: var(--color-text-primary); cursor: pointer; text-align: left;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.import-cat-edit:hover { border-color: var(--color-border-strong); background: var(--color-bg-subtle); }
+.import-cat-edit[data-empty="true"] { color: var(--color-text-muted); }
 
 /* ================================================================
    COMPOSANTS — Feedback (spinner, skeleton, progress, tooltip)

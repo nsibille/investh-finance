@@ -3,6 +3,8 @@ import {
   normalizeLabel,
   computeDedupHash,
   dedupeBatch,
+  assignOccurrences,
+  baseKey,
 } from "@/lib/import/dedup";
 import {
   mapGoCardlessTransaction,
@@ -51,6 +53,36 @@ describe("computeDedupHash", () => {
       external_id: "tx-123",
     });
     expect(withId).toBe(sameIdDifferentLabel);
+  });
+});
+
+describe("computeDedupHash occurrences", () => {
+  const tx = {
+    operation_date: "2026-07-31",
+    amount: -2.55,
+    raw_label: "Ile-de-france Mobilites",
+    external_id: null,
+  };
+
+  it("occurrence 0 garde le hash historique", () => {
+    expect(computeDedupHash("acc", tx, 0)).toBe(computeDedupHash("acc", tx));
+  });
+
+  it("des occurrences différentes donnent des hashes différents", () => {
+    expect(computeDedupHash("acc", tx, 1)).not.toBe(computeDedupHash("acc", tx, 0));
+    expect(computeDedupHash("acc", tx, 2)).not.toBe(computeDedupHash("acc", tx, 1));
+  });
+});
+
+describe("assignOccurrences", () => {
+  it("indexe les éléments identiques 0,1,2… par groupe", () => {
+    const items = [
+      { operation_date: "2026-07-31", amount: -5, raw_label: "A", external_id: null },
+      { operation_date: "2026-07-31", amount: -5, raw_label: "A", external_id: null },
+      { operation_date: "2026-07-31", amount: -9, raw_label: "B", external_id: null },
+      { operation_date: "2026-07-31", amount: -5, raw_label: "A", external_id: null },
+    ];
+    expect(assignOccurrences(items, baseKey)).toEqual([0, 1, 0, 2]);
   });
 });
 

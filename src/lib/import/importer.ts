@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { applyRules, type EngineRule } from "@/lib/rules/engine";
-import { computeDedupHash, dedupeBatch } from "./dedup";
+import { applyRules, toEngineRule } from "@/lib/rules/engine";
+import { computeDedupHash, dedupeBatch, assignOccurrences, baseKey } from "./dedup";
 import type { ParsedTransaction, ImportSummary } from "./types";
 import type { Database } from "@/types/database.types";
 
@@ -11,24 +11,6 @@ interface ImportOptions {
   bankFormat: string;
   sourceFilename: string;
   sourceStoragePath?: string | null;
-}
-
-function toEngineRule(
-  r: Database["public"]["Tables"]["categorization_rules"]["Row"],
-): EngineRule {
-  return {
-    id: r.id,
-    match_type: r.match_type,
-    pattern: r.pattern,
-    case_sensitive: r.case_sensitive,
-    account_id: r.account_id,
-    amount_min: r.amount_min == null ? null : Number(r.amount_min),
-    amount_max: r.amount_max == null ? null : Number(r.amount_max),
-    subcategory_id: r.subcategory_id,
-    auto_validate: r.auto_validate,
-    priority: r.priority,
-    is_active: r.is_active,
-  };
 }
 
 /**
@@ -73,13 +55,28 @@ export async function importParsedTransactions(
     );
 
     const nowIso = new Date().toISOString();
+    const occurrences = assignOccurrences(parsed, (p) => baseKey(p));
 
     const rows: (TransactionInsert & { dedup_hash: string })[] = parsed.map(
-      (p) => {
+      (p, i) => {
         const outcome = applyRules(
           { account_id: accountId, amount: p.amount, raw_label: p.raw_label },
           rules,
         );
+        // Catégorie choisie dans l'aperçu : présence de `subcategory_id` dans
+        // la charge utile = l'utilisateur a revu/modifié la catégorie proposée
+        // par les règles. On la respecte ; sinon les règles font foi (et leur
+        // compteur de hits est mis à jour).
+        const overridden = "subcategory_id" in p;
+        const subcategoryId = overridden
+          ? (p.subcategory_id ?? null)
+          : outcome.subcategory_id;
+        const status = overridden
+          ? subcategoryId
+            ? "validated"
+            : "pending"
+          : outcome.status;
+        const appliedRuleId = overridden ? null : outcome.applied_rule_id;
         return {
           account_id: accountId,
           import_id: importId,
@@ -89,11 +86,11 @@ export async function importParsedTransactions(
           raw_label: p.raw_label,
           amount: p.amount,
           currency: p.currency,
-          status: outcome.status,
-          subcategory_id: outcome.subcategory_id,
-          applied_rule_id: outcome.applied_rule_id,
-          validated_at: outcome.status === "validated" ? nowIso : null,
-          dedup_hash: computeDedupHash(accountId, p),
+          status,
+          subcategory_id: subcategoryId,
+          applied_rule_id: appliedRuleId,
+          validated_at: status === "validated" ? nowIso : null,
+          dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
         };
       },
     );

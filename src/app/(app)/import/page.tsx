@@ -4,6 +4,7 @@ import { StatementImport } from "@/components/import/StatementImport";
 import { BankConnectionsManager } from "@/components/import/BankConnectionsManager";
 import { getBankConnections } from "@/lib/bank/queries";
 import { getAccountOptions } from "@/lib/rules/queries";
+import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { isGoCardlessConfigured } from "@/lib/gocardless/client";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +24,10 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 export default async function ImportPage() {
-  const [connections, accountOptions] = await Promise.all([
+  const [connections, accountOptions, subcategoryOptions] = await Promise.all([
     getBankConnections(),
     getAccountOptions(),
+    getSubcategoryOptions(),
   ]);
   const configured = isGoCardlessConfigured();
 
@@ -37,7 +39,10 @@ export default async function ImportPage() {
       />
 
       <SectionTitle>Import de relevé (PDF ou CSV)</SectionTitle>
-      <StatementImport accountOptions={accountOptions} />
+      <StatementImport
+        accountOptions={accountOptions}
+        subcategoryOptions={subcategoryOptions}
+      />
 
       <SectionTitle>Connexions bancaires (GoCardless)</SectionTitle>
       <Suspense>

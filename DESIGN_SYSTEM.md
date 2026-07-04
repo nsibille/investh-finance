@@ -766,7 +766,15 @@ Variante pour confirmer une action destructive (avec `btn-danger-md`).
 ```
 
 ### `table-import-preview`
-Variante avec colonne "Action" (switch include/exclude) + colonne dedup status.
+Variante avec colonnes "Compte", "Catégorie" (édition inline `import-cat-edit`),
+"Action" (switch include/exclude) + colonne dedup status. Ligne
+`tr[data-duplicate="file"]` : doublon potentiel en rouge léger (ré-importable).
+
+### `import-cat-edit`
+**Bouton d'édition inline de catégorie dans l'aperçu d'import** — bordure
+pointillée, affiche le libellé de la catégorie proposée par les règles ;
+au clic, remplacé par un `input-select-md` (montage paresseux, un seul à la
+fois pour tenir des milliers de lignes).
 
 ### `table-top-transactions`
 Variante compact pour widgets analytics (top 10 dépenses).
@@ -1127,6 +1135,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `spinner-md` | Feedback | Spinner medium (défaut) | auto |
 | `spinner-sm` | Feedback | Spinner small | auto |
 | `table-import-preview` | Table | Variante preview import | auto |
+| `import-cat-edit` | Import | Édition inline catégorie (aperçu import) | auto |
 | `table-top-transactions` | Table | Variante top dépenses compact | auto |
 | `table-transactions` | Table | Table principale transactions | auto |
 | `toast-error` | Feedback | Toast erreur | auto |

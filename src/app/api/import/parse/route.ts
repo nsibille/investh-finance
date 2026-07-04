@@ -6,11 +6,12 @@ import { parseBankinCsv } from "@/lib/import/parsers/bankinCsv";
 import { decodeTextFile } from "@/lib/import/decode";
 import {
   buildPreviewRows,
+  occurrenceHashes,
   resolveCsvTargets,
   buildCsvPreview,
 } from "@/lib/import/preview";
 import { normalizeConnection } from "@/lib/import/connection";
-import { computeDedupHash } from "@/lib/import/dedup";
+import { applyRules, toEngineRule, type EngineRule } from "@/lib/rules/engine";
 import type { ParsedTransaction } from "@/lib/import/types";
 
 function isCsv(file: File): boolean {
@@ -21,11 +22,10 @@ function isCsv(file: File): boolean {
 
 const CHUNK = 300;
 
+type Supa = Awaited<ReturnType<typeof createClient>>;
+
 /** Récupère par lots les dedup_hash déjà présents (limite d'URL PostgREST). */
-async function fetchExistingHashes(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  hashes: string[],
-): Promise<Set<string>> {
+async function fetchExistingHashes(supabase: Supa, hashes: string[]): Promise<Set<string>> {
   const set = new Set<string>();
   for (let i = 0; i < hashes.length; i += CHUNK) {
     const { data } = await supabase
@@ -35,6 +35,27 @@ async function fetchExistingHashes(
     for (const r of data ?? []) set.add(r.dedup_hash);
   }
   return set;
+}
+
+async function loadRules(supabase: Supa): Promise<EngineRule[]> {
+  const { data } = await supabase
+    .from("categorization_rules")
+    .select("*")
+    .eq("is_active", true)
+    .order("priority", { ascending: true });
+  return (data ?? []).map(toEngineRule);
+}
+
+/** Sous-catégorie proposée par les règles pour une transaction d'un compte donné. */
+function suggestSubcategory(
+  rules: EngineRule[],
+  accountId: string,
+  tx: ParsedTransaction,
+): string | null {
+  return applyRules(
+    { account_id: accountId, amount: tx.amount, raw_label: tx.raw_label },
+    rules,
+  ).subcategory_id;
 }
 
 /** Analyse un fichier (PDF ou CSV) et renvoie un aperçu avec doublons flaggés. */
@@ -72,10 +93,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Comptes existants indexés par connexion normalisée.
-    const { data: accounts } = await supabase
-      .from("accounts")
-      .select("id, connection_name");
+    const [{ data: accounts }, rules] = await Promise.all([
+      supabase.from("accounts").select("id, connection_name"),
+      loadRules(supabase),
+    ]);
     const accountIdByConnection = new Map<string, string>();
     for (const a of accounts ?? []) {
       if (a.connection_name) {
@@ -90,6 +111,12 @@ export async function POST(request: Request) {
     const existingSet = await fetchExistingHashes(supabase, knownHashes);
     const { rows, connections } = buildCsvPreview(transactions, targets, existingSet);
 
+    // Catégorie proposée par les règles (compte existant, sinon règles globales).
+    const withSuggestion = rows.map((r, i) => ({
+      ...r,
+      suggestedSubcategoryId: suggestSubcategory(rules, targets[i].accountId ?? "", r),
+    }));
+
     const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
     const dupInFile = rows.filter((r) => r.duplicateReason === "in_file").length;
 
@@ -101,7 +128,7 @@ export async function POST(request: Request) {
       warning: null,
       multiAccount: true,
       connections,
-      rows,
+      rows: withSuggestion,
       total: rows.length,
       newCount: rows.filter((r) => !r.duplicate).length,
       dupCount: dupExisting + dupInFile,
@@ -145,9 +172,16 @@ export async function POST(request: Request) {
       ? "Le sens débit/crédit de la Société Générale est déduit du libellé. Vérifie les montants avant d'importer."
       : null;
 
-  const hashes = transactions.map((t) => computeDedupHash(accountId, t));
-  const existingSet = await fetchExistingHashes(supabase, hashes);
+  const hashes = occurrenceHashes(accountId, transactions);
+  const [existingSet, rules] = await Promise.all([
+    fetchExistingHashes(supabase, hashes),
+    loadRules(supabase),
+  ]);
   const { rows } = buildPreviewRows(accountId, transactions, existingSet);
+  const withSuggestion = rows.map((r) => ({
+    ...r,
+    suggestedSubcategoryId: suggestSubcategory(rules, accountId, r),
+  }));
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
   const dupInFile = rows.filter((r) => r.duplicateReason === "in_file").length;
 
@@ -159,7 +193,7 @@ export async function POST(request: Request) {
     warning,
     multiAccount: false,
     connections: [],
-    rows,
+    rows: withSuggestion,
     total: rows.length,
     newCount: rows.filter((r) => !r.duplicate).length,
     dupCount: dupExisting + dupInFile,

@@ -18,6 +18,25 @@ export interface EngineTransaction {
   raw_label: string;
 }
 
+/** Convertit une ligne `categorization_rules` en règle du moteur. */
+export function toEngineRule(
+  r: Database["public"]["Tables"]["categorization_rules"]["Row"],
+): EngineRule {
+  return {
+    id: r.id,
+    match_type: r.match_type,
+    pattern: r.pattern,
+    case_sensitive: r.case_sensitive,
+    account_id: r.account_id,
+    amount_min: r.amount_min == null ? null : Number(r.amount_min),
+    amount_max: r.amount_max == null ? null : Number(r.amount_max),
+    subcategory_id: r.subcategory_id,
+    auto_validate: r.auto_validate,
+    priority: r.priority,
+    is_active: r.is_active,
+  };
+}
+
 export interface RuleOutcome {
   subcategory_id: string | null;
   status: Database["public"]["Enums"]["transaction_status"];

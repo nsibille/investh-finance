@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import type { SubcategoryOption } from "@/lib/categories/types";
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+const CREATE = "__create__";
 
 interface Item {
   id: string | null;
@@ -21,12 +23,15 @@ interface Item {
 export function ImportCategoryEditor({
   options,
   onSelect,
+  onCreate,
   onTabNext,
   onClose,
 }: {
   options: SubcategoryOption[];
   value: string | null;
   onSelect: (id: string | null) => void;
+  /** Créer une catégorie à la volée avec ce nom. */
+  onCreate: (name: string) => void;
   onTabNext: () => void;
   onClose: () => void;
 }) {
@@ -47,10 +52,13 @@ export function ImportCategoryEditor({
     });
   }, [options, query]);
 
-  // « Non catégorisée » proposé en tête tant qu'on n'a pas commencé à taper.
+  // « Non catégorisée » en tête tant qu'on n'a pas tapé ; « Créer … » en pied
+  // dès qu'on tape (création à la volée).
   const items: Item[] = useMemo(() => {
     const base: Item[] = filtered.map((o) => ({ id: o.id, label: o.label }));
-    return query.trim() ? base : [{ id: null, label: "Non catégorisée" }, ...base];
+    const q = query.trim();
+    if (!q) return [{ id: null, label: "Non catégorisée" }, ...base];
+    return [...base, { id: CREATE, label: q }];
   }, [filtered, query]);
 
   function reposition() {
@@ -95,8 +103,13 @@ export function ImportCategoryEditor({
       ?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
+  function choose(item: Item) {
+    if (item.id === CREATE) onCreate(item.label);
+    else onSelect(item.id);
+  }
+
   function commitActive() {
-    if (active >= 0 && items[active]) onSelect(items[active].id);
+    if (active >= 0 && items[active]) choose(items[active]);
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -152,14 +165,23 @@ export function ImportCategoryEditor({
                   className="cat-combobox__opt"
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    onSelect(it.id);
+                    choose(it);
                     onClose();
                   }}
                   onMouseEnter={() => setActive(i)}
                 >
-                  <span className="cat-combobox__opt-label">
-                    {it.id === null ? <em>{it.label}</em> : it.label}
-                  </span>
+                  {it.id === CREATE ? (
+                    <>
+                      <Plus size={14} aria-hidden style={{ flexShrink: 0 }} />
+                      <span className="cat-combobox__opt-label">
+                        Créer «&nbsp;{it.label}&nbsp;»
+                      </span>
+                    </>
+                  ) : (
+                    <span className="cat-combobox__opt-label">
+                      {it.id === null ? <em>{it.label}</em> : it.label}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

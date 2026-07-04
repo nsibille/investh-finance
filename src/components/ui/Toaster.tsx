@@ -31,30 +31,39 @@ function ToastItem({ toast }: { toast: Toast }) {
     return () => clearTimeout(timer);
   }, [toast.id, toast.duration, dismissToast]);
 
+  const actions = toast.actions ?? (toast.action ? [toast.action] : []);
+
   return (
     <div className={`toast-${toast.variant}`} role="status">
-      <Icon size={18} aria-hidden />
-      <span className="toast-message">{toast.message}</span>
-      {toast.action && (
+      <div className="toast-head">
+        <Icon className="toast-icon" size={18} aria-hidden />
+        <span className="toast-message">{toast.message}</span>
         <button
           type="button"
-          className="toast-action"
-          onClick={() => {
-            toast.action?.onClick();
-            dismissToast(toast.id);
-          }}
+          className="toast-dismiss"
+          aria-label="Fermer"
+          onClick={() => dismissToast(toast.id)}
         >
-          {toast.action.label}
+          <X size={14} aria-hidden />
         </button>
+      </div>
+      {actions.length > 0 && (
+        <div className="toast-actions">
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                a.onClick();
+                dismissToast(toast.id);
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
       )}
-      <button
-        type="button"
-        className="toast-dismiss"
-        aria-label="Fermer"
-        onClick={() => dismissToast(toast.id)}
-      >
-        <X size={14} aria-hidden />
-      </button>
     </div>
   );
 }

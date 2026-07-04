@@ -17,6 +17,8 @@ import { ImportCategoryEditor } from "./ImportCategoryEditor";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
+import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
+import { createCategoryOnTheFly } from "@/server/actions/categories";
 import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
 import type { AccountOption } from "@/lib/rules/queries";
@@ -40,11 +42,103 @@ export function StatementImport({
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
+  // Catégories créées à la volée pendant cette session d'import.
+  const [extraOptions, setExtraOptions] = useState<SubcategoryOption[]>([]);
+
+  const allOptions = useMemo(() => {
+    const seen = new Set(subcategoryOptions.map((o) => o.id));
+    return [...subcategoryOptions, ...extraOptions.filter((o) => !seen.has(o.id))];
+  }, [subcategoryOptions, extraOptions]);
 
   const optLabel = useMemo(
-    () => new Map(subcategoryOptions.map((o) => [o.id, o.label])),
-    [subcategoryOptions],
+    () => new Map(allOptions.map((o) => [o.id, o.label])),
+    [allOptions],
   );
+
+  // Assigne une catégorie à une ligne et crée la règle associée (avec toaster
+  // récap / annuler / appliquer partout).
+  async function assignCategory(
+    index: number,
+    subcategoryId: string | null,
+    labelOverride?: string,
+  ) {
+    patchRow(index, { categoryId: subcategoryId });
+    if (!subcategoryId) return;
+    const row = useImportStore.getState().preview?.rows[index];
+    if (!row) return;
+    const pattern = row.label;
+    const res = await createRuleFromLabel(pattern, subcategoryId);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    const label = labelOverride ?? optLabel.get(subcategoryId) ?? "catégorie";
+    if (res.exists) {
+      toast.info(`Catégorie assignée · règle « ${res.pattern} » déjà existante`, {
+        actions: [
+          {
+            label: "Appliquer à tout l'import",
+            onClick: () => applyEverywhere(res.pattern, subcategoryId),
+          },
+        ],
+      });
+      return;
+    }
+    toast.success(`Règle créée : contient « ${res.pattern} » → ${label}`, {
+      duration: 10000,
+      actions: [
+        {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRule(res.ruleId);
+            toast.info("Règle annulée.");
+          },
+        },
+        {
+          label: "Appliquer à tout l'import",
+          onClick: () => applyEverywhere(res.pattern, subcategoryId),
+        },
+      ],
+    });
+  }
+
+  async function handleCreateCategory(index: number, name: string) {
+    const res = await createCategoryOnTheFly(name);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setExtraOptions((prev) => [
+      ...prev,
+      {
+        id: res.subcategoryId,
+        label: res.label,
+        categoryColor: res.categoryColor,
+        typeName: res.typeName,
+        categoryName: res.categoryName,
+        subName: null,
+      },
+    ]);
+    await assignCategory(index, res.subcategoryId, res.label);
+  }
+
+  // Applique la règle (motif « contient ») à toutes les lignes de l'aperçu.
+  function applyEverywhere(pattern: string, subcategoryId: string) {
+    const state = useImportStore.getState();
+    const cur = state.preview;
+    if (!cur) return;
+    const p = pattern.toLowerCase();
+    let count = 0;
+    const rows = cur.rows.map((r) => {
+      if (r.raw_label.toLowerCase().includes(p)) {
+        count += 1;
+        return { ...r, categoryId: subcategoryId };
+      }
+      return r;
+    });
+    state.setPreview({ ...cur, rows });
+    toast.info(`${count} transaction(s) catégorisée(s) dans l'import.`);
+  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -240,9 +334,10 @@ export function StatementImport({
                       <td data-col="category">
                         {editing === i ? (
                           <ImportCategoryEditor
-                            options={subcategoryOptions}
+                            options={allOptions}
                             value={r.categoryId}
-                            onSelect={(id) => patchRow(i, { categoryId: id })}
+                            onSelect={(id) => assignCategory(i, id)}
+                            onCreate={(name) => handleCreateCategory(i, name)}
                             onTabNext={() =>
                               setEditing(i + 1 < preview.rows.length ? i + 1 : null)
                             }

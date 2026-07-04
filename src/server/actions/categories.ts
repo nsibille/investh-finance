@@ -122,6 +122,91 @@ export async function createCategoryWithDefaultSub(
   return { ok: true, id: sub.id };
 }
 
+export type CreateOnTheFlyResult =
+  | {
+      ok: true;
+      subcategoryId: string;
+      categoryName: string;
+      typeName: string;
+      categoryColor: string | null;
+      label: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Crée une catégorie à la volée (depuis l'import) : rattachée au type
+ * « Frais Variables » par défaut (à reclasser ensuite), avec sa sous-catégorie
+ * « — ». Réutilise une catégorie de même nom si elle existe déjà. Retourne la
+ * sous-catégorie à assigner.
+ */
+export async function createCategoryOnTheFly(
+  name: string,
+): Promise<CreateOnTheFlyResult> {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 80) return fail("Nom invalide");
+
+  const supabase = await createClient();
+  const { data: type } = await supabase
+    .from("category_types")
+    .select("id, name")
+    .eq("slug", "frais-variables")
+    .maybeSingle();
+  if (!type) return fail("Type « Frais Variables » introuvable");
+
+  const { data: existing } = await supabase
+    .from("categories")
+    .select("id, category_type_id")
+    .ilike("name", trimmed)
+    .limit(1);
+
+  let categoryId: string;
+  let typeName = type.name;
+  if (existing && existing.length > 0) {
+    categoryId = existing[0].id;
+    const { data: t } = await supabase
+      .from("category_types")
+      .select("name")
+      .eq("id", existing[0].category_type_id)
+      .maybeSingle();
+    typeName = t?.name ?? type.name;
+  } else {
+    const { data: cat, error } = await supabase
+      .from("categories")
+      .insert({ category_type_id: type.id, name: trimmed, sort_order: 0 })
+      .select("id")
+      .single();
+    if (error || !cat) return fail(error?.message ?? "Catégorie impossible");
+    categoryId = cat.id;
+  }
+
+  const { data: sub } = await supabase
+    .from("subcategories")
+    .select("id")
+    .eq("category_id", categoryId)
+    .eq("name", "—")
+    .maybeSingle();
+  let subcategoryId = sub?.id;
+  if (!subcategoryId) {
+    const { data: newSub, error } = await supabase
+      .from("subcategories")
+      .insert({ category_id: categoryId, name: "—", sort_order: 0 })
+      .select("id")
+      .single();
+    if (error || !newSub) return fail(error?.message ?? "Sous-catégorie impossible");
+    subcategoryId = newSub.id;
+  }
+
+  revalidatePath("/categories");
+  return {
+    ok: true,
+    subcategoryId,
+    categoryName: trimmed,
+    typeName,
+    categoryColor: null,
+    label: `${typeName} / ${trimmed}`,
+  };
+}
+
 export type CategoryParents = {
   types: { id: string; name: string }[];
   categories: { id: string; name: string; typeName: string; color: string | null }[];

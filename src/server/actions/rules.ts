@@ -92,6 +92,55 @@ export async function deleteRule(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+export type RuleFromLabelResult =
+  | { ok: true; ruleId: string; exists: boolean; pattern: string }
+  | { ok: false; error: string };
+
+/**
+ * Crée une règle « contient » à partir d'un libellé assigné (import) :
+ * pattern = libellé, cible = sous-catégorie. Renvoie la règle existante si une
+ * règle identique (contient + même pattern + même sous-catégorie) existe déjà.
+ */
+export async function createRuleFromLabel(
+  pattern: string,
+  subcategoryId: string,
+): Promise<RuleFromLabelResult> {
+  const p = pattern.trim();
+  if (!p) return { ok: false, error: "Motif vide" };
+  if (!subcategoryId) return { ok: false, error: "Catégorie manquante" };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("categorization_rules")
+    .select("id")
+    .eq("match_type", "contains")
+    .eq("subcategory_id", subcategoryId)
+    .ilike("pattern", p)
+    .limit(1);
+  if (existing && existing.length > 0) {
+    return { ok: true, ruleId: existing[0].id, exists: true, pattern: p };
+  }
+
+  const { data, error } = await supabase
+    .from("categorization_rules")
+    .insert({
+      name: p.slice(0, 120),
+      match_type: "contains",
+      pattern: p,
+      case_sensitive: false,
+      subcategory_id: subcategoryId,
+      auto_validate: true,
+      priority: 100,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Règle impossible" };
+
+  revalidatePath("/rules");
+  return { ok: true, ruleId: data.id, exists: false, pattern: p };
+}
+
 export interface RuleImportSummary {
   rulesCreated: number;
   categoriesCreated: number;

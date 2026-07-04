@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Amount } from "@/components/ui/Amount";
 import { ImportRowBadge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Checkbox";
+import { ImportCategoryEditor } from "./ImportCategoryEditor";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
@@ -236,24 +237,17 @@ export function StatementImport({
                         </td>
                       )}
                       <td data-col="label">{r.label}</td>
-                      <td>
+                      <td data-col="category">
                         {editing === i ? (
-                          <Select
-                            autoFocus
-                            value={r.categoryId ?? ""}
-                            onChange={(e) => {
-                              patchRow(i, { categoryId: e.target.value || null });
-                              setEditing(null);
-                            }}
-                            onBlur={() => setEditing(null)}
-                          >
-                            <option value="">Non catégorisée</option>
-                            {subcategoryOptions.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </Select>
+                          <ImportCategoryEditor
+                            options={subcategoryOptions}
+                            value={r.categoryId}
+                            onSelect={(id) => patchRow(i, { categoryId: id })}
+                            onTabNext={() =>
+                              setEditing(i + 1 < preview.rows.length ? i + 1 : null)
+                            }
+                            onClose={() => setEditing(null)}
+                          />
                         ) : (
                           <button
                             type="button"

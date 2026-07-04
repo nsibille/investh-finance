@@ -981,19 +981,33 @@ body {
 .table-import-preview td[data-col="account"] {
   overflow: hidden; text-overflow: ellipsis;
 }
-/* Libellé : retour à la ligne plutôt que troncature — jamais coupé. */
-.table-import-preview td[data-col="label"] {
+/* Libellé & catégorie : retour à la ligne plutôt que troncature — jamais coupés. */
+.table-import-preview td[data-col="label"],
+.table-import-preview td[data-col="category"] {
   white-space: normal; overflow-wrap: anywhere; word-break: break-word;
 }
 /* Édition inline de la catégorie dans l'aperçu d'import. */
 .import-cat-edit {
+  display: block; width: 100%;
   background: none; border: 1px dashed var(--color-border); border-radius: var(--radius-sm);
   padding: 2px var(--space-2); font: inherit; font-size: var(--text-sm);
   color: var(--color-text-primary); cursor: pointer; text-align: left;
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  white-space: normal; overflow-wrap: anywhere; word-break: break-word;
 }
 .import-cat-edit:hover { border-color: var(--color-border-strong); background: var(--color-bg-subtle); }
 .import-cat-edit[data-empty="true"] { color: var(--color-text-muted); }
+/* Éditeur de catégorie inline (autocomplétion) dans l'aperçu d'import. */
+.import-cat-ac {
+  display: flex; align-items: center; gap: var(--space-1);
+  border: 1px solid var(--color-border-focus); border-radius: var(--radius-sm);
+  padding: 2px var(--space-2); background: var(--color-bg-surface);
+  box-shadow: var(--shadow-focus);
+}
+.import-cat-ac input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font: inherit; font-size: var(--text-sm); color: var(--color-text-primary);
+}
+.import-cat-ac input::placeholder { color: var(--color-text-muted); }
 
 /* ================================================================
    COMPOSANTS — Feedback (spinner, skeleton, progress, tooltip)

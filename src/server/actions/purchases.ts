@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { generateInstallments } from "@/lib/purchases/installments";
+import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -57,7 +58,12 @@ export async function createPurchase(input: PurchaseInput): Promise<CreateResult
       amount: i.amount,
       label: i.label,
     }));
-    if (rows.length > 0) await supabase.from("purchase_installments").insert(rows);
+    if (rows.length > 0) {
+      await supabase.from("purchase_installments").insert(rows);
+      // Achat créé sans transaction (pas de libellé de référence) : on apparie
+      // les mensualités aux transactions existantes sur mois + montant.
+      if (!plan.label) await matchPurchaseInstallments(data.id);
+    }
   }
 
   revalidate();
@@ -171,7 +177,10 @@ export async function addInstallment(
     note: note?.trim() || null,
   });
   if (error) return fail(error.message);
+  // Apparie immédiatement la mensualité à une transaction existante si possible.
+  await matchPurchaseInstallments(purchaseId);
   revalidatePath("/achats");
+  revalidatePath("/transactions");
   return { ok: true };
 }
 

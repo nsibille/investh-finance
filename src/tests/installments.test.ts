@@ -91,4 +91,21 @@ describe("matchInstallmentsToTransactions", () => {
     const pairs = matchInstallmentsToTransactions(installments, [tx({ id: "t1" })]);
     expect(pairs).toEqual([{ installmentId: "i1", transactionId: "t1" }]);
   });
+
+  it("sans libellé : apparie mensualité négative et transaction négative (mois + montant)", () => {
+    // Cas achat sans transaction : label null, on matche montant/mois uniquement.
+    const installments = [inst({ label: null, amount: -49.9 })];
+    const txs = [tx({ raw_label: "PEU IMPORTE", amount: -49.9 })];
+    expect(matchInstallmentsToTransactions(installments, txs)).toEqual([
+      { installmentId: "i1", transactionId: "t1" },
+    ]);
+  });
+
+  it("sans libellé : montant positif de mensualité matche transaction négative", () => {
+    const installments = [inst({ label: null, amount: 49.9 })];
+    const txs = [tx({ amount: -49.9, raw_label: "X" })];
+    expect(matchInstallmentsToTransactions(installments, txs)).toEqual([
+      { installmentId: "i1", transactionId: "t1" },
+    ]);
+  });
 });

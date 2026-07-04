@@ -9,16 +9,28 @@ import type { Database } from "@/types/database.types";
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
 
 /**
- * Apparie automatiquement les mensualités non réglées aux transactions (mois +
- * montant + libellé). Une transaction non rattachée qui matche est aussi
- * rattachée à l'achat (catégorie héritée). Retourne le nombre d'appariements.
+ * Apparie automatiquement les mensualités non réglées aux transactions.
+ *
+ * - Si l'achat a déjà au moins une transaction rattachée, on utilise le libellé
+ *   attendu de la mensualité (mois + montant + libellé) pour rester précis.
+ * - Si l'achat n'a AUCUNE transaction (donc aucun libellé de référence fiable),
+ *   on apparie uniquement sur le mois et le montant (en valeur absolue : les
+ *   montants des transactions sont négatifs).
+ *
+ * Une transaction non rattachée qui matche est aussi rattachée à l'achat
+ * (catégorie héritée). `scopePurchaseId` limite le traitement à un seul achat
+ * (utilisé à la création). Retourne le nombre d'appariements.
  */
-export async function matchPurchaseInstallments(): Promise<number> {
+export async function matchPurchaseInstallments(
+  scopePurchaseId?: string,
+): Promise<number> {
   const supabase = await createClient();
-  const { data: installments } = await supabase
+  let query = supabase
     .from("purchase_installments")
     .select("id, purchase_id, month, amount, label")
     .is("transaction_id", null);
+  if (scopePurchaseId) query = query.eq("purchase_id", scopePurchaseId);
+  const { data: installments } = await query;
   if (!installments || installments.length === 0) return 0;
 
   const purchaseIds = [...new Set(installments.map((i) => i.purchase_id))];
@@ -63,7 +75,14 @@ export async function matchPurchaseInstallments(): Promise<number> {
         purchase_id: t.purchase_id,
       }));
 
-    const pairs = matchInstallmentsToTransactions(items, candidates);
+    // Sans transaction rattachée, aucun libellé de référence : on apparie sur le
+    // mois et le montant uniquement.
+    const hasAttached = (txs ?? []).some((t) => t.purchase_id === purchaseId);
+    const matchItems = hasAttached
+      ? items
+      : items.map((i) => ({ ...i, label: null }));
+
+    const pairs = matchInstallmentsToTransactions(matchItems, candidates);
     const subId = subByPurchase.get(purchaseId) ?? null;
 
     for (const { installmentId, transactionId } of pairs) {

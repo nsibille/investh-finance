@@ -16,33 +16,10 @@ import { Toggle } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
+import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
-import type { DuplicateReason, ConnectionSummary } from "@/lib/import/preview";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
-
-interface PreviewRow extends ParsedTransaction {
-  duplicate: boolean;
-  duplicateReason: DuplicateReason;
-  connectionLabel?: string;
-  targetAccountExists?: boolean;
-  suggestedSubcategoryId?: string | null;
-  /** Catégorie courante (proposée par les règles, éventuellement modifiée). */
-  categoryId: string | null;
-  include: boolean;
-}
-
-interface Preview {
-  bank: string;
-  bankLabel: string;
-  sourceFormat: string;
-  warning: string | null;
-  multiAccount: boolean;
-  connections: ConnectionSummary[];
-  rows: PreviewRow[];
-  filename: string;
-  dupExisting: number;
-}
 
 export function StatementImport({
   accountOptions,
@@ -53,11 +30,14 @@ export function StatementImport({
 }) {
   const router = useRouter();
   const toast = useToast();
+  // Aperçu conservé dans un store : survit à la navigation (retour sur /import).
+  const preview = useImportStore((s) => s.preview);
+  const setPreview = useImportStore((s) => s.setPreview);
+  const patchRow = useImportStore((s) => s.patchRow);
   const [accountId, setAccountId] = useState(accountOptions[0]?.id ?? "");
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<Preview | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
 
   const optLabel = useMemo(
@@ -89,7 +69,7 @@ export function StatementImport({
         connections: data.connections ?? [],
         filename: file.name,
         dupExisting: data.dupExisting ?? 0,
-        rows: data.rows.map((r: PreviewRow) => ({
+        rows: data.rows.map((r: ImportPreviewRow) => ({
           ...r,
           categoryId: r.suggestedSubcategoryId ?? null,
           include: !r.duplicate,
@@ -100,14 +80,6 @@ export function StatementImport({
     } finally {
       setParsing(false);
     }
-  }
-
-  function patchRow(index: number, patch: Partial<PreviewRow>) {
-    setPreview((prev) =>
-      prev
-        ? { ...prev, rows: prev.rows.map((r, i) => (i === index ? { ...r, ...patch } : r)) }
-        : prev,
-    );
   }
 
   async function handleImport() {

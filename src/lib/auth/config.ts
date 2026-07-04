@@ -19,6 +19,11 @@
  *
  * ⚠️ La RLS Supabase reste active : sans utilisateur connecté, les requêtes
  * client renvoient des données vides. Le libre accès ouvre l'UI, pas les données.
+ *
+ * 👉 Pour arriver DIRECTEMENT sur tes données sans login (dev / instance
+ * privée), renseigne `SUPABASE_SERVICE_ROLE_KEY` : le client serveur
+ * (`lib/supabase/server.ts`) l'utilise alors et contourne la RLS. À réserver
+ * à une instance locale/privée (voir l'avertissement dans server.ts).
  */
 const flag = process.env.AUTH_ENABLED ?? process.env.NEXT_PUBLIC_AUTH_ENABLED;
 

@@ -121,7 +121,7 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
         <EmptyState
           icon={FolderTree}
           title="Aucune catégorie chargée"
-          description="Tes types et catégories existent en base mais l'app ne peut pas les lire. En mode libre accès, renseigne SUPABASE_SERVICE_ROLE_KEY dans .env.local (puis redémarre) pour accéder à tes données sans connexion."
+          description="Tes types et catégories existent en base mais l'app ne peut pas les lire (RLS). Sur un déploiement public, active l'authentification (AUTH_ENABLED=true) et connecte-toi ; en local privé, renseigne SUPABASE_SERVICE_ROLE_KEY."
         />
       </Card>
     );

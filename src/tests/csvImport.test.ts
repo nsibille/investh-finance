@@ -93,13 +93,13 @@ describe("resolveCsvTargets + buildCsvPreview", () => {
     { operation_date: "2026-07-31", label: "a", raw_label: "a", amount: -5, currency: "EUR", connection_name: "BforBank" },
     // nouveau (compte existant, absent de la base)
     { operation_date: "2026-07-30", label: "b", raw_label: "b", amount: -6, currency: "EUR", connection_name: "BforBank" },
-    // identique au précédent → doublon dans le fichier
+    // identique au précédent → répétition dans le fichier (opération distincte, PAS un doublon)
     { operation_date: "2026-07-30", label: "b", raw_label: "b", amount: -6, currency: "EUR", connection_name: "BforBank" },
     // connexion inconnue → compte à créer, jamais doublon en base
     { operation_date: "2026-07-29", label: "c", raw_label: "c", amount: -7, currency: "EUR", connection_name: "Boursorama" },
   ];
 
-  it("mappe connexions existantes, détecte doublons et récapitule", () => {
+  it("ne marque doublon que ce qui est déjà en base (pas les répétitions du fichier)", () => {
     const accByConn = new Map([[normalizeConnection("BforBank"), "acc-1"]]);
     const targets = resolveCsvTargets(txs, accByConn);
     expect(targets[0].accountId).toBe("acc-1");
@@ -110,7 +110,8 @@ describe("resolveCsvTargets + buildCsvPreview", () => {
 
     expect(rows[0].duplicateReason).toBe("existing");
     expect(rows[1].duplicateReason).toBeNull();
-    expect(rows[2].duplicateReason).toBe("in_file");
+    // répétition dans le fichier → NON marquée doublon, s'importe
+    expect(rows[2].duplicateReason).toBeNull();
     expect(rows[3].duplicateReason).toBeNull();
     expect(rows[3].targetAccountExists).toBe(false);
 
@@ -124,21 +125,20 @@ describe("resolveCsvTargets + buildCsvPreview", () => {
 describe("buildPreviewRows", () => {
   const txs = [
     { operation_date: "2026-07-31", label: "A", raw_label: "A", amount: -5, currency: "EUR" },
-    // exact repeat -> in-file duplicate
+    // répétition exacte dans le fichier → opération distincte, pas un doublon
     { operation_date: "2026-07-31", label: "A", raw_label: "A", amount: -5, currency: "EUR" },
-    // already in DB
+    // déjà en base
     { operation_date: "2026-07-30", label: "B", raw_label: "B", amount: -9, currency: "EUR" },
   ];
 
-  it("flags in-file and existing duplicates with reasons", () => {
+  it("ne marque doublon que ce qui est déjà en base", () => {
     const existing = new Set([computeDedupHash("acc", txs[2])]);
     const { rows } = buildPreviewRows("acc", txs, existing);
 
-    expect(rows[0].duplicate).toBe(false);
     expect(rows[0].duplicateReason).toBeNull();
-
-    expect(rows[1].duplicate).toBe(true);
-    expect(rows[1].duplicateReason).toBe("in_file");
+    // répétition fichier → nouvelle (occurrence distincte)
+    expect(rows[1].duplicate).toBe(false);
+    expect(rows[1].duplicateReason).toBeNull();
 
     expect(rows[2].duplicate).toBe(true);
     expect(rows[2].duplicateReason).toBe("existing");

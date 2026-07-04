@@ -2,8 +2,8 @@ import { computeDedupHash, assignOccurrences, baseKey } from "./dedup";
 import { connectionLabel, normalizeConnection } from "./connection";
 import type { ParsedTransaction } from "./types";
 
-/** Pourquoi une ligne est marquée comme doublon. */
-export type DuplicateReason = "existing" | "in_file" | null;
+/** Pourquoi une ligne est marquée comme doublon (seulement si déjà en base). */
+export type DuplicateReason = "existing" | null;
 
 export interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
@@ -20,11 +20,10 @@ export function occurrenceHashes(
 }
 
 /**
- * Marque chaque transaction selon la clé date | libellé | montant :
- * - `existing` : déjà présente en base pour ce compte (ré-import) ;
- * - `in_file`  : occurrence répétée dans le fichier (doublon potentiel).
- * Décochée par défaut côté UI ; un `in_file` reste ré-importable (occurrence
- * distincte), un `existing` ne peut pas l'être (déjà en base).
+ * Marque une transaction comme doublon UNIQUEMENT si elle est déjà présente en
+ * base pour ce compte (protection contre le ré-import). Les répétitions au sein
+ * du même fichier sont des opérations distinctes (occurrence indexée) et restent
+ * « nouvelles ». Un `existing` est décoché par défaut et non ré-importable.
  */
 export function buildPreviewRows(
   accountId: string,
@@ -35,13 +34,7 @@ export function buildPreviewRows(
   const hashes = transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
 
   const rows = transactions.map((t, i) => {
-    const existing = existingHashes.has(hashes[i]);
-    const inFile = !existing && occ[i] >= 1;
-    const reason: DuplicateReason = existing
-      ? "existing"
-      : inFile
-        ? "in_file"
-        : null;
+    const reason: DuplicateReason = existingHashes.has(hashes[i]) ? "existing" : null;
     return { ...t, duplicate: reason !== null, duplicateReason: reason };
   });
 
@@ -117,9 +110,9 @@ export function resolveCsvTargets(
 }
 
 /**
- * Construit l'aperçu d'un import CSV : lignes avec statut de doublon
- * (existant en base pour les comptes connus, répété dans le fichier sinon)
- * et récapitulatif par connexion (existant vs à créer).
+ * Construit l'aperçu d'un import CSV : lignes marquées « existant » uniquement
+ * si déjà en base (compte connu), et récapitulatif par connexion (existant vs
+ * à créer). Les répétitions dans le fichier restent « nouvelles ».
  */
 export function buildCsvPreview(
   transactions: ParsedTransaction[],
@@ -128,13 +121,8 @@ export function buildCsvPreview(
 ): { rows: CsvPreviewRow[]; connections: ConnectionSummary[] } {
   const rows = transactions.map((t, i) => {
     const tg = targets[i];
-    const existing = tg.hash ? existingHashes.has(tg.hash) : false;
-    const inFile = !existing && tg.occurrence >= 1;
-    const reason: DuplicateReason = existing
-      ? "existing"
-      : inFile
-        ? "in_file"
-        : null;
+    const reason: DuplicateReason =
+      tg.hash && existingHashes.has(tg.hash) ? "existing" : null;
     return {
       ...t,
       duplicate: reason !== null,

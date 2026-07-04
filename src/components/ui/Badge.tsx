@@ -16,18 +16,12 @@ export function StatusBadge({ status }: { status: TxStatus }) {
   );
 }
 
-export function ImportRowBadge({
-  kind,
-}: {
-  kind: "new" | "duplicate" | "duplicate-file";
-}) {
-  const label =
-    kind === "new"
-      ? "Nouvelle"
-      : kind === "duplicate"
-        ? "Doublon (en base)"
-        : "Doublon (fichier)";
-  return <span className={`badge-status-${kind}`}>{label}</span>;
+export function ImportRowBadge({ kind }: { kind: "new" | "duplicate" }) {
+  return (
+    <span className={`badge-status-${kind}`}>
+      {kind === "new" ? "Nouvelle" : "Doublon"}
+    </span>
+  );
 }
 
 export function CategoryBadge({

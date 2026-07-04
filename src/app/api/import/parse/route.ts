@@ -118,7 +118,6 @@ export async function POST(request: Request) {
     }));
 
     const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
-    const dupInFile = rows.filter((r) => r.duplicateReason === "in_file").length;
 
     return NextResponse.json({
       ok: true,
@@ -131,9 +130,8 @@ export async function POST(request: Request) {
       rows: withSuggestion,
       total: rows.length,
       newCount: rows.filter((r) => !r.duplicate).length,
-      dupCount: dupExisting + dupInFile,
+      dupCount: dupExisting,
       dupExisting,
-      dupInFile,
     });
   }
 
@@ -183,7 +181,6 @@ export async function POST(request: Request) {
     suggestedSubcategoryId: suggestSubcategory(rules, accountId, r),
   }));
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;
-  const dupInFile = rows.filter((r) => r.duplicateReason === "in_file").length;
 
   return NextResponse.json({
     ok: true,
@@ -196,8 +193,7 @@ export async function POST(request: Request) {
     rows: withSuggestion,
     total: rows.length,
     newCount: rows.filter((r) => !r.duplicate).length,
-    dupCount: dupExisting + dupInFile,
+    dupCount: dupExisting,
     dupExisting,
-    dupInFile,
   });
 }

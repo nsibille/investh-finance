@@ -42,7 +42,6 @@ interface Preview {
   rows: PreviewRow[];
   filename: string;
   dupExisting: number;
-  dupInFile: number;
 }
 
 export function StatementImport({
@@ -90,7 +89,6 @@ export function StatementImport({
         connections: data.connections ?? [],
         filename: file.name,
         dupExisting: data.dupExisting ?? 0,
-        dupInFile: data.dupInFile ?? 0,
         rows: data.rows.map((r: PreviewRow) => ({
           ...r,
           categoryId: r.suggestedSubcategoryId ?? null,
@@ -161,7 +159,6 @@ export function StatementImport({
   }
 
   const includedCount = preview?.rows.filter((r) => r.include).length ?? 0;
-  const dupTotal = preview ? preview.dupExisting + preview.dupInFile : 0;
 
   return (
     <Card>
@@ -233,49 +230,41 @@ export function StatementImport({
 
             {preview.warning && <Alert variant="warning">{preview.warning}</Alert>}
 
-            {dupTotal > 0 && (
+            {preview.dupExisting > 0 && (
               <Alert variant="warning">
-                {dupTotal} doublon{dupTotal > 1 ? "s" : ""} sur la clé date · libellé · montant
-                {preview.dupExisting > 0 && ` — ${preview.dupExisting} déjà en base (ignoré${preview.dupExisting > 1 ? "s" : ""})`}
-                {preview.dupInFile > 0 && ` — ${preview.dupInFile} répété${preview.dupInFile > 1 ? "s" : ""} dans le fichier`}
-                . Décochés par défaut ; recoche un doublon « fichier » si c&apos;est bien une opération distincte.
+                {preview.dupExisting} transaction{preview.dupExisting > 1 ? "s" : ""} déjà
+                présente{preview.dupExisting > 1 ? "s" : ""} en base (clé date · libellé · montant)
+                — décochée{preview.dupExisting > 1 ? "s" : ""}, elles ne seront pas ré-importées.
               </Alert>
             )}
 
-            <div style={{ overflowX: "auto" }}>
-              <table className="table-import-preview">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    {preview.multiAccount && <th>Compte</th>}
-                    <th>Libellé</th>
-                    <th>Catégorie</th>
-                    <th style={{ textAlign: "right" }}>Montant</th>
-                    <th>Statut</th>
-                    <th>Inclure</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.rows.map((r, i) => (
+            <table className="table-import-preview">
+              <thead>
+                <tr>
+                  <th style={{ width: 92 }}>Date</th>
+                  {preview.multiAccount && <th style={{ width: 110 }}>Compte</th>}
+                  <th>Libellé</th>
+                  <th style={{ width: 200 }}>Catégorie</th>
+                  <th style={{ width: 100, textAlign: "right" }}>Montant</th>
+                  <th style={{ width: 90 }}>Statut</th>
+                  <th style={{ width: 64 }}>Inclure</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((r, i) => (
                     <tr
                       key={i}
                       data-excluded={!r.include || undefined}
-                      data-duplicate={
-                        r.duplicateReason === "in_file"
-                          ? "file"
-                          : r.duplicateReason === "existing"
-                            ? "existing"
-                            : undefined
-                      }
+                      data-duplicate={r.duplicateReason === "existing" ? "existing" : undefined}
                     >
                       <td style={{ whiteSpace: "nowrap" }}>{formatShortDate(r.operation_date)}</td>
                       {preview.multiAccount && (
-                        <td style={{ whiteSpace: "nowrap", color: "var(--color-text-muted)" }}>
+                        <td style={{ color: "var(--color-text-muted)" }} title={r.connectionLabel}>
                           {r.connectionLabel}
                         </td>
                       )}
-                      <td>{r.label}</td>
-                      <td style={{ minWidth: 180 }}>
+                      <td title={r.label}>{r.label}</td>
+                      <td>
                         {editing === i ? (
                           <Select
                             autoFocus
@@ -308,15 +297,7 @@ export function StatementImport({
                         <Amount value={r.amount} />
                       </td>
                       <td>
-                        <ImportRowBadge
-                          kind={
-                            r.duplicateReason === "existing"
-                              ? "duplicate"
-                              : r.duplicateReason === "in_file"
-                                ? "duplicate-file"
-                                : "new"
-                          }
-                        />
+                        <ImportRowBadge kind={r.duplicateReason === "existing" ? "duplicate" : "new"} />
                       </td>
                       <td>
                         <Toggle
@@ -328,9 +309,8 @@ export function StatementImport({
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
           </>
         )}
       </div>

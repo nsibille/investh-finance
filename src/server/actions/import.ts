@@ -6,10 +6,14 @@ import type { ParsedTransaction, ImportSummary } from "@/lib/import/types";
 
 type Result = ({ ok: true } & { summary: ImportSummary }) | { ok: false; error: string };
 
-export async function confirmPdfImport(
+/**
+ * Confirme un import (PDF ou CSV). `sourceFormat` identifie l'origine
+ * (ex. `pdf:bforbank`, `csv:bankin`) et est journalisé dans la table imports.
+ */
+export async function confirmImport(
   accountId: string,
   transactions: ParsedTransaction[],
-  bank: string,
+  sourceFormat: string,
   filename: string,
 ): Promise<Result> {
   if (!accountId) return { ok: false, error: "Compte manquant" };
@@ -17,7 +21,7 @@ export async function confirmPdfImport(
 
   try {
     const summary = await importParsedTransactions(accountId, transactions, {
-      bankFormat: `pdf:${bank}`,
+      bankFormat: sourceFormat,
       sourceFilename: filename,
     });
     revalidatePath("/transactions");

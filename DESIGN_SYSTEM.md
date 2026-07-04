@@ -500,7 +500,10 @@ Idem avec `--color-bg-subtle` / `--color-text-muted`.
 Idem avec `--color-info-light` / `--color-info-dark` (import preview, transaction nouvelle).
 
 ### `badge-status-duplicate`
-Idem avec `--color-bg-subtle` / `--color-text-disabled` + texte rayé (import preview).
+Idem avec `--color-bg-subtle` / `--color-text-disabled` + texte rayé (import preview, doublon déjà en base).
+
+### `badge-status-duplicate-file`
+Idem avec `--color-warning-light` / `--color-warning-dark` (import preview, doublon répété dans le fichier importé).
 
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
@@ -1053,7 +1056,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-dot` | Status | Pastille colorée simple | auto |
 | `badge-recurring-active` | Status | Badge récurrente OK | auto |
 | `badge-recurring-missing` | Status | Badge récurrente manquante | auto |
-| `badge-status-duplicate` | Status | Badge import row doublon | auto |
+| `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |
+| `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |
 | `badge-status-new` | Status | Badge import row nouvelle | auto |
 | `badge-status-pending` | Status | Badge transaction à valider | auto |

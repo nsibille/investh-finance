@@ -743,6 +743,7 @@ body {
 .badge-status-ignored,
 .badge-status-new,
 .badge-status-duplicate,
+.badge-status-duplicate-file,
 .badge-recurring-active,
 .badge-recurring-missing,
 .badge-tag-md {
@@ -756,6 +757,7 @@ body {
 .badge-status-ignored  { background: var(--color-bg-subtle); color: var(--color-text-muted); }
 .badge-status-new      { background: var(--color-info-light); color: var(--color-info-dark); }
 .badge-status-duplicate { background: var(--color-bg-subtle); color: var(--color-text-disabled); text-decoration: line-through; }
+.badge-status-duplicate-file { background: var(--color-warning-light); color: var(--color-warning-dark); }
 .badge-recurring-active { background: var(--color-success-light); color: var(--color-success-dark); }
 .badge-recurring-missing { background: var(--color-warning-light); color: var(--color-warning-dark); }
 .badge-tag-md { background: var(--color-brand-primary-50); color: var(--color-brand-primary-700); }

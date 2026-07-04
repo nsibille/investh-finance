@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { PdfImport } from "@/components/import/PdfImport";
+import { StatementImport } from "@/components/import/StatementImport";
 import { BankConnectionsManager } from "@/components/import/BankConnectionsManager";
 import { getBankConnections } from "@/lib/bank/queries";
 import { getAccountOptions } from "@/lib/rules/queries";
@@ -33,11 +33,11 @@ export default async function ImportPage() {
     <>
       <PageHeader
         title="Import"
-        subtitle="Importe un relevé PDF ou connecte une banque pour synchroniser."
+        subtitle="Importe un relevé PDF, un export CSV ou connecte une banque pour synchroniser."
       />
 
-      <SectionTitle>Import de relevé PDF</SectionTitle>
-      <PdfImport accountOptions={accountOptions} />
+      <SectionTitle>Import de relevé (PDF ou CSV)</SectionTitle>
+      <StatementImport accountOptions={accountOptions} />
 
       <SectionTitle>Connexions bancaires (GoCardless)</SectionTitle>
       <Suspense>

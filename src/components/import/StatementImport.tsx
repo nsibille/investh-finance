@@ -15,23 +15,29 @@ import { ImportRowBadge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
-import { confirmPdfImport } from "@/server/actions/import";
+import { confirmImport } from "@/server/actions/import";
 import type { ParsedTransaction } from "@/lib/import/types";
+import type { DuplicateReason } from "@/lib/import/preview";
 import type { AccountOption } from "@/lib/rules/queries";
 
 interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
+  duplicateReason: DuplicateReason;
   include: boolean;
 }
 
 interface Preview {
   bank: string;
   bankLabel: string;
+  sourceFormat: string;
+  warning: string | null;
   rows: PreviewRow[];
   filename: string;
+  dupExisting: number;
+  dupInFile: number;
 }
 
-export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] }) {
+export function StatementImport({ accountOptions }: { accountOptions: AccountOption[] }) {
   const router = useRouter();
   const toast = useToast();
   const [accountId, setAccountId] = useState(accountOptions[0]?.id ?? "");
@@ -61,7 +67,11 @@ export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] 
       setPreview({
         bank: data.bank,
         bankLabel: data.bankLabel,
+        sourceFormat: data.sourceFormat,
+        warning: data.warning ?? null,
         filename: file.name,
+        dupExisting: data.dupExisting ?? 0,
+        dupInFile: data.dupInFile ?? 0,
         rows: data.rows.map((r: PreviewRow) => ({ ...r, include: !r.duplicate })),
       });
     } catch {
@@ -101,10 +111,10 @@ export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] 
       currency: r.currency,
       external_id: r.external_id,
     }));
-    const res = await confirmPdfImport(
+    const res = await confirmImport(
       accountId,
       payload,
-      preview.bank,
+      preview.sourceFormat,
       preview.filename,
     );
     setImporting(false);
@@ -120,6 +130,7 @@ export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] 
   }
 
   const includedCount = preview?.rows.filter((r) => r.include).length ?? 0;
+  const dupTotal = preview ? preview.dupExisting + preview.dupInFile : 0;
 
   if (accountOptions.length === 0) {
     return (
@@ -149,15 +160,15 @@ export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] 
         {!preview && !parsing && (
           <FileDropzone
             onFile={handleFile}
-            accept="application/pdf,.pdf"
-            hint="Relevé PDF BforBank ou Société Générale (10 Mo max)"
+            accept="application/pdf,.pdf,.csv,.tsv,.txt,text/csv"
+            hint="Relevé PDF (BforBank, Société Générale) ou export CSV Bankin' (10 Mo max)"
           />
         )}
 
         {parsing && (
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", padding: "var(--space-6)", justifyContent: "center" }}>
             <Spinner size="lg" />
-            <span style={{ color: "var(--color-text-muted)" }}>Analyse du relevé…</span>
+            <span style={{ color: "var(--color-text-muted)" }}>Analyse du fichier…</span>
           </div>
         )}
 
@@ -181,10 +192,16 @@ export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] 
               </div>
             </div>
 
-            {preview.bank === "societegenerale" && (
+            {preview.warning && <Alert variant="warning">{preview.warning}</Alert>}
+
+            {dupTotal > 0 && (
               <Alert variant="warning">
-                Le sens débit/crédit de la Société Générale est déduit du libellé.
-                Vérifie les montants avant d&apos;importer.
+                {dupTotal} doublon{dupTotal > 1 ? "s" : ""} détecté
+                {dupTotal > 1 ? "s" : ""} sur la clé date · libellé · montant
+                {preview.dupExisting > 0 && ` — ${preview.dupExisting} déjà en base`}
+                {preview.dupInFile > 0 && ` — ${preview.dupInFile} répété${preview.dupInFile > 1 ? "s" : ""} dans le fichier`}
+                . Décoché{dupTotal > 1 ? "s" : ""} par défaut ; ces lignes ne
+                seront pas ré-importées même si tu les coches.
               </Alert>
             )}
 
@@ -208,7 +225,15 @@ export function PdfImport({ accountOptions }: { accountOptions: AccountOption[] 
                         <Amount value={r.amount} />
                       </td>
                       <td>
-                        <ImportRowBadge kind={r.duplicate ? "duplicate" : "new"} />
+                        <ImportRowBadge
+                          kind={
+                            r.duplicateReason === "existing"
+                              ? "duplicate"
+                              : r.duplicateReason === "in_file"
+                                ? "duplicate-file"
+                                : "new"
+                          }
+                        />
                       </td>
                       <td>
                         <Toggle

@@ -41,6 +41,8 @@ export interface ParsedTransaction {
     nature: Database["public"]["Enums"]["split_nature"];
     personIds: string[];
   } | null;
+  /** Note libre saisie dans l'aperçu d'import (annotation directe). */
+  note?: string | null;
 }
 
 export interface ImportSummary {

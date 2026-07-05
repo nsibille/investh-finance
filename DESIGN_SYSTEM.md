@@ -765,10 +765,31 @@ Variante pour confirmer une action destructive (avec `btn-danger-md`).
 .table-transactions tbody tr[data-selected="true"] { background: var(--color-brand-primary-50); }
 ```
 
+### `table-transaction-editor`
+**Table éditrice mutualisée** — partagée par l'aperçu d'import ET la liste des
+transactions (même niveau d'information, mêmes actions). Colonnes communes :
+Date · [Compte] · Libellé (+ sous-affordances enseigne/récurrente/personnes/
+achat) · Catégorie (édition inline `import-cat-edit` + boutons achat/récurrente)
+· Montant · Note (`note-cell`) · colonne de fin (render-prop du parent : import
+= statut + switch inclure ; liste = statut + valider/ignorer/détails).
+- `table-layout: fixed`, densité row 36px, **jamais de scroll horizontal** : le
+  libellé et la catégorie reviennent à la ligne (`td[data-col="label"]` /
+  `[data-col="category"]`), le compte s'ellipse (`[data-col="account"]`).
+- États lignes : `tr[data-excluded="true"]` (doublon décoché à l'import, grisé),
+  `tr[data-duplicate="existing"]`.
+- La gestion des doublons reste propre à l'import (via la colonne de fin).
+
 ### `table-import-preview`
-Variante avec colonnes "Compte", "Catégorie" (édition inline `import-cat-edit`),
-"Action" (switch include/exclude) + colonne dedup status. Ligne
-`tr[data-duplicate="file"]` : doublon potentiel en rouge léger (ré-importable).
+_(Déprécié — remplacé par `table-transaction-editor`.)_ Ancienne table d'aperçu
+d'import : colonnes "Compte", "Catégorie" (édition inline `import-cat-edit`),
+"Action" (switch include/exclude) + colonne dedup status.
+
+### `note-cell`
+**Annotation inline d'une transaction** — icône « note » par ligne
+(`note-cell__btn`, pleine `[data-filled]` en primaire si une note existe) qui
+ouvre un éditeur en popover (`note-popover` : `input-textarea-md` +
+Annuler/Enregistrer). Persistance selon le contexte : store d'import ou
+`updateTransactionNote` pour une transaction existante.
 
 ### `import-cat-edit`
 **Bouton d'édition inline de catégorie dans l'aperçu d'import** — bordure
@@ -1178,8 +1199,10 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `spinner-lg` | Feedback | Spinner large | auto |
 | `spinner-md` | Feedback | Spinner medium (défaut) | auto |
 | `spinner-sm` | Feedback | Spinner small | auto |
-| `table-import-preview` | Table | Variante preview import | auto |
+| `table-transaction-editor` | Table | Table éditrice mutualisée (import + liste) | auto |
+| `table-import-preview` | Table | Déprécié — voir `table-transaction-editor` | auto |
 | `import-cat-edit` | Import | Édition inline catégorie (aperçu import) | auto |
+| `note-cell` | Table | Annotation inline (icône + popover note) | auto |
 | `table-top-transactions` | Table | Variante top dépenses compact | auto |
 | `table-transactions` | Table | Table principale transactions | auto |
 | `toast-error` | Feedback | Toast erreur | auto |

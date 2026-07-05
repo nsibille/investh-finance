@@ -41,6 +41,11 @@ export interface TransactionRow {
   merchant?: { id: string; name: string } | null;
   /** Récurrente rattachée. */
   recurring?: { id: string; name: string } | null;
+  /** Résumé léger du partage entre personnes (nb + nature) pour la liste. */
+  personsSummary?: {
+    count: number;
+    nature: Database["public"]["Enums"]["split_nature"];
+  } | null;
 }
 
 export interface TransactionFilters {

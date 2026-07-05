@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RecurringForm } from "./RecurringForm";
 import { formatShortDate } from "@/lib/format/date";
+import { useImportStore } from "@/stores/import";
 import {
   detectRecurring,
   createFromCandidate,
@@ -58,10 +59,21 @@ export function RecurringManager({
 
   async function detect() {
     setDetecting(true);
-    const found = await detectRecurring();
+    // Inclut l'aperçu d'import en cours (persisté en mémoire) pour créer les
+    // récurrences à la volée sans avoir à valider l'import d'abord.
+    const preview = useImportStore.getState().preview;
+    const importRows = preview?.rows.map((r) => ({
+      raw_label: r.raw_label,
+      amount: r.amount,
+      operation_date: r.operation_date,
+    }));
+    const found = await detectRecurring(importRows);
     setDetecting(false);
     setCandidates(found);
     if (found.length === 0) toast.info("Aucune nouvelle récurrente détectée.");
+    else if (importRows?.length) {
+      toast.info("Détection incluant l'import en cours.");
+    }
   }
 
   async function addCandidate(c: RecurringCandidate) {

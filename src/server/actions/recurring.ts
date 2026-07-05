@@ -91,7 +91,21 @@ export async function deleteRecurringPattern(id: string): Promise<ActionResult> 
   return { ok: true };
 }
 
-export async function detectRecurring(): Promise<RecurringCandidate[]> {
+/** Ligne d'aperçu d'import (transaction pas encore importée). */
+export interface DetectImportRow {
+  raw_label: string;
+  amount: number;
+  operation_date: string;
+}
+
+/**
+ * Détecte des récurrences dans les transactions validées existantes et,
+ * optionnellement, dans les lignes de l'aperçu d'import en cours (`importRows`)
+ * pour les créer à la volée. Dédupe contre les modèles existants (par libellé).
+ */
+export async function detectRecurring(
+  importRows?: DetectImportRow[],
+): Promise<RecurringCandidate[]> {
   const supabase = await createClient();
   const since = format(subMonths(new Date(), 6), "yyyy-MM-dd");
   const { data } = await supabase
@@ -100,7 +114,7 @@ export async function detectRecurring(): Promise<RecurringCandidate[]> {
     .eq("status", "validated")
     .gte("operation_date", since);
 
-  const candidates = detectRecurringCandidates(
+  const dbCandidates = detectRecurringCandidates(
     (data ?? []).map((t) => ({
       account_id: t.account_id,
       raw_label: t.raw_label,
@@ -109,16 +123,35 @@ export async function detectRecurring(): Promise<RecurringCandidate[]> {
     })),
   );
 
-  // Drop candidates already covered by an existing active pattern.
+  // Aperçu d'import : compte inconnu (multi-comptes) → account_id vide, la
+  // récurrente créée sera « tous comptes ».
+  const importCandidates = importRows?.length
+    ? detectRecurringCandidates(
+        importRows.map((r) => ({
+          account_id: "",
+          raw_label: r.raw_label,
+          amount: Number(r.amount),
+          operation_date: r.operation_date,
+        })),
+      )
+    : [];
+
+  // Dédup par libellé (modèles existants + entre sources DB/import).
   const { data: existing } = await supabase
     .from("recurring_patterns")
-    .select("label_pattern, account_id");
+    .select("label_pattern");
   const covered = new Set(
-    (existing ?? []).map((p) => `${p.account_id}|${(p.label_pattern ?? "").toUpperCase()}`),
+    (existing ?? []).map((p) => (p.label_pattern ?? "").toUpperCase()),
   );
-  return candidates.filter(
-    (c) => !covered.has(`${c.account_id}|${c.label_pattern.toUpperCase()}`),
-  );
+  const seen = new Set<string>();
+  const out: RecurringCandidate[] = [];
+  for (const c of [...dbCandidates, ...importCandidates]) {
+    const key = c.label_pattern.toUpperCase();
+    if (!key || covered.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
 }
 
 export async function createFromCandidate(
@@ -127,7 +160,7 @@ export async function createFromCandidate(
   const supabase = await createClient();
   const { error } = await supabase.from("recurring_patterns").insert({
     name: candidate.name,
-    account_id: candidate.account_id,
+    account_id: candidate.account_id || null,
     expected_amount: candidate.expected_amount,
     frequency_days: candidate.frequency_days,
     label_pattern: candidate.label_pattern,

@@ -202,7 +202,7 @@ export function TransactionDetail({
         action: {
           label: "Annuler",
           onClick: async () => {
-            await undoAssociateRecurring(recurringId, res.addedLabel, res.ids);
+            await undoAssociateRecurring(recurringId, res.addedLabel, res.addedAmount, res.ids);
             toast.info("Association annulée.");
             router.refresh();
           },

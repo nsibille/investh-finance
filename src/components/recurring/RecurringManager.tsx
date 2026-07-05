@@ -252,6 +252,13 @@ export function RecurringManager({
                     merchant_id: modal.pattern.merchant_id ?? "",
                     subcategory_id: modal.pattern.subcategory_id ?? "",
                     expected_amount: modal.pattern.expected_amount ?? "",
+                    expected_amounts:
+                      modal.pattern.expected_amounts &&
+                      modal.pattern.expected_amounts.length > 0
+                        ? modal.pattern.expected_amounts
+                        : modal.pattern.expected_amount != null
+                          ? [modal.pattern.expected_amount]
+                          : [],
                     amount_tolerance: modal.pattern.amount_tolerance,
                     frequency_days: modal.pattern.frequency_days,
                     label_pattern: modal.pattern.label_pattern ?? "",

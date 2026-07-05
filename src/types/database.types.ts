@@ -642,6 +642,7 @@ export type Database = {
           amount_tolerance: number
           created_at: string
           expected_amount: number | null
+          expected_amounts: number[] | null
           expected_day: number | null
           frequency_days: number
           id: string
@@ -659,6 +660,7 @@ export type Database = {
           amount_tolerance?: number
           created_at?: string
           expected_amount?: number | null
+          expected_amounts?: number[] | null
           expected_day?: number | null
           frequency_days?: number
           id?: string
@@ -676,6 +678,7 @@ export type Database = {
           amount_tolerance?: number
           created_at?: string
           expected_amount?: number | null
+          expected_amounts?: number[] | null
           expected_day?: number | null
           frequency_days?: number
           id?: string

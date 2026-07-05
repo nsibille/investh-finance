@@ -9,6 +9,8 @@ import { FormField } from "@/components/ui/FormField";
 import { Input, CurrencyInput } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
+import { IconButton } from "@/components/ui/IconButton";
+import { Plus, X } from "lucide-react";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { Toggle } from "@/components/ui/Checkbox";
@@ -74,6 +76,7 @@ export function RecurringForm({
       merchant_id: initial?.merchant_id ?? "",
       subcategory_id: initial?.subcategory_id ?? "",
       expected_amount: initial?.expected_amount ?? "",
+      expected_amounts: initial?.expected_amounts ?? [],
       amount_tolerance: initial?.amount_tolerance ?? 5,
       frequency_days: initial?.frequency_days ?? 30,
       label_pattern: initial?.label_pattern ?? "",
@@ -152,10 +155,47 @@ export function RecurringForm({
         <Textarea placeholder={"NETFLIX\nNETFLIX.COM"} rows={2} {...register("label_pattern")} />
       </FormField>
 
-      <div style={{ display: "flex", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
-          <FormField label="Montant attendu" error={errors.expected_amount?.message}>
-            <CurrencyInput placeholder="—" {...register("expected_amount")} />
+          <FormField label="Montants attendus" help="Plusieurs possibles (le prix d'un abonnement peut changer).">
+            <Controller
+              control={control}
+              name="expected_amounts"
+              render={({ field }) => {
+                const raw = Array.isArray(field.value) ? field.value.map(String) : [];
+                const values = raw.length ? raw : [""];
+                const setAll = (next: string[]) => field.onChange(next);
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                    {values.map((v, i) => (
+                      <div key={i} style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+                        <CurrencyInput
+                          placeholder="—"
+                          value={v}
+                          onChange={(e) => {
+                            const next = [...values];
+                            next[i] = e.target.value;
+                            setAll(next);
+                          }}
+                        />
+                        {values.length > 1 && (
+                          <IconButton label="Retirer ce montant" onClick={() => setAll(values.filter((_, j) => j !== i))}>
+                            <X size={14} />
+                          </IconButton>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setAll([...values, ""])}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-sm)", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
+                    >
+                      <Plus size={14} aria-hidden /> Ajouter un montant
+                    </button>
+                  </div>
+                );
+              }}
+            />
           </FormField>
         </div>
         <div style={{ width: 120 }}>

@@ -159,9 +159,9 @@ export function StatementImport({
         ? { merchantId: option.merchantId, merchantName: option.merchantName }
         : {}),
     });
-    const rawLabel = useImportStore.getState().preview?.rows[index]?.raw_label ?? "";
-    if (!rawLabel) return;
-    const res = await associateLabelToRecurring(option.id, rawLabel);
+    const row = useImportStore.getState().preview?.rows[index];
+    if (!row?.raw_label) return;
+    const res = await associateLabelToRecurring(option.id, row.raw_label, row.amount);
     if (!res.ok) return toast.error(res.error);
     toast.success(
       res.applied > 0
@@ -172,7 +172,7 @@ export function StatementImport({
         action: {
           label: "Annuler",
           onClick: async () => {
-            await undoAssociateRecurring(option.id, res.addedLabel, res.ids);
+            await undoAssociateRecurring(option.id, res.addedLabel, res.addedAmount, res.ids);
             patchRow(index, { recurringId: null, recurringName: null });
             toast.info("Association annulée.");
           },

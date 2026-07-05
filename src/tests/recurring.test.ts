@@ -31,6 +31,21 @@ describe("multi-motifs de libellé", () => {
   });
 });
 
+describe("montants attendus multiples", () => {
+  it("matche l'un quelconque des montants attendus (± tolérance)", () => {
+    const p = pat({ label_pattern: "CANAL", expected_amounts: [-29.99, -39.99], amount_tolerance: 5 });
+    const base = { account_id: "a", raw_label: "CANAL+", operation_date: "2026-06-06" };
+    expect(matchesPattern(p, { ...base, amount: -29.99 })).toBe(true);
+    expect(matchesPattern(p, { ...base, amount: -39.99 })).toBe(true);
+    expect(matchesPattern(p, { ...base, amount: -50 })).toBe(false);
+  });
+
+  it("retombe sur expected_amount si le tableau est vide", () => {
+    const p = pat({ label_pattern: "CANAL", expected_amount: -29.99, expected_amounts: [] });
+    expect(matchesPattern(p, { account_id: "a", raw_label: "CANAL+", amount: -29.99, operation_date: "2026-06-06" })).toBe(true);
+  });
+});
+
 describe("recurringKey", () => {
   it("drops volatile digits to group monthly variants", () => {
     expect(recurringKey("PRELEVEMENT EUROPEEN 0213741950 DE: Navigo Annuel")).toBe(

@@ -3,6 +3,8 @@ import { normalizeLabel } from "@/lib/import/dedup";
 export interface PatternLike {
   account_id: string | null;
   expected_amount: number | null;
+  /** Montants attendus multiples (le prix d'un abonnement peut changer). */
+  expected_amounts?: number[] | null;
   amount_tolerance: number; // percent
   frequency_days: number;
   label_pattern: string | null;
@@ -21,12 +23,20 @@ export interface MatchableTx {
 export function matchesPattern(pattern: PatternLike, tx: MatchableTx): boolean {
   if (pattern.account_id && pattern.account_id !== tx.account_id) return false;
 
-  if (pattern.expected_amount != null) {
-    const expected = Math.abs(pattern.expected_amount);
-    const tol = (expected * pattern.amount_tolerance) / 100;
-    if (Math.abs(Math.abs(tx.amount) - expected) > Math.max(tol, 0.01)) {
-      return false;
-    }
+  const amounts =
+    pattern.expected_amounts && pattern.expected_amounts.length > 0
+      ? pattern.expected_amounts
+      : pattern.expected_amount != null
+        ? [pattern.expected_amount]
+        : [];
+  if (amounts.length > 0) {
+    const txAbs = Math.abs(tx.amount);
+    const ok = amounts.some((exp) => {
+      const e = Math.abs(exp);
+      const tol = (e * pattern.amount_tolerance) / 100;
+      return Math.abs(txAbs - e) <= Math.max(tol, 0.01);
+    });
+    if (!ok) return false;
   }
 
   const patterns = labelPatterns(pattern.label_pattern);

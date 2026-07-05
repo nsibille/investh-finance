@@ -39,10 +39,17 @@ function toRow(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalide" };
   }
-  const { label_pattern, ...rest } = parsed.data;
+  const { label_pattern, expected_amounts, expected_amount, ...rest } = parsed.data;
+  const amounts = expected_amounts ?? [];
   return {
     ok: true,
-    row: { ...rest, label_pattern: label_pattern ? label_pattern : null },
+    row: {
+      ...rest,
+      label_pattern: label_pattern ? label_pattern : null,
+      expected_amounts: amounts.length > 0 ? amounts : null,
+      // Montant principal (affichage) = premier montant attendu.
+      expected_amount: amounts.length > 0 ? amounts[0] : (expected_amount ?? null),
+    },
   };
 }
 
@@ -270,106 +277,141 @@ export async function applyRecurringPattern(
   return { ok: true, applied: allIds.length, ids: allIds };
 }
 
+type Supa = Awaited<ReturnType<typeof createClient>>;
+type RecurringUpdate = Database["public"]["Tables"]["recurring_patterns"]["Update"];
+
+/** Ajoute au modèle le motif du libellé et, si besoin, le montant de la transaction. */
+async function addLabelAndAmount(
+  supabase: Supa,
+  recurringId: string,
+  rawLabel: string,
+  amount: number | null,
+): Promise<{ addedLabel: string | null; addedAmount: number | null }> {
+  const { data: p } = await supabase
+    .from("recurring_patterns")
+    .select("label_pattern, expected_amount, expected_amounts, amount_tolerance")
+    .eq("id", recurringId)
+    .maybeSingle();
+  if (!p) return { addedLabel: null, addedAmount: null };
+
+  const update: RecurringUpdate = {};
+
+  const key = recurringKey(rawLabel);
+  const existingLabels = labelPatterns(p.label_pattern);
+  let addedLabel: string | null = null;
+  if (key && !existingLabels.some((l) => l.toUpperCase() === key.toUpperCase())) {
+    update.label_pattern = [...existingLabels, key].join("\n");
+    addedLabel = key;
+  }
+
+  // Le montant peut différer (changement de prix d'abonnement) : on l'ajoute
+  // aux montants attendus s'il n'est pas déjà couvert par la tolérance.
+  let addedAmount: number | null = null;
+  if (amount != null && Number.isFinite(amount)) {
+    const amounts =
+      p.expected_amounts && p.expected_amounts.length > 0
+        ? p.expected_amounts.map(Number)
+        : p.expected_amount != null
+          ? [Number(p.expected_amount)]
+          : [];
+    const txAbs = Math.abs(amount);
+    const tol = Number(p.amount_tolerance);
+    const covered = amounts.some((e) => {
+      const a = Math.abs(e);
+      return Math.abs(txAbs - a) <= Math.max((a * tol) / 100, 0.01);
+    });
+    if (!covered) {
+      update.expected_amounts = [...amounts, amount];
+      if (amounts.length === 0) update.expected_amount = amount;
+      addedAmount = amount;
+    }
+  }
+
+  if (Object.keys(update).length > 0) {
+    await supabase.from("recurring_patterns").update(update).eq("id", recurringId);
+  }
+  return { addedLabel, addedAmount };
+}
+
+type AssociateResult =
+  | { ok: true; applied: number; addedLabel: string | null; addedAmount: number | null; ids: string[] }
+  | { ok: false; error: string };
+
 /**
  * Associe une transaction à une récurrente depuis un écran de transaction :
- * ajoute le motif du libellé de la transaction à la récurrente, hérite de sa
- * catégorie et de son enseigne, et applique la récurrente à toutes les
+ * ajoute le motif du libellé (et le montant si différent), hérite de la
+ * catégorie et de l'enseigne du modèle, et applique la récurrente à toutes les
  * transactions correspondantes. Retourne de quoi annuler.
  */
 export async function associateTransactionToRecurring(
   transactionId: string,
   recurringId: string,
-): Promise<
-  | { ok: true; applied: number; addedLabel: string | null; ids: string[] }
-  | { ok: false; error: string }
-> {
+): Promise<AssociateResult> {
   const supabase = await createClient();
   const { data: tx } = await supabase
     .from("transactions")
-    .select("id, raw_label")
+    .select("id, raw_label, amount")
     .eq("id", transactionId)
     .maybeSingle();
   if (!tx) return { ok: false, error: "Transaction introuvable" };
-  const { data: p } = await supabase
-    .from("recurring_patterns")
-    .select("label_pattern")
-    .eq("id", recurringId)
-    .maybeSingle();
-  if (!p) return { ok: false, error: "Récurrente introuvable" };
 
-  // Ajoute le motif (libellé sans les chiffres, robuste aux variantes).
-  const key = recurringKey(tx.raw_label);
-  const existing = labelPatterns(p.label_pattern);
-  let addedLabel: string | null = null;
-  if (key && !existing.some((l) => l.toUpperCase() === key.toUpperCase())) {
-    await supabase
-      .from("recurring_patterns")
-      .update({ label_pattern: [...existing, key].join("\n") })
-      .eq("id", recurringId);
-    addedLabel = key;
-  }
-
+  const added = await addLabelAndAmount(supabase, recurringId, tx.raw_label, Number(tx.amount));
   const res = await applyRecurringPattern(recurringId);
   if (!res.ok) return res;
-  return { ok: true, applied: res.applied, addedLabel, ids: res.ids };
+  return { ok: true, applied: res.applied, ...added, ids: res.ids };
 }
 
 /**
- * Ajoute un motif de libellé à une récurrente (depuis l'aperçu d'import, sans
- * transaction encore importée) et applique la récurrente aux transactions
- * existantes. Le motif ajouté fera aussi matcher la ligne à l'import.
+ * Ajoute un motif (et un montant) à une récurrente depuis l'aperçu d'import,
+ * sans transaction encore importée, et applique aux transactions existantes.
  */
 export async function associateLabelToRecurring(
   recurringId: string,
   rawLabel: string,
-): Promise<
-  | { ok: true; applied: number; addedLabel: string | null; ids: string[] }
-  | { ok: false; error: string }
-> {
+  amount?: number | null,
+): Promise<AssociateResult> {
   const supabase = await createClient();
-  const { data: p } = await supabase
-    .from("recurring_patterns")
-    .select("label_pattern")
-    .eq("id", recurringId)
-    .maybeSingle();
-  if (!p) return { ok: false, error: "Récurrente introuvable" };
-
-  const key = recurringKey(rawLabel);
-  const existing = labelPatterns(p.label_pattern);
-  let addedLabel: string | null = null;
-  if (key && !existing.some((l) => l.toUpperCase() === key.toUpperCase())) {
-    await supabase
-      .from("recurring_patterns")
-      .update({ label_pattern: [...existing, key].join("\n") })
-      .eq("id", recurringId);
-    addedLabel = key;
-  }
+  const added = await addLabelAndAmount(supabase, recurringId, rawLabel, amount ?? null);
   const res = await applyRecurringPattern(recurringId);
   if (!res.ok) return res;
-  return { ok: true, applied: res.applied, addedLabel, ids: res.ids };
+  return { ok: true, applied: res.applied, ...added, ids: res.ids };
 }
 
-/** Annule une association : retire le motif ajouté et détache les transactions. */
+/** Annule une association : retire le motif/montant ajouté et détache les transactions. */
 export async function undoAssociateRecurring(
   recurringId: string,
   addedLabel: string | null,
+  addedAmount: number | null,
   ids: string[],
 ): Promise<ActionResult> {
   const supabase = await createClient();
-  if (addedLabel) {
+  if (addedLabel || addedAmount != null) {
     const { data: p } = await supabase
       .from("recurring_patterns")
-      .select("label_pattern")
+      .select("label_pattern, expected_amount, expected_amounts")
       .eq("id", recurringId)
       .maybeSingle();
     if (p) {
-      const kept = labelPatterns(p.label_pattern).filter(
-        (l) => l.toUpperCase() !== addedLabel.toUpperCase(),
-      );
-      await supabase
-        .from("recurring_patterns")
-        .update({ label_pattern: kept.length ? kept.join("\n") : null })
-        .eq("id", recurringId);
+      const update: RecurringUpdate = {};
+      if (addedLabel) {
+        const kept = labelPatterns(p.label_pattern).filter(
+          (l) => l.toUpperCase() !== addedLabel.toUpperCase(),
+        );
+        update.label_pattern = kept.length ? kept.join("\n") : null;
+      }
+      if (addedAmount != null && p.expected_amounts) {
+        const idx = p.expected_amounts.findIndex((a) => Number(a) === addedAmount);
+        if (idx >= 0) {
+          const next = p.expected_amounts.filter((_, i) => i !== idx);
+          update.expected_amounts = next.length ? next : null;
+          if (p.expected_amount != null && Number(p.expected_amount) === addedAmount) {
+            update.expected_amount = next.length ? next[0] : null;
+          }
+        }
+      }
+      if (Object.keys(update).length > 0) {
+        await supabase.from("recurring_patterns").update(update).eq("id", recurringId);
+      }
     }
   }
   if (ids.length > 0) {
@@ -409,6 +451,7 @@ export async function createFromCandidate(
     name: candidate.name,
     account_id: candidate.account_id || null,
     expected_amount: candidate.expected_amount,
+    expected_amounts: [candidate.expected_amount],
     frequency_days: candidate.frequency_days,
     label_pattern: candidate.label_pattern,
     last_seen_at: candidate.last_seen_at,

@@ -29,12 +29,24 @@ export function matchesPattern(pattern: PatternLike, tx: MatchableTx): boolean {
     }
   }
 
-  if (pattern.label_pattern) {
-    const needle = normalizeLabel(pattern.label_pattern);
-    if (needle && !normalizeLabel(tx.raw_label).includes(needle)) return false;
+  const patterns = labelPatterns(pattern.label_pattern);
+  if (patterns.length > 0) {
+    const hay = normalizeLabel(tx.raw_label);
+    if (!patterns.some((p) => hay.includes(normalizeLabel(p)))) return false;
   }
 
   return true;
+}
+
+/**
+ * Motifs de libellé d'un modèle (un par ligne). Une transaction matche si l'un
+ * des motifs est présent dans son libellé.
+ */
+export function labelPatterns(labelPattern: string | null): string[] {
+  return (labelPattern ?? "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export type PatternStatus = "active" | "missing" | "upcoming";

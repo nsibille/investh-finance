@@ -16,9 +16,9 @@ const DEFAULT_PER_PAGE = 50;
 const LIST_COLUMNS =
   "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring" as const;
 
-/** Colonnes du détail : ajoute `purchase_id` et `merchant_id` (verrou / défaut). */
+/** Colonnes du détail : ajoute purchase_id, merchant_id, recurring_pattern_id. */
 const DETAIL_COLUMNS =
-  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id" as const;
+  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id, recurring_pattern_id" as const;
 
 type TransactionRecord = Pick<
   Transaction,
@@ -180,6 +180,14 @@ export async function getTransaction(
       .eq("id", data.merchant_id)
       .maybeSingle();
     if (merchant) row.merchant = { id: merchant.id, name: merchant.name };
+  }
+  if (data.recurring_pattern_id) {
+    const { data: rec } = await supabase
+      .from("recurring_patterns")
+      .select("id, name")
+      .eq("id", data.recurring_pattern_id)
+      .maybeSingle();
+    if (rec) row.recurring = { id: rec.id, name: rec.name };
   }
   return row;
 }

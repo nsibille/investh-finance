@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Store, Unlink } from "lucide-react";
+import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Store, Repeat, Unlink } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Amount } from "@/components/ui/Amount";
 import { StatusBadge, Dot } from "@/components/ui/Badge";
@@ -31,9 +31,15 @@ import {
   addMerchantRule,
 } from "@/server/actions/merchants";
 import { deleteRule } from "@/server/actions/rules";
+import {
+  associateTransactionToRecurring,
+  undoAssociateRecurring,
+  detachTransactionFromRecurring,
+} from "@/server/actions/recurring";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
+import type { RecurringOption } from "@/lib/recurring/queries";
 import type { Tag } from "@/lib/tags/queries";
 import type { AttachmentView } from "@/lib/attachments/types";
 
@@ -52,6 +58,7 @@ export function TransactionDetail({
   tx,
   subcategoryOptions,
   merchantOptions,
+  recurringOptions,
   tags,
   allTags,
   attachments,
@@ -59,6 +66,7 @@ export function TransactionDetail({
   tx: TransactionRow;
   subcategoryOptions: SubcategoryOption[];
   merchantOptions: MerchantOption[];
+  recurringOptions: RecurringOption[];
   tags: Tag[];
   allTags: Tag[];
   attachments: AttachmentView[];
@@ -67,6 +75,7 @@ export function TransactionDetail({
   const toast = useToast();
   const [subcategoryId, setSubcategoryId] = useState(tx.subcategory_id);
   const [attachingMerchant, setAttachingMerchant] = useState(false);
+  const [associatingRec, setAssociatingRec] = useState(false);
   const [status, setStatus] = useState(tx.status);
   const [note, setNote] = useState(tx.note ?? "");
   const [savingNote, setSavingNote] = useState(false);
@@ -172,6 +181,41 @@ export function TransactionDetail({
     setAttachingMerchant(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Enseigne détachée");
+    router.refresh();
+  }
+
+  async function associateRecurring(recurringId: string) {
+    if (!recurringId) return;
+    setAssociatingRec(true);
+    const res = await associateTransactionToRecurring(tx.id, recurringId);
+    setAssociatingRec(false);
+    if (!res.ok) return toast.error(res.error);
+    router.refresh();
+    const name = recurringOptions.find((r) => r.id === recurringId)?.name ?? "";
+    toast.success(
+      res.applied > 0
+        ? `Rattachée à « ${name} » · ${res.applied} transaction${res.applied > 1 ? "s" : ""} au total`
+        : `Rattachée à « ${name} »`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await undoAssociateRecurring(recurringId, res.addedLabel, res.ids);
+            toast.info("Association annulée.");
+            router.refresh();
+          },
+        },
+      },
+    );
+  }
+
+  async function detachRecurring() {
+    setAssociatingRec(true);
+    const res = await detachTransactionFromRecurring(tx.id);
+    setAssociatingRec(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Détachée de la récurrente");
     router.refresh();
   }
 
@@ -287,6 +331,48 @@ export function TransactionDetail({
             ) : (
               <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
                 Aucune enseigne. Crées-en dans l&apos;espace « Enseignes ».
+              </p>
+            )}
+          </FormField>
+
+          <FormField label="Récurrente">
+            {tx.recurring ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--space-2)",
+                  padding: "var(--space-2) var(--space-3)",
+                  background: "var(--color-bg-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <Repeat size={15} aria-hidden />
+                  {tx.recurring.name}
+                </span>
+                <Button variant="ghost" size="sm" leftIcon={<Unlink size={14} />} disabled={associatingRec} onClick={detachRecurring}>
+                  Détacher
+                </Button>
+              </div>
+            ) : recurringOptions.length > 0 ? (
+              <Select
+                value=""
+                disabled={associatingRec}
+                onChange={(e) => associateRecurring(e.target.value)}
+              >
+                <option value="">Associer à une récurrente…</option>
+                {recurringOptions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
+                Aucune récurrente. Crées-en dans l&apos;espace « Récurrentes ».
               </p>
             )}
           </FormField>

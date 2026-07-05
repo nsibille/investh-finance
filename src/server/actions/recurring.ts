@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { recurringSchema, type RecurringInput } from "@/lib/recurring/schema";
 import {
   detectRecurringCandidates,
+  recurringKey,
   type RecurringCandidate,
 } from "@/lib/recurring/detector";
-import { matchesPattern } from "@/lib/recurring/checker";
+import { matchesPattern, labelPatterns } from "@/lib/recurring/checker";
 import type { Database } from "@/types/database.types";
 
 /** Candidat détecté : soit nouveau, soit correspondant à une règle existante. */
@@ -206,7 +207,7 @@ export async function detectRecurring(
  */
 export async function applyRecurringPattern(
   patternId: string,
-): Promise<{ ok: true; applied: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; applied: number; ids: string[] } | { ok: false; error: string }> {
   const supabase = await createClient();
   const { data: p } = await supabase
     .from("recurring_patterns")
@@ -231,7 +232,7 @@ export async function applyRecurringPattern(
       operation_date: t.operation_date,
     }),
   );
-  if (matches.length === 0) return { ok: true, applied: 0 };
+  if (matches.length === 0) return { ok: true, applied: 0, ids: [] };
 
   const nowIso = new Date().toISOString();
   const CHUNK = 200;
@@ -266,7 +267,103 @@ export async function applyRecurringPattern(
 
   revalidate();
   revalidatePath("/transactions");
-  return { ok: true, applied: allIds.length };
+  return { ok: true, applied: allIds.length, ids: allIds };
+}
+
+/**
+ * Associe une transaction à une récurrente depuis un écran de transaction :
+ * ajoute le motif du libellé de la transaction à la récurrente, hérite de sa
+ * catégorie et de son enseigne, et applique la récurrente à toutes les
+ * transactions correspondantes. Retourne de quoi annuler.
+ */
+export async function associateTransactionToRecurring(
+  transactionId: string,
+  recurringId: string,
+): Promise<
+  | { ok: true; applied: number; addedLabel: string | null; ids: string[] }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id, raw_label")
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (!tx) return { ok: false, error: "Transaction introuvable" };
+  const { data: p } = await supabase
+    .from("recurring_patterns")
+    .select("label_pattern")
+    .eq("id", recurringId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: "Récurrente introuvable" };
+
+  // Ajoute le motif (libellé sans les chiffres, robuste aux variantes).
+  const key = recurringKey(tx.raw_label);
+  const existing = labelPatterns(p.label_pattern);
+  let addedLabel: string | null = null;
+  if (key && !existing.some((l) => l.toUpperCase() === key.toUpperCase())) {
+    await supabase
+      .from("recurring_patterns")
+      .update({ label_pattern: [...existing, key].join("\n") })
+      .eq("id", recurringId);
+    addedLabel = key;
+  }
+
+  const res = await applyRecurringPattern(recurringId);
+  if (!res.ok) return res;
+  return { ok: true, applied: res.applied, addedLabel, ids: res.ids };
+}
+
+/** Annule une association : retire le motif ajouté et détache les transactions. */
+export async function undoAssociateRecurring(
+  recurringId: string,
+  addedLabel: string | null,
+  ids: string[],
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  if (addedLabel) {
+    const { data: p } = await supabase
+      .from("recurring_patterns")
+      .select("label_pattern")
+      .eq("id", recurringId)
+      .maybeSingle();
+    if (p) {
+      const kept = labelPatterns(p.label_pattern).filter(
+        (l) => l.toUpperCase() !== addedLabel.toUpperCase(),
+      );
+      await supabase
+        .from("recurring_patterns")
+        .update({ label_pattern: kept.length ? kept.join("\n") : null })
+        .eq("id", recurringId);
+    }
+  }
+  if (ids.length > 0) {
+    const CHUNK = 200;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      await supabase
+        .from("transactions")
+        .update({ recurring_pattern_id: null, is_recurring: false })
+        .in("id", ids.slice(i, i + CHUNK));
+    }
+  }
+  revalidate();
+  revalidatePath("/transactions");
+  return { ok: true };
+}
+
+/** Détache une transaction d'une récurrente. */
+export async function detachTransactionFromRecurring(
+  transactionId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transactions")
+    .update({ recurring_pattern_id: null, is_recurring: false })
+    .eq("id", transactionId);
+  if (error) return fail(error.message);
+  revalidate();
+  revalidatePath("/transactions");
+  return { ok: true };
 }
 
 export async function createFromCandidate(

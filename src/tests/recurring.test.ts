@@ -4,7 +4,32 @@ import {
   recurringKey,
   type RecurringInput,
 } from "@/lib/recurring/detector";
-import { matchesPattern, patternStatus } from "@/lib/recurring/checker";
+import { matchesPattern, patternStatus, labelPatterns } from "@/lib/recurring/checker";
+
+const pat = (over: Partial<Parameters<typeof matchesPattern>[0]>) => ({
+  account_id: null,
+  expected_amount: null,
+  amount_tolerance: 5,
+  frequency_days: 30,
+  label_pattern: null,
+  last_seen_at: null,
+  alert_if_missing: true,
+  ...over,
+});
+
+describe("multi-motifs de libellé", () => {
+  it("labelPatterns découpe par ligne en ignorant le vide", () => {
+    expect(labelPatterns("NETFLIX\n  SPOTIFY \n\n")).toEqual(["NETFLIX", "SPOTIFY"]);
+    expect(labelPatterns(null)).toEqual([]);
+  });
+
+  it("matche si l'un des motifs est présent (accents/casse ignorés)", () => {
+    const p = pat({ label_pattern: "NETFLIX\nSWISSLIFE PREVOYANCE" });
+    const tx = { account_id: "a", raw_label: "PRLV SEPA SWISSLIFE PRÉVOYANCE", amount: -10, operation_date: "2026-06-06" };
+    expect(matchesPattern(p, tx)).toBe(true);
+    expect(matchesPattern(p, { ...tx, raw_label: "AUTRE CHOSE" })).toBe(false);
+  });
+});
 
 describe("recurringKey", () => {
   it("drops volatile digits to group monthly variants", () => {

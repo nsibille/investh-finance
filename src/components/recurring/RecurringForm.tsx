@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { recurringSchema, type RecurringInput } from "@/lib/recurring/schema";
 import { FormField } from "@/components/ui/FormField";
 import { Input, CurrencyInput } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { Toggle } from "@/components/ui/Checkbox";
@@ -156,8 +157,8 @@ export function RecurringForm({
         </FormField>
       )}
 
-      <FormField label="Motif du libellé (optionnel)" help="Texte présent dans le libellé pour reconnaître l'opération (ex: NETFLIX).">
-        <Input placeholder="NETFLIX" {...register("label_pattern")} />
+      <FormField label="Motifs du libellé (optionnel)" help="Un motif par ligne — la transaction matche si l'un d'eux est présent (ex: NETFLIX).">
+        <Textarea placeholder={"NETFLIX\nNETFLIX.COM"} rows={2} {...register("label_pattern")} />
       </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>

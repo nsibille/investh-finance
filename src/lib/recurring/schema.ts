@@ -18,7 +18,7 @@ export const recurringSchema = z.object({
   expected_amount: nullableNumber,
   amount_tolerance: z.coerce.number().min(0).max(100).default(5),
   frequency_days: z.coerce.number().int().min(1).max(400).default(30),
-  label_pattern: z.string().trim().max(200).optional().or(z.literal("")),
+  label_pattern: z.string().trim().max(500).optional().or(z.literal("")),
   alert_if_missing: z.coerce.boolean().default(true),
 });
 

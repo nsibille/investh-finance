@@ -77,3 +77,19 @@ export async function getMissingRecurring(): Promise<RecurringPatternView[]> {
   const all = await getRecurringPatterns();
   return all.filter((p) => p.status === "missing");
 }
+
+export interface RecurringOption {
+  id: string;
+  name: string;
+}
+
+/** Options légères (id, nom) pour rattacher une transaction à une récurrente. */
+export async function getRecurringOptions(): Promise<RecurringOption[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("recurring_patterns")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name }));
+}

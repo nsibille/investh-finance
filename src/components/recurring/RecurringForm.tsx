@@ -19,6 +19,7 @@ import {
 } from "@/server/actions/recurring";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 interface Props {
   mode: "create" | "edit";
@@ -26,6 +27,7 @@ interface Props {
   initial?: Partial<RecurringInput>;
   accountOptions: AccountOption[];
   subcategoryOptions: SubcategoryOption[];
+  merchantOptions: MerchantOption[];
   onDone: () => void;
 }
 
@@ -45,6 +47,7 @@ export function RecurringForm({
   initial,
   accountOptions,
   subcategoryOptions,
+  merchantOptions,
   onDone,
 }: Props) {
   const router = useRouter();
@@ -59,12 +62,14 @@ export function RecurringForm({
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RecurringInput>({
     resolver: zodResolver(recurringSchema),
     defaultValues: {
       name: initial?.name ?? "",
       account_id: initial?.account_id ?? "",
+      merchant_id: initial?.merchant_id ?? "",
       subcategory_id: initial?.subcategory_id ?? "",
       expected_amount: initial?.expected_amount ?? "",
       amount_tolerance: initial?.amount_tolerance ?? 5,
@@ -123,6 +128,33 @@ export function RecurringForm({
           </FormField>
         </div>
       </div>
+
+      {merchantOptions.length > 0 && (
+        <FormField label="Enseigne (optionnel — pré-remplit la catégorie et rattache les transactions)">
+          <Controller
+            control={control}
+            name="merchant_id"
+            render={({ field }) => (
+              <Select
+                value={(field.value as string) || ""}
+                onChange={(e) => {
+                  const next = e.target.value || "";
+                  field.onChange(next);
+                  const merchant = merchantOptions.find((m) => m.id === next);
+                  if (merchant?.subcategoryId) setValue("subcategory_id", merchant.subcategoryId);
+                }}
+              >
+                <option value="">Aucune</option>
+                {merchantOptions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          />
+        </FormField>
+      )}
 
       <FormField label="Motif du libellé (optionnel)" help="Texte présent dans le libellé pour reconnaître l'opération (ex: NETFLIX).">
         <Input placeholder="NETFLIX" {...register("label_pattern")} />

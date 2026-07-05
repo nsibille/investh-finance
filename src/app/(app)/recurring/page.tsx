@@ -3,15 +3,18 @@ import { RecurringManager } from "@/components/recurring/RecurringManager";
 import { getRecurringPatterns } from "@/lib/recurring/queries";
 import { getAccountOptions } from "@/lib/rules/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
+import { getMerchantOptions } from "@/lib/merchants/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecurringPage() {
-  const [patterns, accountOptions, subcategoryOptions] = await Promise.all([
-    getRecurringPatterns(),
-    getAccountOptions(),
-    getSubcategoryOptions(),
-  ]);
+  const [patterns, accountOptions, subcategoryOptions, merchantOptions] =
+    await Promise.all([
+      getRecurringPatterns(),
+      getAccountOptions(),
+      getSubcategoryOptions(),
+      getMerchantOptions(),
+    ]);
 
   return (
     <>
@@ -23,6 +26,7 @@ export default async function RecurringPage() {
         patterns={patterns}
         accountOptions={accountOptions}
         subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
       />
     </>
   );

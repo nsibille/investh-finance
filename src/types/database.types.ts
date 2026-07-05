@@ -648,6 +648,7 @@ export type Database = {
           is_active: boolean
           label_pattern: string | null
           last_seen_at: string | null
+          merchant_id: string | null
           name: string
           subcategory_id: string | null
           updated_at: string
@@ -664,6 +665,7 @@ export type Database = {
           is_active?: boolean
           label_pattern?: string | null
           last_seen_at?: string | null
+          merchant_id?: string | null
           name: string
           subcategory_id?: string | null
           updated_at?: string
@@ -680,6 +682,7 @@ export type Database = {
           is_active?: boolean
           label_pattern?: string | null
           last_seen_at?: string | null
+          merchant_id?: string | null
           name?: string
           subcategory_id?: string | null
           updated_at?: string

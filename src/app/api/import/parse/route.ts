@@ -257,13 +257,14 @@ export async function POST(request: Request) {
         transferIdx.has(i) && transferSubId
           ? transferSubId
           : (subcategory_id ?? pattern?.subcategory_id ?? null);
+      // Enseigne : règle en priorité, sinon celle du modèle récurrent.
+      const effMerchant = merchant_id ?? pattern?.merchant_id ?? null;
       return {
         ...r,
         suggestedSubcategoryId: subcategory_id,
         initialSubcategoryId,
-        // Enseigne proposée par la règle matchée (éditable dans l'aperçu).
-        ...(merchant_id
-          ? { merchantId: merchant_id, merchantName: merchantNames.get(merchant_id) ?? null }
+        ...(effMerchant
+          ? { merchantId: effMerchant, merchantName: merchantNames.get(effMerchant) ?? null }
           : {}),
         ...(pattern ? { recurringName: pattern.name } : {}),
       };
@@ -334,13 +335,14 @@ export async function POST(request: Request) {
   const withSuggestion = rows.map((r) => {
     const { subcategory_id, merchant_id } = suggestFromRules(rules, accountId, r);
     const pattern = matchRecurring(patterns, accountId, r);
+    const effMerchant = merchant_id ?? pattern?.merchant_id ?? null;
     // Relevé PDF = un seul compte : pas de virement interne détectable ici.
     return {
       ...r,
       suggestedSubcategoryId: subcategory_id,
       initialSubcategoryId: subcategory_id ?? pattern?.subcategory_id ?? null,
-      ...(merchant_id
-        ? { merchantId: merchant_id, merchantName: merchantNames.get(merchant_id) ?? null }
+      ...(effMerchant
+        ? { merchantId: effMerchant, merchantName: merchantNames.get(effMerchant) ?? null }
         : {}),
       ...(pattern ? { recurringName: pattern.name } : {}),
     };

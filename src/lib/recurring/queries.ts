@@ -17,13 +17,14 @@ export interface RecurringPatternView extends RecurringPattern {
   nextExpected: string | null;
   accountName: string | null;
   categoryLabel: string | null;
+  merchantName: string | null;
 }
 
 export async function getRecurringPatterns(): Promise<RecurringPatternView[]> {
   const supabase = await createClient();
   const since = format(subDays(new Date(), 200), "yyyy-MM-dd");
 
-  const [{ data: patterns }, { data: recentTx }, accounts, categories] =
+  const [{ data: patterns }, { data: recentTx }, { data: merchants }, accounts, categories] =
     await Promise.all([
       supabase
         .from("recurring_patterns")
@@ -34,9 +35,12 @@ export async function getRecurringPatterns(): Promise<RecurringPatternView[]> {
         .select("account_id, raw_label, amount, operation_date")
         .eq("status", "validated")
         .gte("operation_date", since),
+      supabase.from("merchants").select("id, name"),
       getAccountDisplayMap(),
       getCategoryDisplayMap(),
     ]);
+
+  const merchantNames = new Map((merchants ?? []).map((m) => [m.id, m.name]));
 
   const txs = (recentTx ?? []).map((t) => ({
     account_id: t.account_id,
@@ -64,6 +68,7 @@ export async function getRecurringPatterns(): Promise<RecurringPatternView[]> {
         ? (accounts.get(p.account_id)?.name ?? null)
         : null,
       categoryLabel: cat ? `${cat.typeName} / ${cat.categoryName}` : null,
+      merchantName: p.merchant_id ? (merchantNames.get(p.merchant_id) ?? null) : null,
     };
   });
 }

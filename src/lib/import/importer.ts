@@ -105,9 +105,9 @@ export async function importParsedTransactions(
         const merchantId =
           explicitMerchant !== undefined
             ? explicitMerchant
-            : overridden
-              ? null
-              : outcome.merchant_id;
+            : (overridden ? null : outcome.merchant_id) ??
+              pattern?.merchant_id ??
+              null;
         return {
           account_id: accountId,
           import_id: importId,

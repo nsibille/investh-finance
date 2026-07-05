@@ -25,6 +25,7 @@ import type { RecurringPatternView } from "@/lib/recurring/queries";
 import type { RecurringCandidate } from "@/lib/recurring/detector";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 type ModalState =
   | { mode: "create" }
@@ -35,10 +36,12 @@ export function RecurringManager({
   patterns,
   accountOptions,
   subcategoryOptions,
+  merchantOptions,
 }: {
   patterns: RecurringPatternView[];
   accountOptions: AccountOption[];
   subcategoryOptions: SubcategoryOption[];
+  merchantOptions: MerchantOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -148,7 +151,7 @@ export function RecurringManager({
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: "var(--fw-semibold)" }}>{p.name}</div>
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-                    {[p.accountName, p.categoryLabel].filter(Boolean).join(" · ") || "Tous comptes"}
+                    {[p.accountName, p.categoryLabel, p.merchantName].filter(Boolean).join(" · ") || "Tous comptes"}
                   </div>
                 </div>
                 {p.status === "missing" ? <RecurringBadge missing /> : <RecurringBadge />}
@@ -199,11 +202,13 @@ export function RecurringManager({
             id={modal.mode === "edit" ? modal.pattern.id : undefined}
             accountOptions={accountOptions}
             subcategoryOptions={subcategoryOptions}
+            merchantOptions={merchantOptions}
             initial={
               modal.mode === "edit"
                 ? {
                     name: modal.pattern.name,
                     account_id: modal.pattern.account_id ?? "",
+                    merchant_id: modal.pattern.merchant_id ?? "",
                     subcategory_id: modal.pattern.subcategory_id ?? "",
                     expected_amount: modal.pattern.expected_amount ?? "",
                     amount_tolerance: modal.pattern.amount_tolerance,

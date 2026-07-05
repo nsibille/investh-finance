@@ -13,6 +13,7 @@ const nullableUuid = z.preprocess(
 export const recurringSchema = z.object({
   name: z.string().trim().min(1, "Nom requis").max(120, "120 caractères max"),
   account_id: nullableUuid,
+  merchant_id: nullableUuid,
   subcategory_id: nullableUuid,
   expected_amount: nullableNumber,
   amount_tolerance: z.coerce.number().min(0).max(100).default(5),

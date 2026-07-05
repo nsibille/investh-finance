@@ -12,6 +12,7 @@ import {
 } from "@/lib/import/preview";
 import { normalizeConnection } from "@/lib/import/connection";
 import { getInternalTransferSubcategoryId } from "@/lib/import/transfers";
+import { isDeferredDebit, getDeferredDebitSubcategoryId } from "@/lib/import/deferred";
 import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
 import { applyRules, toEngineRule, type EngineRule } from "@/lib/rules/engine";
 import { matchesPattern } from "@/lib/recurring/checker";
@@ -220,11 +221,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const [{ data: accounts }, rules, transferSubId, merchantNames, patterns] =
+    const [{ data: accounts }, rules, transferSubId, deferredSubId, merchantNames, patterns] =
       await Promise.all([
         supabase.from("accounts").select("id, connection_name"),
         loadRules(supabase),
         getInternalTransferSubcategoryId(supabase),
+        getDeferredDebitSubcategoryId(supabase),
         loadMerchantNames(supabase),
         loadRecurringPatterns(supabase),
       ]);
@@ -256,7 +258,9 @@ export async function POST(request: Request) {
       const initialSubcategoryId =
         transferIdx.has(i) && transferSubId
           ? transferSubId
-          : (subcategory_id ?? pattern?.subcategory_id ?? null);
+          : deferredSubId && isDeferredDebit(r.raw_label)
+            ? deferredSubId
+            : (subcategory_id ?? pattern?.subcategory_id ?? null);
       // Enseigne : règle en priorité, sinon celle du modèle récurrent.
       const effMerchant = merchant_id ?? pattern?.merchant_id ?? null;
       return {
@@ -325,9 +329,10 @@ export async function POST(request: Request) {
       : null;
 
   const hashes = occurrenceHashes(accountId, transactions);
-  const [existingSet, rules, merchantNames, patterns] = await Promise.all([
+  const [existingSet, rules, deferredSubId, merchantNames, patterns] = await Promise.all([
     fetchExistingHashes(supabase, hashes),
     loadRules(supabase),
+    getDeferredDebitSubcategoryId(supabase),
     loadMerchantNames(supabase),
     loadRecurringPatterns(supabase),
   ]);
@@ -340,7 +345,10 @@ export async function POST(request: Request) {
     return {
       ...r,
       suggestedSubcategoryId: subcategory_id,
-      initialSubcategoryId: subcategory_id ?? pattern?.subcategory_id ?? null,
+      initialSubcategoryId:
+        deferredSubId && isDeferredDebit(r.raw_label)
+          ? deferredSubId
+          : (subcategory_id ?? pattern?.subcategory_id ?? null),
       ...(effMerchant
         ? { merchantId: effMerchant, merchantName: merchantNames.get(effMerchant) ?? null }
         : {}),

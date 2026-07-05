@@ -7,6 +7,7 @@ import {
   type CsvImportSummary,
 } from "@/lib/import/csvImporter";
 import { detectAndTagInternalTransfers } from "@/lib/import/transfers";
+import { detectAndTagDeferredDebits } from "@/lib/import/deferred";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import type { ParsedTransaction, ImportSummary } from "@/lib/import/types";
@@ -38,6 +39,8 @@ export async function confirmImport(
       sourceFilename: filename,
     });
     const transfersDetected = await detectAndTagInternalTransfers();
+    // Débits différés : sortis de la compta (catégorie « Débit différé »).
+    await detectAndTagDeferredDebits();
     // Étend les échéances récurrentes (nouveaux mois) avant l'appariement.
     await ensureRecurringInstallments();
     await matchPurchaseInstallments();
@@ -65,6 +68,8 @@ export async function confirmCsvImport(
   try {
     const summary = await importCsvTransactions(transactions, filename);
     const transfersDetected = await detectAndTagInternalTransfers();
+    // Débits différés : sortis de la compta (catégorie « Débit différé »).
+    await detectAndTagDeferredDebits();
     // Étend les échéances récurrentes (nouveaux mois) avant l'appariement.
     await ensureRecurringInstallments();
     await matchPurchaseInstallments();

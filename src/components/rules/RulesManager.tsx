@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RuleForm } from "./RuleForm";
 import { RuleImport } from "./RuleImport";
+import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
+import { groupByCategory } from "@/lib/categories/group";
 import { setRuleActive, deleteRule } from "@/server/actions/rules";
 import type { Rule, AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -53,13 +55,19 @@ export function RulesManager({
     setLocalRules(rules);
   }
 
-  const subLabels = useMemo(
-    () => new Map(subcategoryOptions.map((o) => [o.id, o.label])),
+  const subNames = useMemo(
+    () => new Map(subcategoryOptions.map((o) => [o.id, o.subName])),
     [subcategoryOptions],
   );
   const accountNames = useMemo(
     () => new Map(accountOptions.map((a) => [a.id, a.name])),
     [accountOptions],
+  );
+
+  const groups = useMemo(
+    () =>
+      groupByCategory(localRules, (r) => r.subcategory_id, subcategoryOptions),
+    [localRules, subcategoryOptions],
   );
 
   async function toggleActive(rule: Rule) {
@@ -95,6 +103,63 @@ export function RulesManager({
     }
   }
 
+  function renderTable(rules: Rule[]) {
+    return (
+      <table className="table-transactions">
+        <thead>
+          <tr>
+            <th>Active</th>
+            <th>Nom</th>
+            <th>Match</th>
+            <th>Sous-catégorie</th>
+            <th>Compte</th>
+            <th>Priorité</th>
+            <th>Hits</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((rule) => (
+            <tr key={rule.id} style={{ opacity: rule.is_active ? 1 : 0.55 }}>
+              <td>
+                <Toggle
+                  checked={rule.is_active}
+                  onChange={() => toggleActive(rule)}
+                  aria-label="Activer/désactiver"
+                />
+              </td>
+              <td style={{ fontWeight: "var(--fw-medium)" }}>{rule.name}</td>
+              <td>
+                <span style={{ color: "var(--color-text-muted)", marginRight: "var(--space-2)" }}>
+                  {MATCH_LABELS[rule.match_type]}
+                </span>
+                <code style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }}>
+                  {rule.pattern}
+                </code>
+              </td>
+              <td style={{ color: subNames.get(rule.subcategory_id) ? undefined : "var(--color-text-muted)" }}>
+                {subNames.get(rule.subcategory_id) ?? "(défaut)"}
+              </td>
+              <td>{rule.account_id ? accountNames.get(rule.account_id) ?? "—" : "Tous"}</td>
+              <td style={{ fontFamily: "var(--font-mono)" }}>{rule.priority}</td>
+              <td style={{ fontFamily: "var(--font-mono)" }}>{rule.hit_count}</td>
+              <td>
+                <div style={{ display: "flex", gap: "var(--space-1)", justifyContent: "flex-end" }}>
+                  <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", rule })}>
+                    <Pencil size={16} />
+                  </IconButton>
+                  <IconButton label="Supprimer" onClick={() => setToDelete(rule)}>
+                    <Trash2 size={16} />
+                  </IconButton>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
   return (
     <>
       <div
@@ -125,56 +190,7 @@ export function RulesManager({
           />
         </Card>
       ) : (
-        <table className="table-transactions">
-          <thead>
-            <tr>
-              <th>Active</th>
-              <th>Nom</th>
-              <th>Match</th>
-              <th>Cible</th>
-              <th>Compte</th>
-              <th>Priorité</th>
-              <th>Hits</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {localRules.map((rule) => (
-              <tr key={rule.id} style={{ opacity: rule.is_active ? 1 : 0.55 }}>
-                <td>
-                  <Toggle
-                    checked={rule.is_active}
-                    onChange={() => toggleActive(rule)}
-                    aria-label="Activer/désactiver"
-                  />
-                </td>
-                <td style={{ fontWeight: "var(--fw-medium)" }}>{rule.name}</td>
-                <td>
-                  <span style={{ color: "var(--color-text-muted)", marginRight: "var(--space-2)" }}>
-                    {MATCH_LABELS[rule.match_type]}
-                  </span>
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }}>
-                    {rule.pattern}
-                  </code>
-                </td>
-                <td>{subLabels.get(rule.subcategory_id) ?? "—"}</td>
-                <td>{rule.account_id ? accountNames.get(rule.account_id) ?? "—" : "Tous"}</td>
-                <td style={{ fontFamily: "var(--font-mono)" }}>{rule.priority}</td>
-                <td style={{ fontFamily: "var(--font-mono)" }}>{rule.hit_count}</td>
-                <td>
-                  <div style={{ display: "flex", gap: "var(--space-1)", justifyContent: "flex-end" }}>
-                    <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", rule })}>
-                      <Pencil size={16} />
-                    </IconButton>
-                    <IconButton label="Supprimer" onClick={() => setToDelete(rule)}>
-                      <Trash2 size={16} />
-                    </IconButton>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <GroupedByCategory groups={groups} renderTable={renderTable} />
       )}
 
       <Modal

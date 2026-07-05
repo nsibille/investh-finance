@@ -779,6 +779,21 @@ fois pour tenir des milliers de lignes).
 ### `table-top-transactions`
 Variante compact pour widgets analytics (top 10 dépenses).
 
+### `category-group`
+**Regroupement d'items par catégorie** (règles, récurrentes) en respectant la
+hiérarchie définie Type → Catégorie (ordre `sort_order`).
+- Composition : `category-group__type` (header niveau 1, majuscule muted) →
+  pour chaque catégorie `category-group__cat-head` (pastille `badge-dot` +
+  `category-group__cat-name` + `badge-count`) → une `table-transactions`
+  (ou variante) listant les items de la catégorie.
+- Les catégories/types sans item sont omis ; les items non catégorisés
+  atterrissent dans un groupe final « Sans catégorie » (sans header catégorie).
+- Colonnes : le Type/Catégorie étant portés par les headers, la table n'affiche
+  que la **sous-catégorie** (niveau 3) en colonne, pas le libellé complet.
+- Implémentation : `src/components/categories/GroupedByCategory.tsx` (rendu
+  générique, prop `renderTable`) + helper `src/lib/categories/group.ts`
+  (`groupByCategory`). CSS section `.category-group*` dans `globals.css`.
+
 ---
 
 ## Amount (composant clé finance)
@@ -1091,6 +1106,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `card-pending-validator` | Métier | Card workflow validation | auto |
 | `card-recurring` | Métier | Card transaction récurrente | auto |
 | `card-surface` | Card | Card neutre wrapper | auto |
+| `category-group` | Table | Regroupement d'items par catégorie (hiérarchie Type→Cat) | auto |
 | `chart-bar-monthly` | Chart | Bar chart 12 mois | auto |
 | `chart-comparison` | Chart | Bar chart groupé comparaison | auto |
 | `chart-net-worth-evolution` | Chart | Line chart évolution patrimoine | auto |

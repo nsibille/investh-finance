@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles, Pencil, Trash2, Repeat } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +14,8 @@ import { Toggle } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RecurringForm } from "./RecurringForm";
+import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
+import { groupByCategory } from "@/lib/categories/group";
 import { formatShortDate } from "@/lib/format/date";
 import { useImportStore } from "@/stores/import";
 import {
@@ -57,6 +59,21 @@ export function RecurringManager({
     setPrevPatterns(patterns);
     setLocalPatterns(patterns);
   }
+
+  const subNames = useMemo(
+    () => new Map(subcategoryOptions.map((o) => [o.id, o.subName])),
+    [subcategoryOptions],
+  );
+
+  const groups = useMemo(
+    () =>
+      groupByCategory(
+        localPatterns,
+        (p) => p.subcategory_id,
+        subcategoryOptions,
+      ),
+    [localPatterns, subcategoryOptions],
+  );
 
   async function detect() {
     setDetecting(true);
@@ -128,6 +145,78 @@ export function RecurringManager({
     }
   }
 
+  function renderTable(items: RecurringPatternView[]) {
+    return (
+      <table className="table-transactions">
+        <thead>
+          <tr>
+            <th>Active</th>
+            <th>Nom</th>
+            <th>Sous-catégorie</th>
+            <th>Compte</th>
+            <th>Montant</th>
+            <th>Fréquence</th>
+            <th>Suivi</th>
+            <th>Statut</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((p) => (
+            <tr key={p.id} style={{ opacity: p.is_active ? 1 : 0.6 }}>
+              <td>
+                <Toggle
+                  checked={p.is_active}
+                  onChange={() => toggle(p)}
+                  aria-label="Activer/désactiver"
+                />
+              </td>
+              <td>
+                <div style={{ fontWeight: "var(--fw-medium)" }}>{p.name}</div>
+                {p.merchantName && (
+                  <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                    {p.merchantName}
+                  </div>
+                )}
+              </td>
+              <td style={{ color: subNames.get(p.subcategory_id ?? "") ? undefined : "var(--color-text-muted)" }}>
+                {p.subcategory_id ? subNames.get(p.subcategory_id) ?? "(défaut)" : "—"}
+              </td>
+              <td>{p.accountName ?? "Tous"}</td>
+              <td>
+                {p.expected_amount != null ? (
+                  <Amount value={Number(p.expected_amount)} />
+                ) : (
+                  <span style={{ color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
+                    Variable
+                  </span>
+                )}
+              </td>
+              <td style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
+                {p.frequency_days} j
+              </td>
+              <td style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
+                {p.effectiveLastSeen ? `Vu ${formatShortDate(p.effectiveLastSeen)}` : "Jamais vu"}
+                {p.nextExpected ? ` · ~${formatShortDate(p.nextExpected)}` : ""}
+              </td>
+              <td>{p.status === "missing" ? <RecurringBadge missing /> : <RecurringBadge />}</td>
+              <td>
+                <div style={{ display: "flex", gap: "var(--space-1)", justifyContent: "flex-end" }}>
+                  <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", pattern: p })}>
+                    <Pencil size={16} />
+                  </IconButton>
+                  <IconButton label="Supprimer" onClick={() => remove(p.id)}>
+                    <Trash2 size={16} />
+                  </IconButton>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
   return (
     <>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
@@ -185,51 +274,7 @@ export function RecurringManager({
           />
         </Card>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "var(--space-4)" }}>
-          {localPatterns.map((p) => (
-            <div className="card-recurring" key={p.id} style={{ opacity: p.is_active ? 1 : 0.6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-3)" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: "var(--fw-semibold)" }}>{p.name}</div>
-                  <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-                    {[p.accountName, p.categoryLabel, p.merchantName].filter(Boolean).join(" · ") || "Tous comptes"}
-                  </div>
-                </div>
-                {p.status === "missing" ? <RecurringBadge missing /> : <RecurringBadge />}
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                {p.expected_amount != null ? (
-                  <Amount value={Number(p.expected_amount)} size="lg" />
-                ) : (
-                  <span style={{ color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>Montant variable</span>
-                )}
-                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                  tous les {p.frequency_days} j
-                </span>
-              </div>
-
-              <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                {p.effectiveLastSeen ? `Vu le ${formatShortDate(p.effectiveLastSeen)}` : "Jamais vu"}
-                {p.nextExpected ? ` · prévu ~${formatShortDate(p.nextExpected)}` : ""}
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-xs)" }}>
-                  <Toggle checked={p.is_active} onChange={() => toggle(p)} /> Active
-                </label>
-                <div style={{ display: "flex", gap: "var(--space-1)" }}>
-                  <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", pattern: p })}>
-                    <Pencil size={16} />
-                  </IconButton>
-                  <IconButton label="Supprimer" onClick={() => remove(p.id)}>
-                    <Trash2 size={16} />
-                  </IconButton>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <GroupedByCategory groups={groups} renderTable={renderTable} />
       )}
 
       <Modal

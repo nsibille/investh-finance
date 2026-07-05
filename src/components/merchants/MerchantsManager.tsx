@@ -77,7 +77,7 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", width: "100%" }}>
       <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
         Règles rattachées
       </span>
@@ -102,21 +102,29 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
         </div>
       )}
       {canAddRules ? (
-        <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-          <Select
-            value={matchType}
-            onChange={(e) => setMatchType(e.target.value as typeof matchType)}
-            style={{ maxWidth: 120 }}
-          >
-            <option value="contains">Contient</option>
-            <option value="regex">Regex</option>
-            <option value="exact">Exact</option>
-          </Select>
+        <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap", width: "100%" }}>
+          <div style={{ flex: "0 0 130px" }}>
+            <Select
+              value={matchType}
+              onChange={(e) => setMatchType(e.target.value as typeof matchType)}
+              style={{ width: "100%" }}
+            >
+              <option value="contains">Contient</option>
+              <option value="regex">Regex</option>
+              <option value="exact">Exact</option>
+            </Select>
+          </div>
           <Input
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
-            placeholder="Motif (ex. CARREFOUR)"
-            style={{ flex: 1 }}
+            placeholder="Motif à matcher (ex. CANAL+, NETFLIX…)"
+            style={{ flex: "1 1 240px", minWidth: 0 }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
           />
           <Button variant="secondary" size="sm" loading={busy} onClick={add}>
             Ajouter

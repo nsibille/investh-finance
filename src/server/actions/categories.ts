@@ -105,6 +105,108 @@ export async function reorderSubcategories(
   return { ok: true };
 }
 
+/**
+ * Promeut une sous-catégorie en catégorie (drag vers le niveau type) : crée une
+ * catégorie du nom de la sous-catégorie, sous laquelle la sous-catégorie devient
+ * la « — » par défaut. Les transactions (qui pointent la sous-catégorie) sont
+ * préservées.
+ */
+export async function promoteSubcategoryToCategory(
+  subId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: sub } = await supabase
+    .from("subcategories")
+    .select("id, name, category_id")
+    .eq("id", subId)
+    .maybeSingle();
+  if (!sub) return fail("Sous-catégorie introuvable");
+  if (sub.name === "—")
+    return fail("La sous-catégorie par défaut ne peut pas devenir une catégorie.");
+
+  const { data: parent } = await supabase
+    .from("categories")
+    .select("category_type_id")
+    .eq("id", sub.category_id)
+    .maybeSingle();
+  if (!parent) return fail("Catégorie parente introuvable");
+
+  const { data: newCat, error } = await supabase
+    .from("categories")
+    .insert({
+      category_type_id: parent.category_type_id,
+      name: sub.name.slice(0, 80),
+      sort_order: 999,
+    })
+    .select("id")
+    .single();
+  if (error || !newCat) return fail(error?.message ?? "Création impossible");
+
+  const { error: moveErr } = await supabase
+    .from("subcategories")
+    .update({ category_id: newCat.id, name: "—" })
+    .eq("id", subId);
+  if (moveErr) return fail(moveErr.message);
+
+  revalidatePath("/categories");
+  return { ok: true };
+}
+
+/**
+ * Rétrograde une catégorie en sous-catégorie d'une autre (drag d'une catégorie
+ * dans une catégorie cible). Cas courant (≤ 1 sous-catégorie) : elle devient une
+ * seule sous-catégorie du nom de la catégorie. Sinon, ses sous-catégories sont
+ * déplacées sous la cible (fusion). L'ancienne catégorie est supprimée.
+ */
+export async function demoteCategoryToSubcategory(
+  catId: string,
+  targetCategoryId: string,
+): Promise<ActionResult> {
+  if (catId === targetCategoryId) return fail("Cible invalide");
+  const supabase = await createClient();
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("id", catId)
+    .maybeSingle();
+  if (!cat) return fail("Catégorie introuvable");
+
+  const { data: subs } = await supabase
+    .from("subcategories")
+    .select("id, name")
+    .eq("category_id", catId);
+  const list = subs ?? [];
+
+  if (list.length <= 1) {
+    const only = list[0];
+    if (only) {
+      const newName = (only.name === "—" ? cat.name : only.name).slice(0, 80);
+      const { error } = await supabase
+        .from("subcategories")
+        .update({ category_id: targetCategoryId, name: newName })
+        .eq("id", only.id);
+      if (error) return fail(error.message);
+    } else {
+      const { error } = await supabase
+        .from("subcategories")
+        .insert({ category_id: targetCategoryId, name: cat.name.slice(0, 80), sort_order: 999 });
+      if (error) return fail(error.message);
+    }
+  } else {
+    const { error } = await supabase
+      .from("subcategories")
+      .update({ category_id: targetCategoryId })
+      .eq("category_id", catId);
+    if (error) return fail(error.message);
+  }
+
+  const { error: delErr } = await supabase.from("categories").delete().eq("id", catId);
+  if (delErr) return fail(delErr.message);
+
+  revalidatePath("/categories");
+  return { ok: true };
+}
+
 export async function createSubcategory(
   input: SubcategoryInput,
 ): Promise<CreateResult> {

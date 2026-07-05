@@ -26,6 +26,8 @@ import {
   setSubcategoryArchived,
   reorderCategories,
   reorderSubcategories,
+  promoteSubcategoryToCategory,
+  demoteCategoryToSubcategory,
 } from "@/server/actions/categories";
 import type {
   CategoryTypeNode,
@@ -64,6 +66,24 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
   const [overCat, setOverCat] = useState<string | null>(null);
   const [dragSub, setDragSub] = useState<{ categoryId: string; id: string } | null>(null);
   const [overSub, setOverSub] = useState<string | null>(null);
+  // Cibles de conversion inter-niveaux : promotion (sur un type) et
+  // rétrogradation (dépôt d'une catégorie dans le panneau d'une autre).
+  const [overType, setOverType] = useState<string | null>(null);
+  const [overPanel, setOverPanel] = useState<string | null>(null);
+
+  async function promote(subId: string) {
+    const res = await promoteSubcategoryToCategory(subId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Sous-catégorie promue en catégorie");
+    router.refresh();
+  }
+
+  async function demote(catId: string, targetCategoryId: string) {
+    const res = await demoteCategoryToSubcategory(catId, targetCategoryId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Catégorie imbriquée en sous-catégorie");
+    router.refresh();
+  }
 
   function moveCategory(typeId: string, dragId: string, targetId: string) {
     if (dragId === targetId) return;
@@ -193,11 +213,26 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
           return (
             <Card key={type.id}>
               <div
+                onDragOver={(e) => {
+                  if (dragSub) {
+                    e.preventDefault();
+                    setOverType(type.id);
+                  }
+                }}
+                onDragLeave={() => setOverType((o) => (o === type.id ? null : o))}
+                onDrop={() => {
+                  if (dragSub) promote(dragSub.id);
+                  setDragSub(null);
+                  setOverType(null);
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                   marginBottom: "var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  outline: overType === type.id ? "2px dashed var(--color-brand-primary)" : "none",
+                  outlineOffset: 4,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
@@ -205,6 +240,11 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
                   <strong style={{ fontSize: "var(--text-base)" }}>{type.name}</strong>
                   {type.is_income && (
                     <span className="badge-status-validated">Revenu</span>
+                  )}
+                  {dragSub && (
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
+                      · déposer ici pour en faire une catégorie
+                    </span>
                   )}
                 </div>
                 <Button
@@ -306,7 +346,32 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
                       </div>
 
                       {isOpen && (
-                        <div style={{ paddingLeft: "var(--space-10)", paddingBottom: "var(--space-2)" }}>
+                        <div
+                          onDragOver={(e) => {
+                            if (dragCat && dragCat.id !== cat.id) {
+                              e.preventDefault();
+                              setOverPanel(cat.id);
+                            }
+                          }}
+                          onDragLeave={() => setOverPanel((o) => (o === cat.id ? null : o))}
+                          onDrop={() => {
+                            if (dragCat && dragCat.id !== cat.id) demote(dragCat.id, cat.id);
+                            setDragCat(null);
+                            setOverPanel(null);
+                          }}
+                          style={{
+                            paddingLeft: "var(--space-10)",
+                            paddingBottom: "var(--space-2)",
+                            borderRadius: "var(--radius-md)",
+                            outline:
+                              overPanel === cat.id ? "2px dashed var(--color-brand-primary)" : "none",
+                          }}
+                        >
+                          {dragCat && dragCat.id !== cat.id && (
+                            <div style={{ fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)", padding: "var(--space-1) 0" }}>
+                              Déposer ici pour imbriquer dans « {cat.name} »
+                            </div>
+                          )}
                           {subs.map((sub) => (
                             <div
                               key={sub.id}

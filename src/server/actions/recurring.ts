@@ -428,6 +428,41 @@ export async function undoAssociateRecurring(
   return { ok: true };
 }
 
+/**
+ * Crée une récurrente à la volée depuis l'aperçu d'import : nom libre, motif =
+ * libellé de la ligne, montant attendu = montant de la ligne. Applique ensuite
+ * la récurrente aux transactions existantes. L'annulation = supprimer le modèle.
+ */
+export async function createAndAssociateRecurring(input: {
+  name: string;
+  rawLabel: string;
+  amount: number | null;
+}): Promise<{ ok: true; id: string; applied: number } | { ok: false; error: string }> {
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Nom requis" };
+  const supabase = await createClient();
+  const key = recurringKey(input.rawLabel);
+  const amount =
+    input.amount != null && Number.isFinite(input.amount) ? input.amount : null;
+  const { data, error } = await supabase
+    .from("recurring_patterns")
+    .insert({
+      name: name.slice(0, 120),
+      label_pattern: key || null,
+      expected_amount: amount,
+      expected_amounts: amount != null ? [amount] : null,
+      frequency_days: 30,
+      alert_if_missing: true,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Création impossible" };
+  const res = await applyRecurringPattern(data.id);
+  revalidate();
+  return { ok: true, id: data.id, applied: res.ok ? res.applied : 0 };
+}
+
 /** Détache une transaction d'une récurrente. */
 export async function detachTransactionFromRecurring(
   transactionId: string,

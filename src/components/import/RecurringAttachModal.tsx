@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import type { RecurringOption } from "@/lib/recurring/queries";
@@ -28,11 +29,14 @@ export function RecurringAttachModal({
   onClose,
   options,
   onAttach,
+  onCreate,
 }: {
   open: boolean;
   onClose: () => void;
   options: RecurringOption[];
   onAttach: (option: RecurringOption) => void;
+  /** Créer une récurrente à la volée depuis le libellé de la ligne. */
+  onCreate?: (name: string) => void;
 }) {
   const [query, setQuery] = useState("");
 
@@ -41,8 +45,18 @@ export function RecurringAttachModal({
     return q ? options.filter((o) => norm(o.name).includes(q)) : options;
   }, [options, query]);
 
+  const exactExists = options.some((o) => norm(o.name) === norm(query.trim()));
+
   function attach(option: RecurringOption) {
     onAttach(option);
+    setQuery("");
+    onClose();
+  }
+
+  function create() {
+    const name = query.trim();
+    if (!name || !onCreate) return;
+    onCreate(name);
     setQuery("");
     onClose();
   }
@@ -69,9 +83,19 @@ export function RecurringAttachModal({
               {o.name}
             </button>
           ))}
-          {options.length === 0 && (
+          {onCreate && query.trim() && !exactExists && (
+            <button
+              type="button"
+              style={{ ...optStyle, color: "var(--color-brand-primary-600)", fontWeight: "var(--fw-medium)" }}
+              onClick={create}
+            >
+              <Plus size={14} aria-hidden />
+              Créer «&nbsp;{query.trim()}&nbsp;»
+            </button>
+          )}
+          {options.length === 0 && !query.trim() && (
             <div style={{ padding: "var(--space-3)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
-              Aucune récurrente. Crées-en dans l&apos;espace « Récurrentes ».
+              Aucune récurrente. Tape un nom pour en créer une.
             </div>
           )}
         </div>

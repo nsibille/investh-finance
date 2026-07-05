@@ -26,6 +26,8 @@ import { addMerchantRule, createMerchantRuleFromLabel } from "@/server/actions/m
 import {
   associateLabelToRecurring,
   undoAssociateRecurring,
+  createAndAssociateRecurring,
+  deleteRecurringPattern,
 } from "@/server/actions/recurring";
 import { createCategoryOnTheFly } from "@/server/actions/categories";
 import { useImportStore, type ImportPreviewRow } from "@/stores/import";
@@ -145,6 +147,35 @@ export function StatementImport({
 
   function detachMerchant(index: number) {
     patchRow(index, { merchantId: null, merchantName: null });
+  }
+
+  // Crée une récurrente à la volée depuis la ligne (nom libre) puis l'associe.
+  async function createRecurring(index: number, name: string) {
+    const row = useImportStore.getState().preview?.rows[index];
+    if (!row) return;
+    const res = await createAndAssociateRecurring({
+      name,
+      rawLabel: row.raw_label,
+      amount: row.amount,
+    });
+    if (!res.ok) return toast.error(res.error);
+    patchRow(index, { recurringId: res.id, recurringName: name });
+    toast.success(
+      res.applied > 0
+        ? `Récurrente « ${name} » créée · ${res.applied} transaction(s) rattachée(s)`
+        : `Récurrente « ${name} » créée`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRecurringPattern(res.id);
+            patchRow(index, { recurringId: null, recurringName: null });
+            toast.info("Récurrente supprimée.");
+          },
+        },
+      },
+    );
   }
 
   // Associe une ligne à une récurrente : ajoute le motif du libellé à la
@@ -710,6 +741,9 @@ export function StatementImport({
         options={recurringOptions}
         onAttach={(option) => {
           if (recurringRow !== null) attachRecurring(recurringRow, option);
+        }}
+        onCreate={(name) => {
+          if (recurringRow !== null) createRecurring(recurringRow, name);
         }}
       />
     </Card>

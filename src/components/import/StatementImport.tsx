@@ -33,7 +33,7 @@ import type { ParsedTransaction } from "@/lib/import/types";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import { installmentOccurrence } from "@/lib/purchases/installments";
-import type { PurchaseOption } from "@/lib/purchases/types";
+import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
 import type { PersonOption } from "@/lib/persons/types";
@@ -84,19 +84,31 @@ export function StatementImport({
     return [...merchantOptions, ...extraMerchants.filter((m) => !seen.has(m.id))];
   }, [merchantOptions, extraMerchants]);
 
-  function attachPurchase(index: number, option: PurchaseOption) {
+  function attachPurchase(
+    index: number,
+    option: PurchaseOption,
+    choice: InstallmentChoice,
+  ) {
     setExtraPurchases((prev) => (prev.some((p) => p.id === option.id) ? prev : [...prev, option]));
-    // Occurrence X/Y : rang du mois de la ligne dans l'échéancier de l'achat.
+    // Occurrence X/Y : rang du mois de la ligne (ou de l'échéance remplie).
     const startMonth = option.installmentMonths[0] ?? null;
     const txMonth = preview?.rows[index]?.operation_date.slice(0, 7) ?? null;
+    const refMonth =
+      choice.mode === "existing" ? choice.month.slice(0, 7) : txMonth;
     const occurrence =
-      startMonth && txMonth ? installmentOccurrence(startMonth, txMonth) : null;
+      startMonth && refMonth ? installmentOccurrence(startMonth, refMonth) : null;
+    // Créer une échéance ajoute une ligne à l'échéancier.
+    const total =
+      option.installmentMonths.length + (choice.mode === "create" ? 1 : 0);
     patchRow(index, {
       purchaseId: option.id,
       purchaseName: option.name,
       purchaseOccurrence: occurrence,
-      purchaseInstallmentTotal: option.installmentMonths.length,
+      purchaseInstallmentTotal: total,
       purchaseEndless: option.endless,
+      // Choix d'échéance appliqué à la confirmation de l'import.
+      installmentId: choice.mode === "existing" ? choice.installmentId : null,
+      installmentCreate: choice.mode === "create",
       // La catégorie de l'achat prime (héritée) si elle existe.
       ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
       // L'enseigne de l'achat est imposée (non éditable) si l'achat en a une.
@@ -114,6 +126,8 @@ export function StatementImport({
       purchaseOccurrence: null,
       purchaseInstallmentTotal: null,
       purchaseEndless: false,
+      installmentId: null,
+      installmentCreate: false,
       merchantLocked: false,
     });
   }
@@ -526,6 +540,9 @@ export function StatementImport({
       const suggested = r.suggestedSubcategoryId ?? null;
       if (r.categoryId !== suggested) base.subcategory_id = r.categoryId;
       if (r.purchaseId) base.purchase_id = r.purchaseId;
+      // Choix d'échéance : remplir une échéance existante ou en créer une.
+      if (r.installmentId) base.installment_id = r.installmentId;
+      else if (r.installmentCreate) base.installment_create = true;
       // L'aperçu fait foi pour l'enseigne (règle, achat ou choix manuel), y
       // compris le détachement explicite (null).
       base.merchant_id = r.merchantId ?? null;
@@ -608,7 +625,8 @@ export function StatementImport({
   const editorHandlers: EditorHandlers = {
     onAssignCategory: (key, subId) => assignCategory(Number(key), subId),
     onCreateCategory: (key, name) => handleCreateCategory(Number(key), name),
-    onAttachPurchase: (key, option) => attachPurchase(Number(key), option),
+    onAttachPurchase: (key, option, choice) =>
+      attachPurchase(Number(key), option, choice),
     onDetachPurchase: (key) => detachPurchase(Number(key)),
     onAttachMerchant: (key, option) => attachMerchant(Number(key), option),
     onDetachMerchant: (key) => detachMerchant(Number(key)),

@@ -102,7 +102,7 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
   const { data } = await supabase
     .from("purchases")
     .select(
-      "id, name, subcategory_id, merchant_id, is_recurring, recurrence_end, merchant:merchants(name), installments:purchase_installments(month)",
+      "id, name, subcategory_id, merchant_id, is_recurring, recurrence_end, merchant:merchants(name), installments:purchase_installments(id, month, amount, transaction_id)",
     )
     .order("name", { ascending: true });
   return (data ?? []).map((p) => ({
@@ -114,6 +114,11 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
     installmentMonths: (p.installments ?? [])
       .map((i) => i.month)
       .sort((a, b) => a.localeCompare(b)),
+    // Échéances prévisionnelles pas encore appariées à une opération.
+    unmatchedInstallments: (p.installments ?? [])
+      .filter((i) => !i.transaction_id)
+      .map((i) => ({ id: i.id, month: i.month, amount: Number(i.amount) }))
+      .sort((a, b) => a.month.localeCompare(b.month)),
     endless: !!(p.is_recurring && !p.recurrence_end),
   }));
 });

@@ -44,6 +44,13 @@ export interface PurchaseParentOption {
   isArchived: boolean;
 }
 
+/** Mensualité prévisionnelle non appariée (« transaction non matchée » d'un achat). */
+export interface UnmatchedInstallment {
+  id: string;
+  month: string; // YYYY-MM-01
+  amount: number;
+}
+
 export interface PurchaseOption {
   id: string;
   name: string;
@@ -53,6 +60,20 @@ export interface PurchaseOption {
   merchantName: string | null;
   /** Mois des mensualités (triés) — sert à calculer l'occurrence X/Y. */
   installmentMonths: string[];
+  /** Échéances non appariées : au rattachement, on peut en remplir une. */
+  unmatchedInstallments: UnmatchedInstallment[];
   /** Abonnement sans fin : total inconnu (occurrence X/∞). */
   endless: boolean;
 }
+
+/**
+ * Choix d'appariement au rattachement d'une transaction à un achat :
+ * - `existing` : remplir une échéance prévisionnelle non appariée (elle adopte
+ *   le montant réel de la transaction) ;
+ * - `create` : créer une nouvelle échéance (mois + montant de l'opération) ;
+ * - `auto` : rattachement simple + appariement automatique (comportement d'avant).
+ */
+export type InstallmentChoice =
+  | { mode: "existing"; installmentId: string; month: string; amount: number }
+  | { mode: "create" }
+  | { mode: "auto" };

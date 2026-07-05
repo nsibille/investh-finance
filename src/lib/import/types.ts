@@ -28,6 +28,17 @@ export interface ParsedTransaction {
   /** Achat rattaché lors de l'import (la catégorie de l'achat prime). */
   purchase_id?: string | null;
   /**
+   * Échéance prévisionnelle de l'achat à remplir avec cette transaction (choix
+   * « transaction non matchée »). Appariée après l'insertion (adopte le montant
+   * réel). Ignorée si la ligne est un doublon non importé.
+   */
+  installment_id?: string | null;
+  /**
+   * Créer une nouvelle échéance dans l'achat (mois + montant de l'opération) et
+   * l'apparier à cette transaction. Exclusif de `installment_id`.
+   */
+  installment_create?: boolean;
+  /**
    * Enseigne rattachée dans l'aperçu (règle, achat ou choix manuel). Présente ⇒
    * fait foi ; absente ⇒ le moteur de règles décide.
    */

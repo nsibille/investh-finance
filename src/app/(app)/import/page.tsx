@@ -8,6 +8,7 @@ import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getPurchaseOptions } from "@/lib/purchases/queries";
 import { getMerchantOptions } from "@/lib/merchants/queries";
 import { getRecurringOptions } from "@/lib/recurring/queries";
+import { getPersonOptions } from "@/lib/persons/queries";
 import { isGoCardlessConfigured } from "@/lib/gocardless/client";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export default async function ImportPage() {
     purchaseOptions,
     merchantOptions,
     recurringOptions,
+    personOptions,
   ] = await Promise.all([
     getBankConnections(),
     getAccountOptions(),
@@ -41,6 +43,7 @@ export default async function ImportPage() {
     getPurchaseOptions(),
     getMerchantOptions(),
     getRecurringOptions(),
+    getPersonOptions(),
   ]);
   const configured = isGoCardlessConfigured();
 
@@ -58,6 +61,7 @@ export default async function ImportPage() {
         purchaseOptions={purchaseOptions}
         merchantOptions={merchantOptions}
         recurringOptions={recurringOptions}
+        personOptions={personOptions}
       />
 
       <SectionTitle>Connexions bancaires (GoCardless)</SectionTitle>

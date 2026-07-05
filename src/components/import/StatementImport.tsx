@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, ShoppingBag, Store, Repeat, X } from "lucide-react";
+import { FileText, ShoppingBag, Store, Repeat, Users, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -18,6 +18,7 @@ import { ImportCategoryEditor } from "./ImportCategoryEditor";
 import { PurchaseAttachModal } from "./PurchaseAttachModal";
 import { MerchantAttachModal } from "./MerchantAttachModal";
 import { RecurringAttachModal } from "./RecurringAttachModal";
+import { PersonAttachModal } from "./PersonAttachModal";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
@@ -37,6 +38,7 @@ import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
+import type { PersonOption } from "@/lib/persons/types";
 
 export function StatementImport({
   accountOptions,
@@ -44,12 +46,14 @@ export function StatementImport({
   purchaseOptions,
   merchantOptions,
   recurringOptions,
+  personOptions,
 }: {
   accountOptions: AccountOption[];
   subcategoryOptions: SubcategoryOption[];
   purchaseOptions: PurchaseOption[];
   merchantOptions: MerchantOption[];
   recurringOptions: RecurringOption[];
+  personOptions: PersonOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -74,6 +78,8 @@ export function StatementImport({
   const [merchantRow, setMerchantRow] = useState<number | null>(null);
   // Ligne dont on associe une récurrente.
   const [recurringRow, setRecurringRow] = useState<number | null>(null);
+  // Ligne dont on édite le partage entre personnes.
+  const [personRow, setPersonRow] = useState<number | null>(null);
 
   const allPurchases = useMemo(() => {
     const seen = new Set(purchaseOptions.map((p) => p.id));
@@ -440,6 +446,7 @@ export function StatementImport({
       // L'aperçu fait foi pour l'enseigne (règle, achat ou choix manuel), y
       // compris le détachement explicite (null).
       base.merchant_id = r.merchantId ?? null;
+      if (r.persons && r.persons.personIds.length > 0) base.persons = r.persons;
       return base;
     });
 
@@ -635,6 +642,27 @@ export function StatementImport({
                               Enseigne…
                             </button>
                           )}
+                          {r.persons && r.persons.personIds.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setPersonRow(i)}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
+                            >
+                              <Users size={12} aria-hidden />
+                              {r.persons.personIds.length} personne
+                              {r.persons.personIds.length > 1 ? "s" : ""} ·{" "}
+                              {r.persons.nature === "gift" ? "cadeau" : "dette"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPersonRow(i)}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
+                            >
+                              <Users size={12} aria-hidden />
+                              Partager…
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td data-col="category">
@@ -744,6 +772,19 @@ export function StatementImport({
         }}
         onCreate={(name) => {
           if (recurringRow !== null) createRecurring(recurringRow, name);
+        }}
+      />
+
+      <PersonAttachModal
+        key={personRow ?? "none"}
+        open={personRow !== null}
+        onClose={() => setPersonRow(null)}
+        persons={personOptions}
+        initial={
+          personRow !== null ? (preview?.rows[personRow]?.persons ?? null) : null
+        }
+        onAttach={(value) => {
+          if (personRow !== null) patchRow(personRow, { persons: value });
         }}
       />
     </Card>

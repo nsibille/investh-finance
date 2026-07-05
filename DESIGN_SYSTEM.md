@@ -1053,6 +1053,23 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 .layout-page-header__actions { display: flex; gap: var(--space-3); }
 ```
 
+### `input-split-nature`
+**Bascule segmentée dette / cadeau** — deux boutons exclusifs (`HandCoins` = dette, `Gift` = cadeau) qualifiant la nature de la ventilation d'une transaction (parts des personnes ≠ moi). État actif : bordure + fond `--color-brand-primary` / `--color-brand-primary-50`, texte `--color-brand-primary-700`. Hauteur 32px, `--radius-md`. Réutilisé dans `person-share-editor` et `person-attach-modal`.
+
+### `person-share-editor`
+**Éditeur de ventilation d'une transaction entre personnes**
+- Usage : bloc « Partage entre personnes » du détail d'une transaction. Chaque personne est cochable (`input-checkbox` + `badge-dot` couleur), « moi » coché par défaut mais décochable.
+- Composition : liste des personnes cochables (part éditable `input-currency` alignée à droite à côté de chaque cochée) → actions `btn-ghost-sm` « Répartir équitablement » + `input-split-nature` → encart résumé (`--color-bg-subtle`) « Ma part / Créances (ou Cadeaux) / Total réparti » → `btn-primary-sm` « Enregistrer le partage » (+ `btn-ghost-sm` « Ne pas partager » si déjà ventilée).
+- Répartition : parts égales auto entre les personnes cochées (reste au centime sur la 1re part), chaque part restant modifiable. Le total réparti est signalé en `--color-warning-dark` s'il diffère du montant de la transaction.
+- États : vide (aucune personne → invite), édition, mismatch (total ≠ montant), saving.
+- Dark mode : auto. Implémentation : `src/components/persons/PersonSharePicker.tsx`.
+
+### `person-card`
+**Card personne (page Personnes)** — `card-surface` : en-tête (`badge-dot` + nom + `btn-icon-md` modifier/supprimer) → grille de 4 stats mono (`Dettes`, `Cadeaux` en `--color-finance-investissement`, `Remboursé` en `--color-success`, `Restant dû` en `--color-danger` si > 0) → `btn-ghost-sm` déplier → registre : transactions partagées (icône `Gift`/`HandCoins` + date + libellé lien + part mono) puis remboursements (date + libellé + montant `--color-success` + `btn-icon-md` supprimer) et formulaire d'ajout de remboursement (`input-currency` + `input-date` + `input-select` transaction créditée optionnelle + note). Implémentation : `src/components/persons/PersonsManager.tsx`.
+
+### `person-attach-modal`
+**Variante de `modal-surface`** pour rattacher des personnes à une ligne d'aperçu d'import : sélection multiple (`input-checkbox` + `badge-dot`, « moi » par défaut) + `input-split-nature`. Le montant est réparti à parts égales à l'import (ajustable ensuite via `person-share-editor`). Implémentation : `src/components/import/PersonAttachModal.tsx`.
+
 ---
 
 # Index des slugs
@@ -1137,6 +1154,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `input-radio` | Form | Bouton radio | auto |
 | `input-search-md` | Form | Variante recherche | auto |
 | `input-select-md` | Form | Dropdown md | auto |
+| `input-split-nature` | Form | Bascule segmentée dette / cadeau | auto |
 | `input-text-md` | Form | Champ texte md (défaut) | auto |
 | `input-textarea-md` | Form | Zone texte multilignes | auto |
 | `input-toggle` | Form | Switch on/off | auto |
@@ -1149,6 +1167,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `nav-header` | Nav | Header haut app | auto |
 | `nav-sidebar` | Nav | Sidebar gauche app | auto |
 | `nav-tabs` | Nav | Onglets de section | auto |
+| `person-attach-modal` | Métier | Modale d'attache de personnes (import) | auto |
+| `person-card` | Métier | Card personne + registre (page Personnes) | auto |
+| `person-share-editor` | Métier | Éditeur de ventilation entre personnes | auto |
 | `progress-bar` | Feedback | Barre de progression | auto |
 | `rule-suggestion-form` | Métier | Form proposition règle depuis libellé | auto |
 | `search-result-item` | Métier | Item résultat recherche | auto |

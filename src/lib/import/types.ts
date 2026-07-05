@@ -1,3 +1,5 @@
+import type { Database } from "@/types/database.types";
+
 /** Source-agnostic parsed transaction (from CSV, API, etc.). */
 export interface ParsedTransaction {
   /** ISO date YYYY-MM-DD of the operation. */
@@ -30,6 +32,15 @@ export interface ParsedTransaction {
    * fait foi ; absente ⇒ le moteur de règles décide.
    */
   merchant_id?: string | null;
+  /**
+   * Ventilation entre personnes choisie dans l'aperçu : nature globale
+   * (dette/cadeau) + personnes concernées. Le montant est réparti à parts
+   * égales à l'import (ajustable ensuite à l'édition de la transaction).
+   */
+  persons?: {
+    nature: Database["public"]["Enums"]["split_nature"];
+    personIds: string[];
+  } | null;
 }
 
 export interface ImportSummary {

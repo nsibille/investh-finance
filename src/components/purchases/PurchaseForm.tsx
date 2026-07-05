@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
+import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { useToast } from "@/hooks/useToast";
 import { createPurchase, updatePurchase } from "@/server/actions/purchases";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -48,14 +49,6 @@ export function PurchaseForm({
     initial?.merchantId ?? null,
   );
 
-  // Choisir une enseigne pré-remplit la catégorie avec sa catégorie par défaut
-  // (surchargeable : l'utilisateur peut ensuite changer la catégorie).
-  function onMerchantChange(value: string) {
-    const next = value || null;
-    setMerchantId(next);
-    const merchant = merchantOptions.find((m) => m.id === next);
-    if (merchant?.subcategoryId) setSubcategoryId(merchant.subcategoryId);
-  }
   // Échéancier (création uniquement).
   const [planKind, setPlanKind] = useState<"none" | "installments" | "recurring">("none");
   const [count, setCount] = useState("");
@@ -129,18 +122,16 @@ export function PurchaseForm({
         />
       </FormField>
 
-      {merchantOptions.length > 0 && (
-        <FormField label="Enseigne (optionnel — pré-remplit la catégorie)">
-          <Select value={merchantId ?? ""} onChange={(e) => onMerchantChange(e.target.value)}>
-            <option value="">Aucune</option>
-            {merchantOptions.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-      )}
+      <FormField label="Enseigne (optionnel — pré-remplit la catégorie)">
+        <MerchantSelect
+          value={merchantId}
+          options={merchantOptions}
+          onChange={(id, opt) => {
+            setMerchantId(id);
+            if (opt?.subcategoryId) setSubcategoryId(opt.subcategoryId);
+          }}
+        />
+      </FormField>
 
       <FormField label="Catégorie (héritée par les transactions rattachées)">
         <CategorySelect

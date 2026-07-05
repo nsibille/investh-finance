@@ -9,6 +9,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
+import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -175,18 +176,19 @@ export function RuleForm({
         </div>
       </div>
 
-      {merchantOptions.length > 0 && (
-        <FormField label="Enseigne (optionnel — rattache la transaction à l'enseigne au match)">
-          <Select {...register("merchant_id")}>
-            <option value="">Aucune</option>
-            {merchantOptions.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-      )}
+      <FormField label="Enseigne (optionnel — rattache la transaction à l'enseigne au match)">
+        <Controller
+          control={control}
+          name="merchant_id"
+          render={({ field }) => (
+            <MerchantSelect
+              value={(field.value as string) || null}
+              options={merchantOptions}
+              onChange={(id) => field.onChange(id ?? "")}
+            />
+          )}
+        />
+      </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <div style={{ flex: 1 }}>

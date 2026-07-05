@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "./CategorySelect";
+import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { TagPicker } from "@/components/tags/TagPicker";
 import { AttachmentManager } from "@/components/attachments/AttachmentManager";
@@ -315,23 +316,15 @@ export function TransactionDetail({
                   Détacher
                 </Button>
               </div>
-            ) : merchantOptions.length > 0 ? (
-              <Select
-                value=""
-                disabled={attachingMerchant}
-                onChange={(e) => attachMerchant(e.target.value)}
-              >
-                <option value="">Rattacher à une enseigne…</option>
-                {merchantOptions.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
             ) : (
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
-                Aucune enseigne. Crées-en dans l&apos;espace « Enseignes ».
-              </p>
+              <MerchantSelect
+                value={null}
+                options={merchantOptions}
+                placeholder="Rattacher à une enseigne…"
+                onChange={(id) => {
+                  if (id) attachMerchant(id);
+                }}
+              />
             )}
           </FormField>
 

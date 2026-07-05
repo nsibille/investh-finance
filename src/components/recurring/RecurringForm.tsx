@@ -10,6 +10,7 @@ import { Input, CurrencyInput } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
+import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -130,32 +131,22 @@ export function RecurringForm({
         </div>
       </div>
 
-      {merchantOptions.length > 0 && (
-        <FormField label="Enseigne (optionnel — pré-remplit la catégorie et rattache les transactions)">
-          <Controller
-            control={control}
-            name="merchant_id"
-            render={({ field }) => (
-              <Select
-                value={(field.value as string) || ""}
-                onChange={(e) => {
-                  const next = e.target.value || "";
-                  field.onChange(next);
-                  const merchant = merchantOptions.find((m) => m.id === next);
-                  if (merchant?.subcategoryId) setValue("subcategory_id", merchant.subcategoryId);
-                }}
-              >
-                <option value="">Aucune</option>
-                {merchantOptions.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-          />
-        </FormField>
-      )}
+      <FormField label="Enseigne (optionnel — pré-remplit la catégorie et rattache les transactions)">
+        <Controller
+          control={control}
+          name="merchant_id"
+          render={({ field }) => (
+            <MerchantSelect
+              value={(field.value as string) || null}
+              options={merchantOptions}
+              onChange={(id, opt) => {
+                field.onChange(id ?? "");
+                if (opt?.subcategoryId) setValue("subcategory_id", opt.subcategoryId);
+              }}
+            />
+          )}
+        />
+      </FormField>
 
       <FormField label="Motifs du libellé (optionnel)" help="Un motif par ligne — la transaction matche si l'un d'eux est présent (ex: NETFLIX).">
         <Textarea placeholder={"NETFLIX\nNETFLIX.COM"} rows={2} {...register("label_pattern")} />

@@ -7,12 +7,12 @@ import { Card } from "@/components/ui/Card";
 import { Amount } from "@/components/ui/Amount";
 import { StatusBadge, Dot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "./CategorySelect";
 import { MerchantSelect } from "@/components/merchants/MerchantSelect";
+import { RecurringSelect } from "@/components/recurring/RecurringSelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { TagPicker } from "@/components/tags/TagPicker";
 import { AttachmentManager } from "@/components/attachments/AttachmentManager";
@@ -36,6 +36,8 @@ import {
   associateTransactionToRecurring,
   undoAssociateRecurring,
   detachTransactionFromRecurring,
+  createAndAssociateRecurring,
+  deleteRecurringPattern,
 } from "@/server/actions/recurring";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -220,6 +222,34 @@ export function TransactionDetail({
     router.refresh();
   }
 
+  async function createRecurringForTx(name: string) {
+    setAssociatingRec(true);
+    const res = await createAndAssociateRecurring({
+      name,
+      rawLabel: tx.raw_label,
+      amount: tx.amount,
+    });
+    setAssociatingRec(false);
+    if (!res.ok) return toast.error(res.error);
+    router.refresh();
+    toast.success(
+      res.applied > 0
+        ? `Récurrente « ${name} » créée · ${res.applied} transaction${res.applied > 1 ? "s" : ""} rattachée${res.applied > 1 ? "s" : ""}`
+        : `Récurrente « ${name} » créée`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRecurringPattern(res.id);
+            toast.info("Récurrente supprimée.");
+            router.refresh();
+          },
+        },
+      },
+    );
+  }
+
   async function saveNote() {
     setSavingNote(true);
     const res = await updateTransactionNote(tx.id, note);
@@ -350,23 +380,16 @@ export function TransactionDetail({
                   Détacher
                 </Button>
               </div>
-            ) : recurringOptions.length > 0 ? (
-              <Select
-                value=""
-                disabled={associatingRec}
-                onChange={(e) => associateRecurring(e.target.value)}
-              >
-                <option value="">Associer à une récurrente…</option>
-                {recurringOptions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </Select>
             ) : (
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
-                Aucune récurrente. Crées-en dans l&apos;espace « Récurrentes ».
-              </p>
+              <RecurringSelect
+                value={null}
+                options={recurringOptions}
+                placeholder="Associer à une récurrente…"
+                onChange={(id) => {
+                  if (id) associateRecurring(id);
+                }}
+                onCreate={createRecurringForTx}
+              />
             )}
           </FormField>
 

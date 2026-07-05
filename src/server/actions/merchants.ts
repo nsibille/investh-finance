@@ -185,16 +185,26 @@ export async function createMerchantRuleFromLabel(
     categorySet = true;
   }
 
+  // Règle « contient » identique déjà présente : rattachée à cette enseigne →
+  // rien à faire ; sans enseigne (ancienne règle simple) → on la met à niveau
+  // au lieu de créer un doublon qui masquerait le rattachement.
   const { data: existing } = await supabase
     .from("categorization_rules")
-    .select("id")
+    .select("id, merchant_id")
     .eq("match_type", "contains")
-    .eq("merchant_id", merchantId)
     .ilike("pattern", p)
+    .or(`merchant_id.eq.${merchantId},merchant_id.is.null`)
     .limit(1);
   if (existing && existing.length > 0) {
+    const found = existing[0];
+    if (!found.merchant_id) {
+      await supabase
+        .from("categorization_rules")
+        .update({ merchant_id: merchantId, subcategory_id: subcategoryId })
+        .eq("id", found.id);
+    }
     revalidate();
-    return { ok: true, ruleId: existing[0].id, exists: true, pattern: p, categorySet };
+    return { ok: true, ruleId: found.id, exists: true, pattern: p, categorySet };
   }
 
   const { data, error } = await supabase
@@ -244,11 +254,40 @@ export async function addMerchantRule(
       error: "Définis d'abord une catégorie par défaut pour l'enseigne.",
     };
 
+  const matchType = input.matchType ?? "contains";
+  // Évite les doublons : une règle identique déjà rattachée à cette enseigne est
+  // réutilisée ; une règle « contient » identique sans enseigne est mise à
+  // niveau (rattachée) plutôt que dupliquée.
+  const { data: dupe } = await supabase
+    .from("categorization_rules")
+    .select("*")
+    .eq("match_type", matchType)
+    .ilike("pattern", pattern)
+    .or(`merchant_id.eq.${merchantId},merchant_id.is.null`)
+    .limit(1);
+  if (dupe && dupe.length > 0) {
+    let rule = dupe[0];
+    if (!rule.merchant_id) {
+      const { data: upgraded } = await supabase
+        .from("categorization_rules")
+        .update({ merchant_id: merchantId, subcategory_id: merchant.subcategory_id })
+        .eq("id", rule.id)
+        .select("*")
+        .single();
+      if (upgraded) rule = upgraded;
+    }
+    const applied = applyToUncategorized
+      ? await applyRuleToTransactions(supabase, rule, "uncategorized")
+      : 0;
+    revalidate();
+    return { ok: true, applied, ruleId: rule.id, pattern };
+  }
+
   const { data: rule, error } = await supabase
     .from("categorization_rules")
     .insert({
       name: `${merchant.name} → ${pattern}`.slice(0, 120),
-      match_type: input.matchType ?? "contains",
+      match_type: matchType,
       pattern,
       case_sensitive: false,
       subcategory_id: merchant.subcategory_id,

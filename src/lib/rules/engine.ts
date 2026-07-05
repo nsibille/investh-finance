@@ -57,7 +57,13 @@ export function applyRules(
 ): RuleOutcome {
   const ordered = rules
     .filter((r) => r.is_active)
-    .sort((a, b) => a.priority - b.priority);
+    // Priorité croissante ; à priorité égale, une règle rattachée à une enseigne
+    // l'emporte (elle catégorise ET rattache l'enseigne, donc plus informative).
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        (a.merchant_id ? 0 : 1) - (b.merchant_id ? 0 : 1),
+    );
 
   for (const rule of ordered) {
     if (rule.account_id && rule.account_id !== transaction.account_id) continue;

@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           bank: string | null
           color: string | null
+          connection_name: string | null
           created_at: string
           currency: string
           id: string
@@ -31,6 +32,7 @@ export type Database = {
         Insert: {
           bank?: string | null
           color?: string | null
+          connection_name?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -44,6 +46,7 @@ export type Database = {
         Update: {
           bank?: string | null
           color?: string | null
+          connection_name?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -281,6 +284,7 @@ export type Database = {
           is_active: boolean
           last_hit_at: string | null
           match_type: Database["public"]["Enums"]["rule_match_type"]
+          merchant_id: string | null
           name: string
           pattern: string
           priority: number
@@ -300,6 +304,7 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: Database["public"]["Enums"]["rule_match_type"]
+          merchant_id?: string | null
           name: string
           pattern: string
           priority?: number
@@ -319,6 +324,7 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: Database["public"]["Enums"]["rule_match_type"]
+          merchant_id?: string | null
           name?: string
           pattern?: string
           priority?: number
@@ -345,6 +351,13 @@ export type Database = {
             columns: ["created_from_transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categorization_rules_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
             referencedColumns: ["id"]
           },
           {
@@ -459,6 +472,169 @@ export type Database = {
           },
         ]
       }
+      merchants: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          is_online: boolean
+          name: string
+          subcategory_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_online?: boolean
+          name: string
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_online?: boolean
+          name?: string
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchants_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_summary"
+            referencedColumns: ["subcategory_id"]
+          },
+          {
+            foreignKeyName: "merchants_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_installments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          label: string | null
+          month: string
+          note: string | null
+          purchase_id: string
+          transaction_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          label?: string | null
+          month: string
+          note?: string | null
+          purchase_id: string
+          transaction_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          label?: string | null
+          month?: string
+          note?: string | null
+          purchase_id?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_installments_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_installments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchases: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          is_recurring: boolean
+          merchant_id: string | null
+          name: string
+          recurrence_amount: number | null
+          recurrence_end: string | null
+          recurrence_label: string | null
+          recurrence_start: string | null
+          subcategory_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          is_recurring?: boolean
+          merchant_id?: string | null
+          name: string
+          recurrence_amount?: number | null
+          recurrence_end?: string | null
+          recurrence_label?: string | null
+          recurrence_start?: string | null
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          is_recurring?: boolean
+          merchant_id?: string | null
+          name?: string
+          recurrence_amount?: number | null
+          recurrence_end?: string | null
+          recurrence_label?: string | null
+          recurrence_start?: string | null
+          subcategory_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_summary"
+            referencedColumns: ["subcategory_id"]
+          },
+          {
+            foreignKeyName: "purchases_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_patterns: {
         Row: {
           account_id: string | null
@@ -466,12 +642,14 @@ export type Database = {
           amount_tolerance: number
           created_at: string
           expected_amount: number | null
+          expected_amounts: number[] | null
           expected_day: number | null
           frequency_days: number
           id: string
           is_active: boolean
           label_pattern: string | null
           last_seen_at: string | null
+          merchant_id: string | null
           name: string
           subcategory_id: string | null
           updated_at: string
@@ -482,12 +660,14 @@ export type Database = {
           amount_tolerance?: number
           created_at?: string
           expected_amount?: number | null
+          expected_amounts?: number[] | null
           expected_day?: number | null
           frequency_days?: number
           id?: string
           is_active?: boolean
           label_pattern?: string | null
           last_seen_at?: string | null
+          merchant_id?: string | null
           name: string
           subcategory_id?: string | null
           updated_at?: string
@@ -498,12 +678,14 @@ export type Database = {
           amount_tolerance?: number
           created_at?: string
           expected_amount?: number | null
+          expected_amounts?: number[] | null
           expected_day?: number | null
           frequency_days?: number
           id?: string
           is_active?: boolean
           label_pattern?: string | null
           last_seen_at?: string | null
+          merchant_id?: string | null
           name?: string
           subcategory_id?: string | null
           updated_at?: string
@@ -653,8 +835,10 @@ export type Database = {
           import_id: string | null
           is_recurring: boolean
           label: string
+          merchant_id: string | null
           note: string | null
           operation_date: string
+          purchase_id: string | null
           raw_label: string
           recurring_pattern_id: string | null
           search_vector: unknown
@@ -675,8 +859,10 @@ export type Database = {
           import_id?: string | null
           is_recurring?: boolean
           label: string
+          merchant_id?: string | null
           note?: string | null
           operation_date: string
+          purchase_id?: string | null
           raw_label: string
           recurring_pattern_id?: string | null
           search_vector?: unknown
@@ -697,8 +883,10 @@ export type Database = {
           import_id?: string | null
           is_recurring?: boolean
           label?: string
+          merchant_id?: string | null
           note?: string | null
           operation_date?: string
+          purchase_id?: string | null
           raw_label?: string
           recurring_pattern_id?: string | null
           search_vector?: unknown
@@ -742,6 +930,20 @@ export type Database = {
             columns: ["import_id"]
             isOneToOne: false
             referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
             referencedColumns: ["id"]
           },
           {

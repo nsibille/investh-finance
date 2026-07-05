@@ -9,6 +9,8 @@ export interface ToastAction {
 
 export interface ToastOptions {
   action?: ToastAction;
+  /** Plusieurs actions (rendues côte à côte). */
+  actions?: ToastAction[];
   /** Auto-dismiss delay in ms. Defaults to 4000. */
   duration?: number;
 }
@@ -18,6 +20,7 @@ export interface Toast {
   variant: ToastVariant;
   message: string;
   action?: ToastAction;
+  actions?: ToastAction[];
   duration?: number;
 }
 
@@ -42,6 +45,7 @@ export const useUIStore = create<UIState>((set) => ({
           variant,
           message,
           action: options?.action,
+          actions: options?.actions,
           duration: options?.duration,
         },
       ].slice(-3),

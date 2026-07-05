@@ -7,8 +7,7 @@ import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MonthNavigator } from "@/components/dashboard/MonthNavigator";
-import { ComparisonChart } from "@/components/ui/charts/ComparisonChart";
-import { NetWorthChart } from "@/components/ui/charts/NetWorthChart";
+import { ComparisonChart, NetWorthChart } from "@/components/ui/charts/lazy";
 import { getAnalytics } from "@/lib/analytics/queries";
 import { formatShortDate } from "@/lib/format/date";
 

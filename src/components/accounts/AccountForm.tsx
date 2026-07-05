@@ -47,6 +47,7 @@ export function AccountForm({ mode, id, initial, onDone }: AccountFormProps) {
       name: initial?.name ?? "",
       type: initial?.type ?? "checking",
       bank: initial?.bank ?? "",
+      connection_name: initial?.connection_name ?? "",
       initial_balance: initial?.initial_balance ?? 0,
       initial_date: initial?.initial_date ?? todayISO(),
       currency: initial?.currency ?? "EUR",
@@ -105,6 +106,17 @@ export function AccountForm({ mode, id, initial, onDone }: AccountFormProps) {
           </FormField>
         </div>
       </div>
+
+      <FormField
+        label="Nom de la connexion (import CSV)"
+        error={errors.connection_name?.message}
+      >
+        <Input
+          placeholder="BforBank"
+          invalid={!!errors.connection_name}
+          {...register("connection_name")}
+        />
+      </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <div style={{ flex: 1 }}>

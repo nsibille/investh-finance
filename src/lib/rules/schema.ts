@@ -20,6 +20,7 @@ export const ruleSchema = z
     amount_min: nullableNumber,
     amount_max: nullableNumber,
     account_id: nullableUuid,
+    merchant_id: nullableUuid,
     subcategory_id: z.string().uuid("Sous-catégorie requise"),
     auto_validate: z.coerce.boolean().default(true),
     priority: z.coerce

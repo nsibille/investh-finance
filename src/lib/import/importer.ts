@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { applyRules, type EngineRule } from "@/lib/rules/engine";
-import { computeDedupHash, dedupeBatch } from "./dedup";
+import { applyRules, toEngineRule } from "@/lib/rules/engine";
+import { matchesPattern } from "@/lib/recurring/checker";
+import { computeDedupHash, dedupeBatch, assignOccurrences, baseKey } from "./dedup";
 import type { ParsedTransaction, ImportSummary } from "./types";
 import type { Database } from "@/types/database.types";
 
@@ -11,24 +12,6 @@ interface ImportOptions {
   bankFormat: string;
   sourceFilename: string;
   sourceStoragePath?: string | null;
-}
-
-function toEngineRule(
-  r: Database["public"]["Tables"]["categorization_rules"]["Row"],
-): EngineRule {
-  return {
-    id: r.id,
-    match_type: r.match_type,
-    pattern: r.pattern,
-    case_sensitive: r.case_sensitive,
-    account_id: r.account_id,
-    amount_min: r.amount_min == null ? null : Number(r.amount_min),
-    amount_max: r.amount_max == null ? null : Number(r.amount_max),
-    subcategory_id: r.subcategory_id,
-    auto_validate: r.auto_validate,
-    priority: r.priority,
-    is_active: r.is_active,
-  };
 }
 
 /**
@@ -61,25 +44,70 @@ export async function importParsedTransactions(
   const importId = importRow.id;
 
   try {
-    const { data: ruleRows } = await supabase
-      .from("categorization_rules")
-      .select("*")
-      .eq("is_active", true)
-      .order("priority", { ascending: true });
+    const [{ data: ruleRows }, { data: patternRows }] = await Promise.all([
+      supabase
+        .from("categorization_rules")
+        .select("*")
+        .eq("is_active", true)
+        .order("priority", { ascending: true }),
+      supabase.from("recurring_patterns").select("*").eq("is_active", true),
+    ]);
 
     const rules = (ruleRows ?? []).map(toEngineRule);
+    const patterns = patternRows ?? [];
     const hitBase = new Map(
       (ruleRows ?? []).map((r) => [r.id, r.hit_count]),
     );
 
     const nowIso = new Date().toISOString();
+    const occurrences = assignOccurrences(parsed, (p) => baseKey(p));
 
     const rows: (TransactionInsert & { dedup_hash: string })[] = parsed.map(
-      (p) => {
+      (p, i) => {
         const outcome = applyRules(
           { account_id: accountId, amount: p.amount, raw_label: p.raw_label },
           rules,
         );
+        // Catégorie choisie dans l'aperçu : présence de `subcategory_id` dans
+        // la charge utile = l'utilisateur a revu/modifié la catégorie proposée
+        // par les règles. On la respecte ; sinon les règles font foi (et leur
+        // compteur de hits est mis à jour).
+        const overridden = "subcategory_id" in p;
+        let subcategoryId = overridden
+          ? (p.subcategory_id ?? null)
+          : outcome.subcategory_id;
+        let status = overridden
+          ? subcategoryId
+            ? "validated"
+            : "pending"
+          : outcome.status;
+        const appliedRuleId = overridden ? null : outcome.applied_rule_id;
+
+        // Récurrentes : une transaction qui correspond à un modèle récurrent
+        // (libellé + montant) est marquée récurrente ; si elle n'a pas encore
+        // de catégorie, on applique celle du modèle.
+        const pattern = patterns.find((pat) =>
+          matchesPattern(pat, {
+            account_id: accountId,
+            raw_label: p.raw_label,
+            amount: p.amount,
+            operation_date: p.operation_date,
+          }),
+        );
+        if (pattern && subcategoryId == null && pattern.subcategory_id) {
+          subcategoryId = pattern.subcategory_id;
+          status = "validated";
+        }
+        // Enseigne : l'aperçu fait foi quand il fournit `merchant_id` (règle,
+        // achat ou choix manuel) ; sinon rattachement automatique par la règle.
+        const explicitMerchant =
+          "merchant_id" in p ? (p.merchant_id ?? null) : undefined;
+        const merchantId =
+          explicitMerchant !== undefined
+            ? explicitMerchant
+            : (overridden ? null : outcome.merchant_id) ??
+              pattern?.merchant_id ??
+              null;
         return {
           account_id: accountId,
           import_id: importId,
@@ -89,11 +117,15 @@ export async function importParsedTransactions(
           raw_label: p.raw_label,
           amount: p.amount,
           currency: p.currency,
-          status: outcome.status,
-          subcategory_id: outcome.subcategory_id,
-          applied_rule_id: outcome.applied_rule_id,
-          validated_at: outcome.status === "validated" ? nowIso : null,
-          dedup_hash: computeDedupHash(accountId, p),
+          status,
+          subcategory_id: subcategoryId,
+          applied_rule_id: appliedRuleId,
+          merchant_id: merchantId,
+          purchase_id: p.purchase_id ?? null,
+          is_recurring: Boolean(pattern),
+          recurring_pattern_id: pattern?.id ?? null,
+          validated_at: status === "validated" ? nowIso : null,
+          dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
         };
       },
     );

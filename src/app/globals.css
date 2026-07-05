@@ -285,8 +285,8 @@ body {
 .toast-warning,
 .toast-info {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   min-width: 280px;
   max-width: 480px;
   padding: var(--space-3) var(--space-4);
@@ -300,15 +300,18 @@ body {
   color: var(--color-text-primary);
   animation: slideInRight var(--transition-spring);
 }
+.toast-head { display: flex; align-items: center; gap: var(--space-3); }
 .toast-success { border-left-color: var(--color-success); }
 .toast-error   { border-left-color: var(--color-danger); }
 .toast-warning { border-left-color: var(--color-warning); }
 .toast-info    { border-left-color: var(--color-info); }
-.toast-success > svg { color: var(--color-success); }
-.toast-error > svg   { color: var(--color-danger); }
-.toast-warning > svg { color: var(--color-warning); }
-.toast-info > svg    { color: var(--color-info); }
+.toast-success .toast-icon { color: var(--color-success); }
+.toast-error   .toast-icon { color: var(--color-danger); }
+.toast-warning .toast-icon { color: var(--color-warning); }
+.toast-info    .toast-icon { color: var(--color-info); }
+.toast-icon { flex-shrink: 0; }
 .toast-message { flex: 1; }
+.toast-actions { display: flex; gap: var(--space-2); justify-content: flex-end; flex-wrap: wrap; }
 .toast-action {
   flex-shrink: 0;
   border: none;
@@ -743,6 +746,7 @@ body {
 .badge-status-ignored,
 .badge-status-new,
 .badge-status-duplicate,
+.badge-status-duplicate-file,
 .badge-recurring-active,
 .badge-recurring-missing,
 .badge-tag-md {
@@ -756,6 +760,7 @@ body {
 .badge-status-ignored  { background: var(--color-bg-subtle); color: var(--color-text-muted); }
 .badge-status-new      { background: var(--color-info-light); color: var(--color-info-dark); }
 .badge-status-duplicate { background: var(--color-bg-subtle); color: var(--color-text-disabled); text-decoration: line-through; }
+.badge-status-duplicate-file { background: var(--color-warning-light); color: var(--color-warning-dark); }
 .badge-recurring-active { background: var(--color-success-light); color: var(--color-success-dark); }
 .badge-recurring-missing { background: var(--color-warning-light); color: var(--color-warning-dark); }
 .badge-tag-md { background: var(--color-brand-primary-50); color: var(--color-brand-primary-700); }
@@ -795,7 +800,9 @@ body {
   white-space: nowrap;
 }
 .amount-positive { color: var(--color-finance-revenus); }
-.amount-negative { color: var(--color-finance-depenses); }
+/* Dépenses : ton neutre et lisible (le signe − suffit à indiquer le débit) ;
+   seuls les revenus sont mis en couleur. Plus calme qu'un rouge d'alerte. */
+.amount-negative { color: var(--color-text-primary); }
 .amount-neutral  { color: var(--color-text-primary); }
 .amount-sm { font-size: var(--text-sm); }
 .amount-md { font-size: var(--text-base); }
@@ -967,6 +974,56 @@ body {
 .table-top-transactions tbody tr:hover { background: var(--color-bg-subtle); }
 .table-transactions tbody tr[data-selected="true"] { background: var(--color-brand-primary-50); }
 .table-import-preview tr[data-excluded="true"] td { opacity: 0.5; }
+/* Aperçu d'import : largeurs fixes, jamais de scroll horizontal. */
+.table-import-preview { table-layout: fixed; }
+.table-import-preview td { vertical-align: middle; }
+/* Colonnes courtes (date, montant, statut, inclure) : jamais tronquées,
+   dimensionnées pour tenir leur contenu. */
+.table-import-preview td { white-space: nowrap; }
+/* Compte : ellipse si trop long (non critique). */
+.table-import-preview td[data-col="account"] {
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* Libellé & catégorie : retour à la ligne plutôt que troncature — jamais coupés. */
+.table-import-preview td[data-col="label"],
+.table-import-preview td[data-col="category"] {
+  white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+}
+/* Édition inline de la catégorie dans l'aperçu d'import. */
+.import-cat-edit {
+  display: block; width: 100%;
+  background: none; border: 1px dashed var(--color-border); border-radius: var(--radius-sm);
+  padding: 2px var(--space-2); font: inherit; font-size: var(--text-sm);
+  color: var(--color-text-primary); cursor: pointer; text-align: left;
+  white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+}
+.import-cat-edit:hover { border-color: var(--color-border-strong); background: var(--color-bg-subtle); }
+.import-cat-edit[data-empty="true"] { color: var(--color-text-muted); }
+/* Éditeur de catégorie inline (autocomplétion) dans l'aperçu d'import. */
+.import-cat-ac {
+  display: flex; align-items: center; gap: var(--space-1);
+  border: 1px solid var(--color-border-focus); border-radius: var(--radius-sm);
+  padding: 2px var(--space-2); background: var(--color-bg-surface);
+  box-shadow: var(--shadow-focus);
+}
+.import-cat-ac input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font: inherit; font-size: var(--text-sm); color: var(--color-text-primary);
+}
+.import-cat-ac input::placeholder { color: var(--color-text-muted); }
+/* Achat rattaché à une ligne d'import. */
+.import-purchase-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 1px var(--space-2); border-radius: var(--radius-full);
+  background: var(--color-brand-primary-50); color: var(--color-brand-primary-700);
+  font-size: var(--text-xs); font-weight: var(--fw-medium); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.import-purchase-chip button {
+  display: inline-flex; border: none; background: none; padding: 0; cursor: pointer;
+  color: inherit; opacity: 0.7;
+}
+.import-purchase-chip button:hover { opacity: 1; }
 
 /* ================================================================
    COMPOSANTS — Feedback (spinner, skeleton, progress, tooltip)

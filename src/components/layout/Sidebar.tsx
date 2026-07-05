@@ -11,6 +11,8 @@ import {
   Wand2,
   Repeat,
   BarChart3,
+  ShoppingBag,
+  Store,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +29,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/accounts", label: "Comptes", icon: Wallet },
   { href: "/import", label: "Import", icon: Upload },
+  { href: "/achats", label: "Achats", icon: ShoppingBag },
+  { href: "/enseignes", label: "Enseignes", icon: Store },
   { href: "/categories", label: "Catégories", icon: FolderTree },
   { href: "/rules", label: "Règles", icon: Wand2 },
   { href: "/recurring", label: "Récurrentes", icon: Repeat },

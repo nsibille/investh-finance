@@ -9,6 +9,7 @@ import {
   Pencil,
   Archive,
   ArchiveRestore,
+  GripVertical,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -23,6 +24,10 @@ import { SubcategoryForm } from "./SubcategoryForm";
 import {
   setCategoryArchived,
   setSubcategoryArchived,
+  reorderCategories,
+  reorderSubcategories,
+  promoteSubcategoryToCategory,
+  demoteCategoryToSubcategory,
 } from "@/server/actions/categories";
 import type {
   CategoryTypeNode,
@@ -53,6 +58,73 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
   if (tree !== prevTree) {
     setPrevTree(tree);
     setLocalTree(tree);
+  }
+
+  // Drag & drop : réordonnancement des catégories (par type) et des
+  // sous-catégories (par catégorie). `over` sert d'indicateur visuel.
+  const [dragCat, setDragCat] = useState<{ typeId: string; id: string } | null>(null);
+  const [overCat, setOverCat] = useState<string | null>(null);
+  const [dragSub, setDragSub] = useState<{ categoryId: string; id: string } | null>(null);
+  const [overSub, setOverSub] = useState<string | null>(null);
+  // Cibles de conversion inter-niveaux : promotion (sur un type) et
+  // rétrogradation (dépôt d'une catégorie dans le panneau d'une autre).
+  const [overType, setOverType] = useState<string | null>(null);
+  const [overPanel, setOverPanel] = useState<string | null>(null);
+
+  async function promote(subId: string) {
+    const res = await promoteSubcategoryToCategory(subId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Sous-catégorie promue en catégorie");
+    router.refresh();
+  }
+
+  async function demote(catId: string, targetCategoryId: string) {
+    const res = await demoteCategoryToSubcategory(catId, targetCategoryId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Catégorie imbriquée en sous-catégorie");
+    router.refresh();
+  }
+
+  function moveCategory(typeId: string, dragId: string, targetId: string) {
+    if (dragId === targetId) return;
+    const type = localTree.find((t) => t.id === typeId);
+    if (!type) return;
+    const cats = [...type.categories];
+    const from = cats.findIndex((c) => c.id === dragId);
+    const to = cats.findIndex((c) => c.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = cats.splice(from, 1);
+    cats.splice(to, 0, moved);
+    setLocalTree(localTree.map((t) => (t.id === typeId ? { ...t, categories: cats } : t)));
+    reorderCategories(cats.map((c) => c.id)).then((res) => {
+      if (!res.ok) toast.error(res.error);
+      router.refresh();
+    });
+  }
+
+  function moveSubcategory(categoryId: string, dragId: string, targetId: string) {
+    if (dragId === targetId) return;
+    let changed: string[] | null = null;
+    const next = localTree.map((t) => ({
+      ...t,
+      categories: t.categories.map((c) => {
+        if (c.id !== categoryId) return c;
+        const subs = [...c.subcategories];
+        const from = subs.findIndex((s) => s.id === dragId);
+        const to = subs.findIndex((s) => s.id === targetId);
+        if (from < 0 || to < 0) return c;
+        const [moved] = subs.splice(from, 1);
+        subs.splice(to, 0, moved);
+        changed = subs.map((s) => s.id);
+        return { ...c, subcategories: subs };
+      }),
+    }));
+    if (!changed) return;
+    setLocalTree(next);
+    reorderSubcategories(changed).then((res) => {
+      if (!res.ok) toast.error(res.error);
+      router.refresh();
+    });
   }
 
   function toggle(id: string) {
@@ -141,11 +213,26 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
           return (
             <Card key={type.id}>
               <div
+                onDragOver={(e) => {
+                  if (dragSub) {
+                    e.preventDefault();
+                    setOverType(type.id);
+                  }
+                }}
+                onDragLeave={() => setOverType((o) => (o === type.id ? null : o))}
+                onDrop={() => {
+                  if (dragSub) promote(dragSub.id);
+                  setDragSub(null);
+                  setOverType(null);
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                   marginBottom: "var(--space-4)",
+                  borderRadius: "var(--radius-md)",
+                  outline: overType === type.id ? "2px dashed var(--color-brand-primary)" : "none",
+                  outlineOffset: 4,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
@@ -153,6 +240,11 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
                   <strong style={{ fontSize: "var(--text-base)" }}>{type.name}</strong>
                   {type.is_income && (
                     <span className="badge-status-validated">Revenu</span>
+                  )}
+                  {dragSub && (
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
+                      · déposer ici pour en faire une catégorie
+                    </span>
                   )}
                 </div>
                 <Button
@@ -179,14 +271,45 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
                   return (
                     <div key={cat.id} style={{ borderTop: "1px solid var(--color-border)" }}>
                       <div
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", cat.id);
+                          setDragCat({ typeId: type.id, id: cat.id });
+                        }}
+                        onDragEnd={() => {
+                          setDragCat(null);
+                          setOverCat(null);
+                        }}
+                        onDragOver={(e) => {
+                          if (dragCat?.typeId === type.id && dragCat.id !== cat.id) {
+                            e.preventDefault();
+                            setOverCat(cat.id);
+                          }
+                        }}
+                        onDragLeave={() => setOverCat((o) => (o === cat.id ? null : o))}
+                        onDrop={() => {
+                          if (dragCat?.typeId === type.id) moveCategory(type.id, dragCat.id, cat.id);
+                          setDragCat(null);
+                          setOverCat(null);
+                        }}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           gap: "var(--space-2)",
                           padding: "var(--space-2) 0",
-                          opacity: cat.is_archived ? 0.55 : 1,
+                          opacity: cat.is_archived ? 0.55 : dragCat?.id === cat.id ? 0.4 : 1,
+                          boxShadow:
+                            overCat === cat.id ? "inset 0 2px 0 0 var(--color-brand-primary)" : "none",
                         }}
                       >
+                        <span
+                          aria-hidden
+                          title="Glisser pour réordonner"
+                          style={{ display: "inline-flex", color: "var(--color-text-muted)", cursor: "grab" }}
+                        >
+                          <GripVertical size={14} />
+                        </span>
                         <IconButton
                           label={isOpen ? "Replier" : "Déplier"}
                           onClick={() => toggle(cat.id)}
@@ -223,18 +346,75 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
                       </div>
 
                       {isOpen && (
-                        <div style={{ paddingLeft: "var(--space-10)", paddingBottom: "var(--space-2)" }}>
+                        <div
+                          onDragOver={(e) => {
+                            if (dragCat && dragCat.id !== cat.id) {
+                              e.preventDefault();
+                              setOverPanel(cat.id);
+                            }
+                          }}
+                          onDragLeave={() => setOverPanel((o) => (o === cat.id ? null : o))}
+                          onDrop={() => {
+                            if (dragCat && dragCat.id !== cat.id) demote(dragCat.id, cat.id);
+                            setDragCat(null);
+                            setOverPanel(null);
+                          }}
+                          style={{
+                            paddingLeft: "var(--space-10)",
+                            paddingBottom: "var(--space-2)",
+                            borderRadius: "var(--radius-md)",
+                            outline:
+                              overPanel === cat.id ? "2px dashed var(--color-brand-primary)" : "none",
+                          }}
+                        >
+                          {dragCat && dragCat.id !== cat.id && (
+                            <div style={{ fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)", padding: "var(--space-1) 0" }}>
+                              Déposer ici pour imbriquer dans « {cat.name} »
+                            </div>
+                          )}
                           {subs.map((sub) => (
                             <div
                               key={sub.id}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.effectAllowed = "move";
+                                e.dataTransfer.setData("text/plain", sub.id);
+                                setDragSub({ categoryId: cat.id, id: sub.id });
+                              }}
+                              onDragEnd={() => {
+                                setDragSub(null);
+                                setOverSub(null);
+                              }}
+                              onDragOver={(e) => {
+                                if (dragSub?.categoryId === cat.id && dragSub.id !== sub.id) {
+                                  e.preventDefault();
+                                  setOverSub(sub.id);
+                                }
+                              }}
+                              onDragLeave={() => setOverSub((o) => (o === sub.id ? null : o))}
+                              onDrop={() => {
+                                if (dragSub?.categoryId === cat.id)
+                                  moveSubcategory(cat.id, dragSub.id, sub.id);
+                                setDragSub(null);
+                                setOverSub(null);
+                              }}
                               style={{
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "var(--space-2)",
                                 padding: "var(--space-1) 0",
-                                opacity: sub.is_archived ? 0.55 : 1,
+                                opacity: sub.is_archived ? 0.55 : dragSub?.id === sub.id ? 0.4 : 1,
+                                boxShadow:
+                                  overSub === sub.id ? "inset 0 2px 0 0 var(--color-brand-primary)" : "none",
                               }}
                             >
+                              <span
+                                aria-hidden
+                                title="Glisser pour réordonner"
+                                style={{ display: "inline-flex", color: "var(--color-text-muted)", cursor: "grab" }}
+                              >
+                                <GripVertical size={13} />
+                              </span>
                               <span style={{ flex: 1, fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
                                 {sub.name === "—" ? "(défaut)" : sub.name}
                               </span>

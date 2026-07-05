@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Ban, RotateCcw, Wand2 } from "lucide-react";
+import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Store, Repeat, Unlink } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Amount } from "@/components/ui/Amount";
 import { StatusBadge, Dot } from "@/components/ui/Badge";
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "./CategorySelect";
+import { MerchantSelect } from "@/components/merchants/MerchantSelect";
+import { RecurringSelect } from "@/components/recurring/RecurringSelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { TagPicker } from "@/components/tags/TagPicker";
 import { AttachmentManager } from "@/components/attachments/AttachmentManager";
@@ -23,8 +25,24 @@ import {
   validateTransaction,
   updateTransactionNote,
 } from "@/server/actions/transactions";
+import { detachTransaction } from "@/server/actions/purchases";
+import {
+  attachTransactionToMerchant,
+  detachTransactionFromMerchant,
+  addMerchantRule,
+} from "@/server/actions/merchants";
+import { deleteRule } from "@/server/actions/rules";
+import {
+  associateTransactionToRecurring,
+  undoAssociateRecurring,
+  detachTransactionFromRecurring,
+  createAndAssociateRecurring,
+  deleteRecurringPattern,
+} from "@/server/actions/recurring";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
+import type { RecurringOption } from "@/lib/recurring/queries";
 import type { Tag } from "@/lib/tags/queries";
 import type { AttachmentView } from "@/lib/attachments/types";
 
@@ -42,12 +60,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function TransactionDetail({
   tx,
   subcategoryOptions,
+  merchantOptions,
+  recurringOptions,
   tags,
   allTags,
   attachments,
 }: {
   tx: TransactionRow;
   subcategoryOptions: SubcategoryOption[];
+  merchantOptions: MerchantOption[];
+  recurringOptions: RecurringOption[];
   tags: Tag[];
   allTags: Tag[];
   attachments: AttachmentView[];
@@ -55,10 +77,19 @@ export function TransactionDetail({
   const router = useRouter();
   const toast = useToast();
   const [subcategoryId, setSubcategoryId] = useState(tx.subcategory_id);
+  const [attachingMerchant, setAttachingMerchant] = useState(false);
+  const [associatingRec, setAssociatingRec] = useState(false);
   const [status, setStatus] = useState(tx.status);
   const [note, setNote] = useState(tx.note ?? "");
   const [savingNote, setSavingNote] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  // Enseigne à rattacher par la règle créée (null = règle de catégorie simple).
+  const [ruleMerchant, setRuleMerchant] = useState<{ id: string; name: string } | null>(null);
+
+  function openRule(merchant: { id: string; name: string } | null) {
+    setRuleMerchant(merchant);
+    setRuleOpen(true);
+  }
 
   async function changeCategory(subId: string | null) {
     const prev = subcategoryId;
@@ -73,7 +104,7 @@ export function TransactionDetail({
       if (subId) {
         toast.info("Catégorie mise à jour", {
           duration: 8000,
-          action: { label: "Créer une règle", onClick: () => setRuleOpen(true) },
+          action: { label: "Créer une règle", onClick: () => openRule(null) },
         });
       }
     }
@@ -97,6 +128,126 @@ export function TransactionDetail({
       toast.success("Statut mis à jour");
       router.refresh();
     }
+  }
+
+  async function detach() {
+    const res = await detachTransaction(tx.id);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Transaction détachée de l'achat");
+    router.refresh();
+  }
+
+  async function attachMerchant(merchantId: string) {
+    if (!merchantId) return;
+    setAttachingMerchant(true);
+    const res = await attachTransactionToMerchant(tx.id, merchantId);
+    setAttachingMerchant(false);
+    if (!res.ok) return toast.error(res.error);
+    const merchant = merchantOptions.find((m) => m.id === merchantId);
+    // La catégorie par défaut de l'enseigne vient d'être appliquée côté serveur.
+    if (merchant?.subcategoryId) setSubcategoryId(merchant.subcategoryId);
+    router.refresh();
+
+    // Règle créée automatiquement (comme pour les catégories), avec annulation.
+    if (!merchant?.subcategoryId) {
+      toast.info(
+        "Enseigne rattachée. Définis une catégorie par défaut pour créer une règle automatiquement.",
+      );
+      return;
+    }
+    const ruleRes = await addMerchantRule(merchantId, {
+      pattern: tx.label,
+      matchType: "contains",
+    });
+    if (!ruleRes.ok) return toast.error(ruleRes.error);
+    toast.success(
+      ruleRes.applied > 0
+        ? `Règle créée pour « ${merchant.name} » · ${ruleRes.applied} transaction${ruleRes.applied > 1 ? "s" : ""} rattachée${ruleRes.applied > 1 ? "s" : ""}`
+        : `Règle créée pour « ${merchant.name} »`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRule(ruleRes.ruleId);
+            toast.info("Règle annulée.");
+            router.refresh();
+          },
+        },
+      },
+    );
+  }
+
+  async function detachMerchant() {
+    setAttachingMerchant(true);
+    const res = await detachTransactionFromMerchant(tx.id);
+    setAttachingMerchant(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Enseigne détachée");
+    router.refresh();
+  }
+
+  async function associateRecurring(recurringId: string) {
+    if (!recurringId) return;
+    setAssociatingRec(true);
+    const res = await associateTransactionToRecurring(tx.id, recurringId);
+    setAssociatingRec(false);
+    if (!res.ok) return toast.error(res.error);
+    router.refresh();
+    const name = recurringOptions.find((r) => r.id === recurringId)?.name ?? "";
+    toast.success(
+      res.applied > 0
+        ? `Rattachée à « ${name} » · ${res.applied} transaction${res.applied > 1 ? "s" : ""} au total`
+        : `Rattachée à « ${name} »`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await undoAssociateRecurring(recurringId, res.addedLabel, res.addedAmount, res.ids);
+            toast.info("Association annulée.");
+            router.refresh();
+          },
+        },
+      },
+    );
+  }
+
+  async function detachRecurring() {
+    setAssociatingRec(true);
+    const res = await detachTransactionFromRecurring(tx.id);
+    setAssociatingRec(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Détachée de la récurrente");
+    router.refresh();
+  }
+
+  async function createRecurringForTx(name: string) {
+    setAssociatingRec(true);
+    const res = await createAndAssociateRecurring({
+      name,
+      rawLabel: tx.raw_label,
+      amount: tx.amount,
+    });
+    setAssociatingRec(false);
+    if (!res.ok) return toast.error(res.error);
+    router.refresh();
+    toast.success(
+      res.applied > 0
+        ? `Récurrente « ${name} » créée · ${res.applied} transaction${res.applied > 1 ? "s" : ""} rattachée${res.applied > 1 ? "s" : ""}`
+        : `Récurrente « ${name} » créée`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await deleteRecurringPattern(res.id);
+            toast.info("Récurrente supprimée.");
+            router.refresh();
+          },
+        },
+      },
+    );
   }
 
   async function saveNote() {
@@ -141,8 +292,105 @@ export function TransactionDetail({
 
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          <FormField label="Catégorie">
-            <CategorySelect value={subcategoryId} options={subcategoryOptions} allowCreate onChange={changeCategory} />
+          {tx.purchase ? (
+            <FormField label="Catégorie (héritée de l'achat)">
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <CategorySelect value={subcategoryId} options={subcategoryOptions} disabled onChange={changeCategory} />
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "var(--space-2)",
+                    padding: "var(--space-2) var(--space-3)",
+                    background: "var(--color-bg-subtle)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "var(--text-sm)",
+                  }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                    <ShoppingBag size={15} aria-hidden />
+                    Rattachée à l&apos;achat « {tx.purchase.name} »
+                  </span>
+                  <Button variant="ghost" size="sm" leftIcon={<Unlink size={14} />} onClick={detach}>
+                    Détacher
+                  </Button>
+                </div>
+              </div>
+            </FormField>
+          ) : (
+            <FormField label="Catégorie">
+              <CategorySelect value={subcategoryId} options={subcategoryOptions} allowCreate onChange={changeCategory} />
+            </FormField>
+          )}
+
+          <FormField label="Enseigne">
+            {tx.merchant ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--space-2)",
+                  padding: "var(--space-2) var(--space-3)",
+                  background: "var(--color-bg-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <Store size={15} aria-hidden />
+                  {tx.merchant.name}
+                </span>
+                <Button variant="ghost" size="sm" leftIcon={<Unlink size={14} />} disabled={attachingMerchant} onClick={detachMerchant}>
+                  Détacher
+                </Button>
+              </div>
+            ) : (
+              <MerchantSelect
+                value={null}
+                options={merchantOptions}
+                placeholder="Rattacher à une enseigne…"
+                onChange={(id) => {
+                  if (id) attachMerchant(id);
+                }}
+              />
+            )}
+          </FormField>
+
+          <FormField label="Récurrente">
+            {tx.recurring ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--space-2)",
+                  padding: "var(--space-2) var(--space-3)",
+                  background: "var(--color-bg-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <Repeat size={15} aria-hidden />
+                  {tx.recurring.name}
+                </span>
+                <Button variant="ghost" size="sm" leftIcon={<Unlink size={14} />} disabled={associatingRec} onClick={detachRecurring}>
+                  Détacher
+                </Button>
+              </div>
+            ) : (
+              <RecurringSelect
+                value={null}
+                options={recurringOptions}
+                placeholder="Associer à une récurrente…"
+                onChange={(id) => {
+                  if (id) associateRecurring(id);
+                }}
+                onCreate={createRecurringForTx}
+              />
+            )}
           </FormField>
 
           <FormField label="Tags">
@@ -178,7 +426,7 @@ export function TransactionDetail({
                 Remettre à valider
               </Button>
             )}
-            <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => setRuleOpen(true)}>
+            <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => openRule(null)}>
               Créer une règle
             </Button>
           </div>
@@ -192,6 +440,8 @@ export function TransactionDetail({
           accountId={tx.account?.id ?? ""}
           defaultSubcategoryId={subcategoryId}
           subcategoryOptions={subcategoryOptions}
+          merchantId={ruleMerchant?.id ?? null}
+          merchantName={ruleMerchant?.name ?? null}
           onDone={() => setRuleOpen(false)}
         />
       </Modal>

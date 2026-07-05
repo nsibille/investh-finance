@@ -13,6 +13,23 @@ export interface ParsedTransaction {
   currency: string;
   /** Stable external id from the source (bank transactionId), when available. */
   external_id?: string | null;
+  /**
+   * Nom de la connexion bancaire (export CSV) : sert de pivot pour
+   * rattacher/créer automatiquement le compte de destination.
+   */
+  connection_name?: string | null;
+  /**
+   * Catégorie choisie/validée dans l'aperçu d'import. Présente ⇒ l'utilisateur
+   * a revu la proposition des règles (override) ; absente ⇒ les règles décident.
+   */
+  subcategory_id?: string | null;
+  /** Achat rattaché lors de l'import (la catégorie de l'achat prime). */
+  purchase_id?: string | null;
+  /**
+   * Enseigne rattachée dans l'aperçu (règle, achat ou choix manuel). Présente ⇒
+   * fait foi ; absente ⇒ le moteur de règles décide.
+   */
+  merchant_id?: string | null;
 }
 
 export interface ImportSummary {

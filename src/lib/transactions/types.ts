@@ -35,6 +35,12 @@ export interface TransactionRow {
   subcategory_id: string | null;
   account: AccountDisplay | null;
   category: CategoryDisplay | null;
+  /** Achat rattaché (catégorie héritée, verrou sur le sélecteur). */
+  purchase?: { id: string; name: string } | null;
+  /** Enseigne rattachée (catégorie par défaut appliquée, surchargeable). */
+  merchant?: { id: string; name: string } | null;
+  /** Récurrente rattachée. */
+  recurring?: { id: string; name: string } | null;
 }
 
 export interface TransactionFilters {

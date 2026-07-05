@@ -13,9 +13,11 @@ import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RuleForm } from "./RuleForm";
+import { RuleImport } from "./RuleImport";
 import { setRuleActive, deleteRule } from "@/server/actions/rules";
 import type { Rule, AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 const MATCH_LABELS: Record<Rule["match_type"], string> = {
   regex: "Regex",
@@ -32,10 +34,12 @@ export function RulesManager({
   rules,
   subcategoryOptions,
   accountOptions,
+  merchantOptions,
 }: {
   rules: Rule[];
   subcategoryOptions: SubcategoryOption[];
   accountOptions: AccountOption[];
+  merchantOptions: MerchantOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -97,9 +101,11 @@ export function RulesManager({
         style={{
           display: "flex",
           justifyContent: "flex-end",
+          gap: "var(--space-3)",
           marginBottom: "var(--space-5)",
         }}
       >
+        <RuleImport subcategoryOptions={subcategoryOptions} />
         <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
           Nouvelle règle
         </Button>
@@ -182,6 +188,7 @@ export function RulesManager({
             id={modal.mode === "edit" ? modal.rule.id : undefined}
             subcategoryOptions={subcategoryOptions}
             accountOptions={accountOptions}
+            merchantOptions={merchantOptions}
             initial={
               modal.mode === "edit"
                 ? {
@@ -192,6 +199,7 @@ export function RulesManager({
                     amount_min: modal.rule.amount_min ?? "",
                     amount_max: modal.rule.amount_max ?? "",
                     account_id: modal.rule.account_id ?? "",
+                    merchant_id: modal.rule.merchant_id ?? "",
                     subcategory_id: modal.rule.subcategory_id,
                     auto_validate: modal.rule.auto_validate,
                     priority: modal.rule.priority,

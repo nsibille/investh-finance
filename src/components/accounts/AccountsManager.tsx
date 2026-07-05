@@ -154,6 +154,7 @@ export function AccountsManager({
                     name: modal.account.name,
                     type: modal.account.type,
                     bank: modal.account.bank ?? "",
+                    connection_name: modal.account.connection_name ?? "",
                     initial_balance: modal.account.initial_balance,
                     initial_date: modal.account.initial_date,
                     currency: modal.account.currency,

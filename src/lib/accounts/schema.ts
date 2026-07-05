@@ -15,6 +15,12 @@ export const accountSchema = z.object({
     "other",
   ]),
   bank: z.string().trim().max(80, "80 caractères maximum").optional().or(z.literal("")),
+  connection_name: z
+    .string()
+    .trim()
+    .max(120, "120 caractères maximum")
+    .optional()
+    .or(z.literal("")),
   initial_balance: z.coerce
     .number({ message: "Montant invalide" })
     .finite("Montant invalide"),

@@ -9,6 +9,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
+import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -17,6 +18,7 @@ import { saveRule } from "@/server/actions/rules";
 import type { RuleApplyScope } from "@/server/rules/apply";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { AccountOption } from "@/lib/rules/queries";
+import type { MerchantOption } from "@/lib/merchants/types";
 
 interface RuleFormProps {
   mode: "create" | "edit";
@@ -24,6 +26,7 @@ interface RuleFormProps {
   initial?: Partial<RuleInput>;
   subcategoryOptions: SubcategoryOption[];
   accountOptions: AccountOption[];
+  merchantOptions: MerchantOption[];
   onDone: () => void;
 }
 
@@ -53,6 +56,7 @@ export function RuleForm({
   initial,
   subcategoryOptions,
   accountOptions,
+  merchantOptions,
   onDone,
 }: RuleFormProps) {
   const router = useRouter();
@@ -77,6 +81,7 @@ export function RuleForm({
       amount_min: initial?.amount_min ?? "",
       amount_max: initial?.amount_max ?? "",
       account_id: initial?.account_id ?? "",
+      merchant_id: initial?.merchant_id ?? "",
       subcategory_id: initial?.subcategory_id ?? "",
       auto_validate: initial?.auto_validate ?? true,
       priority: initial?.priority ?? 100,
@@ -170,6 +175,20 @@ export function RuleForm({
           </FormField>
         </div>
       </div>
+
+      <FormField label="Enseigne (optionnel — rattache la transaction à l'enseigne au match)">
+        <Controller
+          control={control}
+          name="merchant_id"
+          render={({ field }) => (
+            <MerchantSelect
+              value={(field.value as string) || null}
+              options={merchantOptions}
+              onChange={(id) => field.onChange(id ?? "")}
+            />
+          )}
+        />
+      </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <div style={{ flex: 1 }}>

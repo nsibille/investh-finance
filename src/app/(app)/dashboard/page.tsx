@@ -7,8 +7,7 @@ import { Amount } from "@/components/ui/Amount";
 import { AccountAvatar } from "@/components/ui/Avatar";
 import { MonthNavigator } from "@/components/dashboard/MonthNavigator";
 import { MissingRecurringAlert } from "@/components/recurring/MissingRecurringAlert";
-import { PieCategories } from "@/components/ui/charts/PieCategories";
-import { BarMonthly } from "@/components/ui/charts/BarMonthly";
+import { PieCategories, BarMonthly } from "@/components/ui/charts/lazy";
 import {
   getMonthlyKpis,
   getCategoryBreakdown,

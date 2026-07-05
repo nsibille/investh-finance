@@ -4,7 +4,47 @@ import {
   recurringKey,
   type RecurringInput,
 } from "@/lib/recurring/detector";
-import { matchesPattern, patternStatus } from "@/lib/recurring/checker";
+import { matchesPattern, patternStatus, labelPatterns } from "@/lib/recurring/checker";
+
+const pat = (over: Partial<Parameters<typeof matchesPattern>[0]>) => ({
+  account_id: null,
+  expected_amount: null,
+  amount_tolerance: 5,
+  frequency_days: 30,
+  label_pattern: null,
+  last_seen_at: null,
+  alert_if_missing: true,
+  ...over,
+});
+
+describe("multi-motifs de libellé", () => {
+  it("labelPatterns découpe par ligne en ignorant le vide", () => {
+    expect(labelPatterns("NETFLIX\n  SPOTIFY \n\n")).toEqual(["NETFLIX", "SPOTIFY"]);
+    expect(labelPatterns(null)).toEqual([]);
+  });
+
+  it("matche si l'un des motifs est présent (accents/casse ignorés)", () => {
+    const p = pat({ label_pattern: "NETFLIX\nSWISSLIFE PREVOYANCE" });
+    const tx = { account_id: "a", raw_label: "PRLV SEPA SWISSLIFE PRÉVOYANCE", amount: -10, operation_date: "2026-06-06" };
+    expect(matchesPattern(p, tx)).toBe(true);
+    expect(matchesPattern(p, { ...tx, raw_label: "AUTRE CHOSE" })).toBe(false);
+  });
+});
+
+describe("montants attendus multiples", () => {
+  it("matche l'un quelconque des montants attendus (± tolérance)", () => {
+    const p = pat({ label_pattern: "CANAL", expected_amounts: [-29.99, -39.99], amount_tolerance: 5 });
+    const base = { account_id: "a", raw_label: "CANAL+", operation_date: "2026-06-06" };
+    expect(matchesPattern(p, { ...base, amount: -29.99 })).toBe(true);
+    expect(matchesPattern(p, { ...base, amount: -39.99 })).toBe(true);
+    expect(matchesPattern(p, { ...base, amount: -50 })).toBe(false);
+  });
+
+  it("retombe sur expected_amount si le tableau est vide", () => {
+    const p = pat({ label_pattern: "CANAL", expected_amount: -29.99, expected_amounts: [] });
+    expect(matchesPattern(p, { account_id: "a", raw_label: "CANAL+", amount: -29.99, operation_date: "2026-06-06" })).toBe(true);
+  });
+});
 
 describe("recurringKey", () => {
   it("drops volatile digits to group monthly variants", () => {

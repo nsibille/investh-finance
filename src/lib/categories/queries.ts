@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type {
   CategoryTypeNode,
@@ -5,7 +6,12 @@ import type {
   SubcategoryOption,
 } from "./types";
 
-export async function getCategoryTree(): Promise<CategoryTypeNode[]> {
+// `cache()` dédoublonne les appels identiques dans un même rendu serveur :
+// l'arbre des catégories (3 requêtes) n'est chargé qu'une fois par requête,
+// même s'il est consommé par plusieurs helpers (options, display maps…).
+export const getCategoryTree = cache(async function getCategoryTree(): Promise<
+  CategoryTypeNode[]
+> {
   const supabase = await createClient();
 
   const [{ data: types }, { data: categories }, { data: subcategories }] =
@@ -48,10 +54,33 @@ export async function getCategoryTree(): Promise<CategoryTypeNode[]> {
     ...type,
     categories: catsByType.get(type.id) ?? [],
   }));
-}
+});
+
+/** Slug du type réservé aux virements internes (exclu des KPIs revenus/dépenses). */
+export const TRANSFER_TYPE_SLUG = "virements";
+
+/**
+ * Ids des sous-catégories de virement interne, dérivés de l'arbre (en cache).
+ * Servent à exclure les virements des agrégats revenus/dépenses (ils ne sont
+ * ni un revenu ni une dépense : l'argent circule entre comptes).
+ */
+export const getTransferSubcategoryIds = cache(
+  async function getTransferSubcategoryIds(): Promise<Set<string>> {
+    const tree = await getCategoryTree();
+    const ids = new Set<string>();
+    for (const type of tree) {
+      if (type.slug !== TRANSFER_TYPE_SLUG) continue;
+      for (const cat of type.categories)
+        for (const sub of cat.subcategories) ids.add(sub.id);
+    }
+    return ids;
+  },
+);
 
 /** Flat options "Type / Catégorie / Sous-catégorie" for pickers. */
-export async function getSubcategoryOptions(): Promise<SubcategoryOption[]> {
+export const getSubcategoryOptions = cache(async function getSubcategoryOptions(): Promise<
+  SubcategoryOption[]
+> {
   const tree = await getCategoryTree();
   const options: SubcategoryOption[] = [];
   for (const type of tree) {
@@ -73,4 +102,4 @@ export async function getSubcategoryOptions(): Promise<SubcategoryOption[]> {
     }
   }
   return options;
-}
+});

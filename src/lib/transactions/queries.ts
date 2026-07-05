@@ -1,4 +1,6 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { getCategoryTree } from "@/lib/categories/queries";
 import type {
   Transaction,
   TransactionRow,
@@ -10,36 +12,55 @@ import type {
 
 const DEFAULT_PER_PAGE = 50;
 
-export async function getCategoryDisplayMap(): Promise<
+/** Colonnes réellement affichées : on évite de tirer `search_vector`, `dedup_hash`, etc. */
+const LIST_COLUMNS =
+  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring" as const;
+
+/** Colonnes du détail : ajoute purchase_id, merchant_id, recurring_pattern_id. */
+const DETAIL_COLUMNS =
+  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id, recurring_pattern_id" as const;
+
+type TransactionRecord = Pick<
+  Transaction,
+  | "id"
+  | "account_id"
+  | "subcategory_id"
+  | "operation_date"
+  | "value_date"
+  | "label"
+  | "raw_label"
+  | "amount"
+  | "currency"
+  | "status"
+  | "note"
+  | "is_recurring"
+>;
+
+// Dérivé de l'arbre des catégories (mis en cache) : plus aucune requête
+// dédiée, et memoïsé par requête pour être partagé entre les pages.
+export const getCategoryDisplayMap = cache(async function getCategoryDisplayMap(): Promise<
   Map<string, CategoryDisplay>
 > {
-  const supabase = await createClient();
-  const [{ data: types }, { data: cats }, { data: subs }] = await Promise.all([
-    supabase.from("category_types").select("id, name, is_income, color"),
-    supabase.from("categories").select("id, name, color, category_type_id"),
-    supabase.from("subcategories").select("id, name, category_id"),
-  ]);
-
-  const typeMap = new Map((types ?? []).map((t) => [t.id, t]));
-  const catMap = new Map((cats ?? []).map((c) => [c.id, c]));
+  const tree = await getCategoryTree();
   const out = new Map<string, CategoryDisplay>();
-
-  for (const sub of subs ?? []) {
-    const cat = catMap.get(sub.category_id);
-    const type = cat ? typeMap.get(cat.category_type_id) : undefined;
-    out.set(sub.id, {
-      subcategory_id: sub.id,
-      subcategoryName: sub.name,
-      categoryName: cat?.name ?? "",
-      typeName: type?.name ?? "",
-      color: cat?.color ?? type?.color ?? null,
-      isIncome: type?.is_income ?? false,
-    });
+  for (const type of tree) {
+    for (const cat of type.categories) {
+      for (const sub of cat.subcategories) {
+        out.set(sub.id, {
+          subcategory_id: sub.id,
+          subcategoryName: sub.name,
+          categoryName: cat.name,
+          typeName: type.name,
+          color: cat.color ?? type.color ?? null,
+          isIncome: type.is_income,
+        });
+      }
+    }
   }
   return out;
-}
+});
 
-export async function getAccountDisplayMap(): Promise<
+export const getAccountDisplayMap = cache(async function getAccountDisplayMap(): Promise<
   Map<string, AccountDisplay>
 > {
   const supabase = await createClient();
@@ -52,10 +73,10 @@ export async function getAccountDisplayMap(): Promise<
       { id: a.id, name: a.name, color: a.color, type: a.type },
     ]),
   );
-}
+});
 
 function enrich(
-  tx: Transaction,
+  tx: TransactionRecord,
   accounts: Map<string, AccountDisplay>,
   categories: Map<string, CategoryDisplay>,
 ): TransactionRow {
@@ -87,7 +108,7 @@ export async function getTransactionsPage(
 
   let query = supabase
     .from("transactions")
-    .select("*", { count: "exact" });
+    .select(LIST_COLUMNS, { count: "exact" });
 
   if (filters.accountId) query = query.eq("account_id", filters.accountId);
   if (filters.status) query = query.eq("status", filters.status);
@@ -118,9 +139,9 @@ export async function getTransactionsPage(
   query = query.order("created_at", { ascending: false });
   query = query.range((page - 1) * perPage, page * perPage - 1);
 
-  const { data, count } = await query;
-
-  const [accounts, categories] = await Promise.all([
+  // Les maps de référence ne dépendent pas des lignes : on lance tout en parallèle.
+  const [{ data, count }, accounts, categories] = await Promise.all([
+    query,
     getAccountDisplayMap(),
     getCategoryDisplayMap(),
   ]);
@@ -137,17 +158,38 @@ export async function getTransaction(
   id: string,
 ): Promise<TransactionRow | null> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (!data) return null;
-  const [accounts, categories] = await Promise.all([
+  const [{ data }, accounts, categories] = await Promise.all([
+    supabase.from("transactions").select(DETAIL_COLUMNS).eq("id", id).maybeSingle(),
     getAccountDisplayMap(),
     getCategoryDisplayMap(),
   ]);
-  return enrich(data, accounts, categories);
+  if (!data) return null;
+  const row = enrich(data, accounts, categories);
+  if (data.purchase_id) {
+    const { data: purchase } = await supabase
+      .from("purchases")
+      .select("id, name")
+      .eq("id", data.purchase_id)
+      .maybeSingle();
+    if (purchase) row.purchase = { id: purchase.id, name: purchase.name };
+  }
+  if (data.merchant_id) {
+    const { data: merchant } = await supabase
+      .from("merchants")
+      .select("id, name")
+      .eq("id", data.merchant_id)
+      .maybeSingle();
+    if (merchant) row.merchant = { id: merchant.id, name: merchant.name };
+  }
+  if (data.recurring_pattern_id) {
+    const { data: rec } = await supabase
+      .from("recurring_patterns")
+      .select("id, name")
+      .eq("id", data.recurring_pattern_id)
+      .maybeSingle();
+    if (rec) row.recurring = { id: rec.id, name: rec.name };
+  }
+  return row;
 }
 
 export async function countPending(): Promise<number> {

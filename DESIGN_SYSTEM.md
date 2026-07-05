@@ -500,7 +500,10 @@ Idem avec `--color-bg-subtle` / `--color-text-muted`.
 Idem avec `--color-info-light` / `--color-info-dark` (import preview, transaction nouvelle).
 
 ### `badge-status-duplicate`
-Idem avec `--color-bg-subtle` / `--color-text-disabled` + texte rayé (import preview).
+Idem avec `--color-bg-subtle` / `--color-text-disabled` + texte rayé (import preview, doublon déjà en base).
+
+### `badge-status-duplicate-file`
+Idem avec `--color-warning-light` / `--color-warning-dark` (import preview, doublon répété dans le fichier importé).
 
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
@@ -763,7 +766,15 @@ Variante pour confirmer une action destructive (avec `btn-danger-md`).
 ```
 
 ### `table-import-preview`
-Variante avec colonne "Action" (switch include/exclude) + colonne dedup status.
+Variante avec colonnes "Compte", "Catégorie" (édition inline `import-cat-edit`),
+"Action" (switch include/exclude) + colonne dedup status. Ligne
+`tr[data-duplicate="file"]` : doublon potentiel en rouge léger (ré-importable).
+
+### `import-cat-edit`
+**Bouton d'édition inline de catégorie dans l'aperçu d'import** — bordure
+pointillée, affiche le libellé de la catégorie proposée par les règles ;
+au clic, remplacé par un `input-select-md` (montage paresseux, un seul à la
+fois pour tenir des milliers de lignes).
 
 ### `table-top-transactions`
 Variante compact pour widgets analytics (top 10 dépenses).
@@ -1053,7 +1064,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-dot` | Status | Pastille colorée simple | auto |
 | `badge-recurring-active` | Status | Badge récurrente OK | auto |
 | `badge-recurring-missing` | Status | Badge récurrente manquante | auto |
-| `badge-status-duplicate` | Status | Badge import row doublon | auto |
+| `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |
+| `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |
 | `badge-status-new` | Status | Badge import row nouvelle | auto |
 | `badge-status-pending` | Status | Badge transaction à valider | auto |
@@ -1123,6 +1135,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `spinner-md` | Feedback | Spinner medium (défaut) | auto |
 | `spinner-sm` | Feedback | Spinner small | auto |
 | `table-import-preview` | Table | Variante preview import | auto |
+| `import-cat-edit` | Import | Édition inline catégorie (aperçu import) | auto |
 | `table-top-transactions` | Table | Variante top dépenses compact | auto |
 | `table-transactions` | Table | Table principale transactions | auto |
 | `toast-error` | Feedback | Toast erreur | auto |

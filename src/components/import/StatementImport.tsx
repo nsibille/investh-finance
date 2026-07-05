@@ -2,25 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, ShoppingBag, Store, Repeat, Users, RefreshCw, X } from "lucide-react";
+import { FileText, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/ui/IconButton";
 import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
-import { Amount } from "@/components/ui/Amount";
 import { ImportRowBadge } from "@/components/ui/Badge";
 import { Toggle, Checkbox } from "@/components/ui/Checkbox";
-import { ImportCategoryEditor } from "./ImportCategoryEditor";
-import { PurchaseAttachModal } from "./PurchaseAttachModal";
-import { MerchantAttachModal } from "./MerchantAttachModal";
-import { RecurringAttachModal } from "./RecurringAttachModal";
-import { PersonAttachModal } from "./PersonAttachModal";
+import {
+  TransactionEditorTable,
+  type EditorRowVM,
+  type EditorHandlers,
+} from "@/components/transactions/TransactionEditorTable";
 import { useToast } from "@/hooks/useToast";
-import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport, rematchPreviewPurchases } from "@/server/actions/import";
 import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
 import { addMerchantRule, createMerchantRuleFromLabel } from "@/server/actions/merchants";
@@ -66,21 +63,14 @@ export function StatementImport({
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<number | null>(null);
   // Filtre rapide : n'afficher que les lignes sans catégorie.
   const [onlyUncat, setOnlyUncat] = useState(false);
   // Catégories créées à la volée pendant cette session d'import.
   const [extraOptions, setExtraOptions] = useState<SubcategoryOption[]>([]);
-  // Achats (dont créés à la volée) + ligne dont on rattache un achat.
+  // Achats créés à la volée pendant cette session d'import.
   const [extraPurchases, setExtraPurchases] = useState<PurchaseOption[]>([]);
-  const [purchaseRow, setPurchaseRow] = useState<number | null>(null);
-  // Enseignes (dont créées à la volée) + ligne dont on rattache une enseigne.
+  // Enseignes créées à la volée pendant cette session d'import.
   const [extraMerchants, setExtraMerchants] = useState<MerchantOption[]>([]);
-  const [merchantRow, setMerchantRow] = useState<number | null>(null);
-  // Ligne dont on associe une récurrente.
-  const [recurringRow, setRecurringRow] = useState<number | null>(null);
-  // Ligne dont on édite le partage entre personnes.
-  const [personRow, setPersonRow] = useState<number | null>(null);
   // Recalcul des rattachements d'achats (achats créés après le parse).
   const [rematching, setRematching] = useState(false);
 
@@ -478,7 +468,6 @@ export function StatementImport({
     setError(null);
     setParsing(true);
     setPreview(null);
-    setEditing(null);
     try {
       const fd = new FormData();
       fd.append("accountId", accountId);
@@ -502,6 +491,7 @@ export function StatementImport({
           ...r,
           // Virement interne détecté (ou règle) appliqué par défaut.
           categoryId: r.initialSubcategoryId ?? r.suggestedSubcategoryId ?? null,
+          note: r.note ?? null,
           include: !r.duplicate,
         })),
       });
@@ -540,6 +530,7 @@ export function StatementImport({
       // compris le détachement explicite (null).
       base.merchant_id = r.merchantId ?? null;
       if (r.persons && r.persons.personIds.length > 0) base.persons = r.persons;
+      if (r.note?.trim()) base.note = r.note.trim();
       return base;
     });
 
@@ -570,6 +561,62 @@ export function StatementImport({
   const categorizedCount = preview?.rows.filter((r) => r.categoryId).length ?? 0;
   const uncategorizedCount = totalRows - categorizedCount;
   const catPct = totalRows > 0 ? Math.round((categorizedCount / totalRows) * 100) : 0;
+
+  // Lignes de l'aperçu → vue normalisée de la table éditrice partagée.
+  const editorRows: EditorRowVM[] = useMemo(
+    () =>
+      (preview?.rows ?? []).map((r, i) => ({
+        key: String(i),
+        operationDate: r.operation_date,
+        account: preview?.multiAccount
+          ? { name: r.connectionLabel ?? "", color: null }
+          : null,
+        label: r.label,
+        amount: r.amount,
+        currency: r.currency,
+        categoryId: r.categoryId,
+        categoryLocked: Boolean(r.purchaseId),
+        purchase: r.purchaseId
+          ? {
+              id: r.purchaseId,
+              name: r.purchaseName ?? "",
+              occurrence: r.purchaseOccurrence ?? null,
+              installmentTotal: r.purchaseInstallmentTotal ?? null,
+              endless: r.purchaseEndless ?? false,
+            }
+          : null,
+        merchant: r.merchantId
+          ? { id: r.merchantId, name: r.merchantName ?? "", locked: r.merchantLocked }
+          : null,
+        recurring: r.recurringId
+          ? { id: r.recurringId, name: r.recurringName ?? "" }
+          : null,
+        personsBadge:
+          r.persons && r.persons.personIds.length > 0
+            ? { count: r.persons.personIds.length, nature: r.persons.nature }
+            : null,
+        personsInitial: r.persons ?? null,
+        note: r.note ?? null,
+        dimmed: !r.include,
+        isExistingDuplicate: r.duplicateReason === "existing",
+      })),
+    [preview],
+  );
+
+  // Adaptateur import : chaque action patche le store (persistance différée au
+  // clic « Importer »), en réutilisant la logique existante (règles, toasts…).
+  const editorHandlers: EditorHandlers = {
+    onAssignCategory: (key, subId) => assignCategory(Number(key), subId),
+    onCreateCategory: (key, name) => handleCreateCategory(Number(key), name),
+    onAttachPurchase: (key, option) => attachPurchase(Number(key), option),
+    onDetachPurchase: (key) => detachPurchase(Number(key)),
+    onAttachMerchant: (key, option) => attachMerchant(Number(key), option),
+    onDetachMerchant: (key) => detachMerchant(Number(key)),
+    onAttachRecurring: (key, option) => attachRecurring(Number(key), option),
+    onCreateRecurring: (key, name) => createRecurring(Number(key), name),
+    onSharePersons: (key, value) => patchRow(Number(key), { persons: value }),
+    onSaveNote: (key, note) => patchRow(Number(key), { note }),
+  };
 
   return (
     <Card>
@@ -670,235 +717,46 @@ export function StatementImport({
               </Button>
             </div>
 
-            <table className="table-import-preview">
-              <thead>
-                <tr>
-                  <th style={{ width: 108 }}>Date</th>
-                  {preview.multiAccount && <th style={{ width: 120 }}>Compte</th>}
-                  <th>Libellé</th>
-                  <th style={{ width: 190 }}>Catégorie</th>
-                  <th style={{ width: 120, textAlign: "right" }}>Montant</th>
+            <TransactionEditorTable
+              rows={editorRows}
+              handlers={editorHandlers}
+              subcategoryOptions={allOptions}
+              purchaseOptions={allPurchases}
+              merchantOptions={allMerchants}
+              recurringOptions={recurringOptions}
+              personOptions={personOptions}
+              showAccount={preview.multiAccount}
+              filterRow={onlyUncat ? (row) => !row.categoryId : undefined}
+              trailingHeader={
+                <>
                   <th style={{ width: 96 }}>Statut</th>
                   <th style={{ width: 72 }}>Inclure</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.rows.map((r, i) => {
-                  if (onlyUncat && r.categoryId) return null;
-                  return (
-                    <tr
-                      key={i}
-                      data-excluded={!r.include || undefined}
-                      data-duplicate={r.duplicateReason === "existing" ? "existing" : undefined}
-                    >
-                      <td>{formatShortDate(r.operation_date)}</td>
-                      {preview.multiAccount && (
-                        <td data-col="account" style={{ color: "var(--color-text-muted)" }} title={r.connectionLabel}>
-                          {r.connectionLabel}
-                        </td>
-                      )}
-                      <td data-col="label">
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                          <span>{r.label}</span>
-                          {r.recurringName && (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
-                              <Repeat size={12} aria-hidden />
-                              Récurrent · {r.recurringName}
-                            </span>
-                          )}
-                          {r.merchantId ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                              <Store size={12} aria-hidden />
-                              {r.merchantLocked ? (
-                                <span title="Enseigne imposée par l'achat rattaché">
-                                  {r.merchantName}
-                                </span>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => setMerchantRow(i)}
-                                    style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
-                                  >
-                                    {r.merchantName}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-label="Détacher l'enseigne"
-                                    onClick={() => detachMerchant(i)}
-                                    style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
-                                  >
-                                    <X size={11} aria-hidden />
-                                  </button>
-                                </>
-                              )}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setMerchantRow(i)}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
-                            >
-                              <Store size={12} aria-hidden />
-                              Enseigne…
-                            </button>
-                          )}
-                          {r.persons && r.persons.personIds.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => setPersonRow(i)}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
-                            >
-                              <Users size={12} aria-hidden />
-                              {r.persons.personIds.length} personne
-                              {r.persons.personIds.length > 1 ? "s" : ""} ·{" "}
-                              {r.persons.nature === "gift" ? "cadeau" : "dette"}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setPersonRow(i)}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
-                            >
-                              <Users size={12} aria-hidden />
-                              Partager…
-                            </button>
-                          )}
-                          {r.purchaseId && (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
-                              <ShoppingBag size={12} aria-hidden />
-                              <span>{r.purchaseName}</span>
-                              {(() => {
-                                const total = r.purchaseInstallmentTotal ?? 0;
-                                // Occurrence affichée dès qu'il y a un échéancier (> 1) ou un abonnement sans fin.
-                                if (r.purchaseOccurrence == null || (!r.purchaseEndless && total <= 1)) return null;
-                                return (
-                                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
-                                    {r.purchaseOccurrence}/{r.purchaseEndless ? "∞" : total}
-                                  </span>
-                                );
-                              })()}
-                              <button
-                                type="button"
-                                aria-label="Détacher l'achat"
-                                onClick={() => detachPurchase(i)}
-                                style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
-                              >
-                                <X size={11} aria-hidden />
-                              </button>
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td data-col="category">
-                        {r.purchaseId ? (
-                          <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                            {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Catégorie de l'achat"}
-                          </span>
-                        ) : editing === i ? (
-                          <ImportCategoryEditor
-                            options={allOptions}
-                            value={r.categoryId}
-                            onSelect={(id) => assignCategory(i, id)}
-                            onCreate={(name) => handleCreateCategory(i, name)}
-                            onTabNext={() =>
-                              setEditing(i + 1 < preview.rows.length ? i + 1 : null)
-                            }
-                            onClose={() => setEditing(null)}
-                          />
-                        ) : (
-                          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                            <button
-                              type="button"
-                              className="import-cat-edit"
-                              onClick={() => setEditing(i)}
-                              data-empty={r.categoryId ? undefined : "true"}
-                            >
-                              {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Non catégorisée"}
-                            </button>
-                            <IconButton label="Rattacher un achat" onClick={() => setPurchaseRow(i)}>
-                              <ShoppingBag size={15} />
-                            </IconButton>
-                            <IconButton label="Associer une récurrente" onClick={() => setRecurringRow(i)}>
-                              <Repeat size={15} />
-                            </IconButton>
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <Amount value={r.amount} />
-                      </td>
-                      <td>
-                        <ImportRowBadge kind={r.duplicateReason === "existing" ? "duplicate" : "new"} />
-                      </td>
-                      <td>
-                        <Toggle
-                          checked={r.include}
-                          disabled={r.duplicateReason === "existing"}
-                          onChange={() => patchRow(i, { include: !r.include })}
-                          aria-label="Inclure"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                </>
+              }
+              renderTrailing={(row) => {
+                const i = Number(row.key);
+                const src = preview.rows[i];
+                if (!src) return null;
+                return (
+                  <>
+                    <td>
+                      <ImportRowBadge kind={src.duplicateReason === "existing" ? "duplicate" : "new"} />
+                    </td>
+                    <td>
+                      <Toggle
+                        checked={src.include}
+                        disabled={src.duplicateReason === "existing"}
+                        onChange={() => patchRow(i, { include: !src.include })}
+                        aria-label="Inclure"
+                      />
+                    </td>
+                  </>
+                );
+              }}
+            />
           </>
         )}
       </div>
-
-      <PurchaseAttachModal
-        open={purchaseRow !== null}
-        onClose={() => setPurchaseRow(null)}
-        purchaseOptions={allPurchases}
-        fromTransaction={
-          purchaseRow !== null && preview?.rows[purchaseRow]
-            ? {
-                operationDate: preview.rows[purchaseRow].operation_date,
-                amount: preview.rows[purchaseRow].amount,
-                label: preview.rows[purchaseRow].label,
-              }
-            : null
-        }
-        onAttach={(option) => {
-          if (purchaseRow !== null) attachPurchase(purchaseRow, option);
-        }}
-      />
-
-      <MerchantAttachModal
-        open={merchantRow !== null}
-        onClose={() => setMerchantRow(null)}
-        merchantOptions={allMerchants}
-        onAttach={(option) => {
-          if (merchantRow !== null) attachMerchant(merchantRow, option);
-        }}
-      />
-
-      <RecurringAttachModal
-        open={recurringRow !== null}
-        onClose={() => setRecurringRow(null)}
-        options={recurringOptions}
-        onAttach={(option) => {
-          if (recurringRow !== null) attachRecurring(recurringRow, option);
-        }}
-        onCreate={(name) => {
-          if (recurringRow !== null) createRecurring(recurringRow, name);
-        }}
-      />
-
-      <PersonAttachModal
-        key={personRow ?? "none"}
-        open={personRow !== null}
-        onClose={() => setPersonRow(null)}
-        persons={personOptions}
-        initial={
-          personRow !== null ? (preview?.rows[personRow]?.persons ?? null) : null
-        }
-        onAttach={(value) => {
-          if (personRow !== null) patchRow(personRow, { persons: value });
-        }}
-      />
     </Card>
   );
 }

@@ -131,6 +131,8 @@ export async function importParsedTransactions(
           applied_rule_id: appliedRuleId,
           merchant_id: merchantId,
           purchase_id: p.purchase_id ?? null,
+          // Note libre saisie dans l'aperçu (annotation directe).
+          note: p.note?.trim() ? p.note.trim() : null,
           is_recurring: Boolean(pattern),
           recurring_pattern_id: pattern?.id ?? null,
           // Ventilation entre personnes choisie dans l'aperçu (nature globale).

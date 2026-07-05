@@ -16,11 +16,12 @@ interface Item {
 }
 
 /**
- * Éditeur de catégorie inline pour l'aperçu d'import : au clic, saisie clavier
- * immédiate + autocomplétion. Entrée valide la catégorie surlignée ; Tab valide
- * et passe à la catégorie de la ligne suivante ; Échap/clic dehors annule.
+ * Éditeur de catégorie inline (aperçu d'import + liste de transactions) : au
+ * clic, saisie clavier immédiate + autocomplétion. Entrée valide la catégorie
+ * surlignée ; Tab valide et passe à la catégorie de la ligne suivante ;
+ * Échap/clic dehors annule.
  */
-export function ImportCategoryEditor({
+export function CategoryInlineEditor({
   options,
   onSelect,
   onCreate,

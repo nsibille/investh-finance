@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryTree } from "@/lib/categories/queries";
+import { installmentOccurrence } from "@/lib/purchases/installments";
 import type {
   Transaction,
   TransactionRow,
@@ -175,6 +176,7 @@ async function attachRelations(
   supabase: Awaited<ReturnType<typeof createClient>>,
   records: {
     id: string;
+    operation_date: string;
     purchase_id: string | null;
     merchant_id: string | null;
     recurring_pattern_id: string | null;
@@ -191,7 +193,12 @@ async function attachRelations(
 
   const [purchases, merchants, recurrings, shares] = await Promise.all([
     purchaseIds.length
-      ? supabase.from("purchases").select("id, name").in("id", purchaseIds)
+      ? supabase
+          .from("purchases")
+          .select(
+            "id, name, is_recurring, recurrence_end, installments:purchase_installments(month)",
+          )
+          .in("id", purchaseIds)
       : Promise.resolve({ data: [] }),
     merchantIds.length
       ? supabase.from("merchants").select("id, name").in("id", merchantIds)
@@ -209,9 +216,29 @@ async function attachRelations(
 
   const nameMap = (data: { id: string; name: string }[] | null) =>
     new Map((data ?? []).map((x) => [x.id, x.name]));
-  const purchaseName = nameMap(purchases.data as { id: string; name: string }[]);
   const merchantName = nameMap(merchants.data as { id: string; name: string }[]);
   const recurringName = nameMap(recurrings.data as { id: string; name: string }[]);
+
+  // Achat : nom + mois d'échéancier (triés) + abonnement sans fin, pour dériver
+  // l'occurrence X/Y par transaction (mois de l'opération vs mois de départ).
+  const purchaseInfo = new Map(
+    ((purchases.data ?? []) as {
+      id: string;
+      name: string;
+      is_recurring: boolean;
+      recurrence_end: string | null;
+      installments: { month: string }[] | null;
+    }[]).map((p) => [
+      p.id,
+      {
+        name: p.name,
+        months: (p.installments ?? [])
+          .map((i) => i.month)
+          .sort((a, b) => a.localeCompare(b)),
+        endless: !!(p.is_recurring && !p.recurrence_end),
+      },
+    ]),
+  );
 
   const shareCount = new Map<string, number>();
   for (const s of (shares.data ?? []) as { transaction_id: string }[]) {
@@ -220,8 +247,17 @@ async function attachRelations(
 
   records.forEach((rec, i) => {
     const row = rows[i];
-    if (rec.purchase_id && purchaseName.has(rec.purchase_id)) {
-      row.purchase = { id: rec.purchase_id, name: purchaseName.get(rec.purchase_id)! };
+    const pInfo = rec.purchase_id ? purchaseInfo.get(rec.purchase_id) : null;
+    if (rec.purchase_id && pInfo) {
+      const startMonth = pInfo.months[0] ?? null;
+      const txMonth = rec.operation_date.slice(0, 7);
+      row.purchase = {
+        id: rec.purchase_id,
+        name: pInfo.name,
+        occurrence: startMonth ? installmentOccurrence(startMonth, txMonth) : null,
+        installmentTotal: pInfo.months.length,
+        endless: pInfo.endless,
+      };
     }
     if (rec.merchant_id && merchantName.has(rec.merchant_id)) {
       row.merchant = { id: rec.merchant_id, name: merchantName.get(rec.merchant_id)! };

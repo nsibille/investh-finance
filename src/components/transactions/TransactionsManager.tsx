@@ -33,6 +33,7 @@ import {
   addMerchantRule,
 } from "@/server/actions/merchants";
 import { deleteRule } from "@/server/actions/rules";
+import { installmentOccurrence } from "@/lib/purchases/installments";
 import {
   associateTransactionToRecurring,
   undoAssociateRecurring,
@@ -64,7 +65,7 @@ type RowOverride = Partial<{
   subcategory_id: string | null;
   status: TransactionRow["status"];
   note: string | null;
-  purchase: { id: string; name: string } | null;
+  purchase: TransactionRow["purchase"];
   merchant: { id: string; name: string } | null;
   recurring: { id: string; name: string } | null;
   personsSummary: { count: number; nature: SplitNature } | null;
@@ -177,8 +178,18 @@ export function TransactionsManager({
   async function attachPurchase(id: string, option: PurchaseOption) {
     const res = await attachTransactionToPurchase(id, option.id);
     if (!res.ok) return toast.error(res.error);
+    const row = rowById.get(id);
+    const startMonth = option.installmentMonths[0] ?? null;
+    const txMonth = row?.operation_date.slice(0, 7) ?? null;
     patch(id, {
-      purchase: { id: option.id, name: option.name },
+      purchase: {
+        id: option.id,
+        name: option.name,
+        occurrence:
+          startMonth && txMonth ? installmentOccurrence(startMonth, txMonth) : null,
+        installmentTotal: option.installmentMonths.length,
+        endless: option.endless,
+      },
       ...(option.subcategoryId
         ? { subcategory_id: option.subcategoryId, status: "validated" as const }
         : {}),
@@ -413,7 +424,15 @@ export function TransactionsManager({
       currency: row.currency,
       categoryId: r.subcategory_id,
       categoryLocked: Boolean(r.purchase),
-      purchase: r.purchase ?? null,
+      purchase: r.purchase
+        ? {
+            id: r.purchase.id,
+            name: r.purchase.name,
+            occurrence: r.purchase.occurrence ?? null,
+            installmentTotal: r.purchase.installmentTotal ?? null,
+            endless: r.purchase.endless ?? false,
+          }
+        : null,
       merchant: r.merchant ?? null,
       recurring: r.recurring ?? null,
       personsBadge: r.personsSummary ?? null,

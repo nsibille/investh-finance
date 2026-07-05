@@ -36,7 +36,15 @@ export interface TransactionRow {
   account: AccountDisplay | null;
   category: CategoryDisplay | null;
   /** Achat rattaché (catégorie héritée, verrou sur le sélecteur). */
-  purchase?: { id: string; name: string } | null;
+  purchase?: {
+    id: string;
+    name: string;
+    /** Occurrence 1-based de la mensualité et total (affiché « X/Y »). */
+    occurrence?: number | null;
+    installmentTotal?: number | null;
+    /** Abonnement sans fin (occurrence X/∞). */
+    endless?: boolean;
+  } | null;
   /** Enseigne rattachée (catégorie par défaut appliquée, surchargeable). */
   merchant?: { id: string; name: string } | null;
   /** Récurrente rattachée. */

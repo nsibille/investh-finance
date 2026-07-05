@@ -7,6 +7,7 @@ import { getMerchantOptions } from "@/lib/merchants/queries";
 import { getRecurringOptions } from "@/lib/recurring/queries";
 import { getTags, getTagsForTransaction } from "@/lib/tags/queries";
 import { getAttachments } from "@/lib/attachments/queries";
+import { getPersonOptions, getSharesForTransaction } from "@/lib/persons/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ export default async function TransactionDetailPage({
     tags,
     allTags,
     attachments,
+    personOptions,
+    split,
   ] = await Promise.all([
     getTransaction(id),
     getSubcategoryOptions(),
@@ -32,6 +35,8 @@ export default async function TransactionDetailPage({
     getTagsForTransaction(id),
     getTags(),
     getAttachments(id),
+    getPersonOptions(),
+    getSharesForTransaction(id),
   ]);
 
   if (!tx) notFound();
@@ -53,6 +58,8 @@ export default async function TransactionDetailPage({
           tags={tags}
           allTags={allTags}
           attachments={attachments}
+          personOptions={personOptions}
+          split={split}
         />
       </div>
     </>

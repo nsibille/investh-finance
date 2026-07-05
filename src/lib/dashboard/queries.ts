@@ -7,6 +7,7 @@ import {
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { getTransferSubcategoryIds } from "@/lib/categories/queries";
+import { getPersonalAmountAdjustments } from "@/lib/persons/queries";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -40,14 +41,15 @@ export async function getMonthlyKpis(ref: Date): Promise<MonthlyKpis> {
   const monthEnd = endOfMonth(ref);
   const prevStart = startOfMonth(subMonths(ref, 1));
 
-  const [{ data }, transferIds] = await Promise.all([
+  const [{ data }, transferIds, { debtByTx, repaymentTxIds }] = await Promise.all([
     supabase
       .from("transactions")
-      .select("operation_date, amount, subcategory_id")
+      .select("id, operation_date, amount, subcategory_id")
       .eq("status", "validated")
       .gte("operation_date", iso(prevStart))
       .lte("operation_date", iso(monthEnd)),
     getTransferSubcategoryIds(),
+    getPersonalAmountAdjustments(),
   ]);
 
   const cur: number[] = [];
@@ -55,7 +57,11 @@ export async function getMonthlyKpis(ref: Date): Promise<MonthlyKpis> {
   const startStr = iso(monthStart);
   for (const t of data ?? []) {
     if (t.subcategory_id && transferIds.has(t.subcategory_id)) continue;
-    (t.operation_date >= startStr ? cur : prev).push(Number(t.amount));
+    // Remboursement rattaché : pas un revenu (la créance est déjà déduite).
+    if (repaymentTxIds.has(t.id)) continue;
+    // Créance déduite : on ne garde que ma part (+ les cadeaux).
+    const amount = Number(t.amount) + (debtByTx.get(t.id) ?? 0);
+    (t.operation_date >= startStr ? cur : prev).push(amount);
   }
   return { current: computeKpis(cur), previous: computeKpis(prev) };
 }
@@ -117,14 +123,15 @@ export async function getMonthlyTrend(
   const monthEnd = endOfMonth(ref);
   const firstStart = startOfMonth(subMonths(ref, months - 1));
 
-  const [{ data }, transferIds] = await Promise.all([
+  const [{ data }, transferIds, { debtByTx, repaymentTxIds }] = await Promise.all([
     supabase
       .from("transactions")
-      .select("operation_date, amount, subcategory_id")
+      .select("id, operation_date, amount, subcategory_id")
       .eq("status", "validated")
       .gte("operation_date", iso(firstStart))
       .lte("operation_date", iso(monthEnd)),
     getTransferSubcategoryIds(),
+    getPersonalAmountAdjustments(),
   ]);
 
   const buckets = new Map<string, { revenus: number; depenses: number }>();
@@ -135,10 +142,11 @@ export async function getMonthlyTrend(
 
   for (const t of data ?? []) {
     if (t.subcategory_id && transferIds.has(t.subcategory_id)) continue;
+    if (repaymentTxIds.has(t.id)) continue;
     const key = t.operation_date.slice(0, 7);
     const bucket = buckets.get(key);
     if (!bucket) continue;
-    const a = Number(t.amount);
+    const a = Number(t.amount) + (debtByTx.get(t.id) ?? 0);
     if (a > 0) bucket.revenus += a;
     else bucket.depenses += -a;
   }

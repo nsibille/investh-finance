@@ -14,6 +14,15 @@ interface ImportOptions {
   sourceStoragePath?: string | null;
 }
 
+/** Répartit `total` en `n` parts égales (le reste au centime va à la 1re part). */
+function equalShares(total: number, n: number): number[] {
+  if (n <= 0) return [];
+  const each = Math.floor((total / n) * 100) / 100;
+  const parts = new Array(n).fill(each);
+  parts[0] = Math.round((total - each * (n - 1)) * 100) / 100;
+  return parts;
+}
+
 /**
  * Shared import pipeline: dedup, rule categorisation, bulk insert and
  * import bookkeeping. Used by every transaction source (bank API, CSV…).
@@ -124,11 +133,23 @@ export async function importParsedTransactions(
           purchase_id: p.purchase_id ?? null,
           is_recurring: Boolean(pattern),
           recurring_pattern_id: pattern?.id ?? null,
+          // Ventilation entre personnes choisie dans l'aperçu (nature globale).
+          split_nature:
+            p.persons && p.persons.personIds.length > 0 ? p.persons.nature : null,
           validated_at: status === "validated" ? nowIso : null,
           dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
         };
       },
     );
+
+    // Plans de ventilation indexés par dedup_hash (résout l'id après insert).
+    const personPlans = parsed
+      .map((p, i) => ({
+        hash: rows[i].dedup_hash,
+        amount: p.amount,
+        persons: p.persons,
+      }))
+      .filter((x) => x.persons && x.persons.personIds.length > 0);
 
     const batch = dedupeBatch(rows);
 
@@ -138,7 +159,7 @@ export async function importParsedTransactions(
         onConflict: "account_id,dedup_hash",
         ignoreDuplicates: true,
       })
-      .select("id, status, applied_rule_id");
+      .select("id, status, applied_rule_id, dedup_hash");
 
     if (insertErr) throw new Error(insertErr.message);
 
@@ -166,6 +187,35 @@ export async function importParsedTransactions(
           .eq("id", ruleId),
       ),
     );
+
+    // Ventilation entre personnes : parts égales insérées pour les lignes
+    // réellement importées (les doublons ignorés n'ont pas d'id).
+    if (personPlans.length > 0) {
+      const idByHash = new Map(
+        insertedRows.map((r) => [r.dedup_hash, r.id] as const),
+      );
+      const shareRows: {
+        transaction_id: string;
+        person_id: string;
+        share_amount: number;
+      }[] = [];
+      for (const plan of personPlans) {
+        const txId = idByHash.get(plan.hash);
+        if (!txId || !plan.persons) continue;
+        const ids = plan.persons.personIds;
+        const parts = equalShares(Math.abs(plan.amount), ids.length);
+        ids.forEach((personId, k) => {
+          shareRows.push({
+            transaction_id: txId,
+            person_id: personId,
+            share_amount: parts[k],
+          });
+        });
+      }
+      if (shareRows.length > 0) {
+        await supabase.from("transaction_persons").insert(shareRows);
+      }
+    }
 
     await supabase
       .from("imports")

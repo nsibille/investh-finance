@@ -13,6 +13,7 @@ import {
   BarChart3,
   ShoppingBag,
   Store,
+  Users,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/import", label: "Import", icon: Upload },
   { href: "/achats", label: "Achats", icon: ShoppingBag },
   { href: "/enseignes", label: "Enseignes", icon: Store },
+  { href: "/personnes", label: "Personnes", icon: Users },
   { href: "/categories", label: "Catégories", icon: FolderTree },
   { href: "/rules", label: "Règles", icon: Wand2 },
   { href: "/recurring", label: "Récurrentes", icon: Repeat },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -29,6 +29,7 @@ export function PurchaseForm({
   initial,
   subcategoryOptions,
   merchantOptions,
+  installmentsEditor,
   onDone,
 }: {
   mode: "create" | "edit";
@@ -36,6 +37,9 @@ export function PurchaseForm({
   initial?: PurchaseFormInitial;
   subcategoryOptions: SubcategoryOption[];
   merchantOptions: MerchantOption[];
+  /** Éditeur de mensualités affiché en mode édition (l'échéancier n'est
+   *  paramétrable à la volée qu'en création ; en édition on gère ligne à ligne). */
+  installmentsEditor?: ReactNode;
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -217,6 +221,10 @@ export function PurchaseForm({
             )}
           </div>
         </FormField>
+      )}
+
+      {mode === "edit" && installmentsEditor && (
+        <FormField label="Échéancier">{installmentsEditor}</FormField>
       )}
 
       <div

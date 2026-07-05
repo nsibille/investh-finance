@@ -95,10 +95,14 @@ export interface MatchableTx {
 
 const ym = (d: string) => d.slice(0, 7);
 
+/** Tolérance d'appariement des montants : ±5 centimes (arrondis, frais…). */
+export const AMOUNT_MATCH_TOLERANCE = 0.05;
+
 /**
- * Apparie chaque mensualité non réglée à une transaction : même mois, même
- * montant (en valeur absolue), et — si la mensualité a un libellé attendu — le
- * libellé de la transaction le contient. Appariement glouton, 1-pour-1.
+ * Apparie chaque mensualité non réglée à une transaction : même mois, montant
+ * proche (valeur absolue, à ±5 centimes près), et — si la mensualité a un
+ * libellé attendu — le libellé de la transaction le contient. Appariement
+ * glouton, 1-pour-1.
  */
 export function matchInstallmentsToTransactions(
   installments: MatchableInstallment[],
@@ -109,14 +113,14 @@ export function matchInstallmentsToTransactions(
 
   for (const inst of installments) {
     const wantMonth = ym(inst.month);
-    const wantAmount = Math.abs(inst.amount).toFixed(2);
+    const wantAmount = Math.abs(inst.amount);
     const wantLabel = inst.label ? normalizeLabel(inst.label) : null;
 
     const match = transactions.find(
       (t) =>
         !used.has(t.id) &&
         ym(t.operation_date) === wantMonth &&
-        Math.abs(t.amount).toFixed(2) === wantAmount &&
+        Math.abs(Math.abs(t.amount) - wantAmount) <= AMOUNT_MATCH_TOLERANCE + 1e-9 &&
         (!wantLabel || normalizeLabel(t.raw_label).includes(wantLabel)),
     );
     if (match) {

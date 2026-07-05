@@ -128,6 +128,21 @@ describe("matchInstallmentsToTransactions", () => {
     ).toEqual([]);
   });
 
+  it("apparie à ±5 centimes près", () => {
+    // 4 centimes d'écart → match.
+    expect(
+      matchInstallmentsToTransactions([inst({ amount: -100 })], [tx({ amount: -100.04 })]),
+    ).toEqual([{ installmentId: "i1", transactionId: "t1" }]);
+    // Pile 5 centimes → match.
+    expect(
+      matchInstallmentsToTransactions([inst({ amount: -100 })], [tx({ amount: -99.95 })]),
+    ).toEqual([{ installmentId: "i1", transactionId: "t1" }]);
+    // 6 centimes → pas de match.
+    expect(
+      matchInstallmentsToTransactions([inst({ amount: -100 })], [tx({ amount: -100.06 })]),
+    ).toEqual([]);
+  });
+
   it("appariement glouton 1-pour-1 : une transaction n'est utilisée qu'une fois", () => {
     const installments = [inst({ id: "i1" }), inst({ id: "i2" })];
     const pairs = matchInstallmentsToTransactions(installments, [tx({ id: "t1" })]);

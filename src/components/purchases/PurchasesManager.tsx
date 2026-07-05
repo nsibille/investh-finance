@@ -29,13 +29,77 @@ import type { MerchantOption } from "@/lib/merchants/types";
 
 type ModalState =
   | { mode: "create" }
-  | { mode: "edit"; purchase: PurchaseWithDetails }
+  | { mode: "edit"; purchaseId: string }
   | null;
 
 function parseAmount(s: string): number {
   return parseFloat(s.replace(/[\s€]/g, "").replace(",", "."));
 }
 
+/** Lignes de mensualités. `onRemove` fourni → mode édition (bouton supprimer
+ *  sur les mensualités non appariées) ; absent → lecture seule. */
+function InstallmentRows({
+  purchase,
+  onRemove,
+}: {
+  purchase: PurchaseWithDetails;
+  onRemove?: (id: string) => void;
+}) {
+  if (purchase.installments.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+      {purchase.installments.map((inst) => {
+        // Mensualités triées par mois : la 1re est le mois de départ.
+        const startMonth = purchase.installments[0]?.month ?? inst.month;
+        const total = purchase.installments.length;
+        const occurrence = installmentOccurrence(startMonth, inst.month);
+        // Abonnement sans fin : total inconnu → « N/∞ ».
+        const endless = purchase.is_recurring && !purchase.recurrence_end;
+        return (
+          <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
+            <span style={{ flex: 1, textTransform: "capitalize" }}>
+              {formatMonthLabel(inst.month)}
+              {(total > 1 || endless) && (
+                <span style={{ marginLeft: 6, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "none", fontFamily: "var(--font-mono)" }}>
+                  {occurrence}/{endless ? "∞" : total}
+                </span>
+              )}
+            </span>
+            <Amount value={Number(inst.amount)} size="sm" tone="neutral" />
+            {inst.transaction_id ? (
+              <span title="Appariée à une transaction" style={{ color: "var(--color-success)", display: "inline-flex" }}>
+                <Check size={15} aria-hidden />
+              </span>
+            ) : onRemove ? (
+              <IconButton label="Supprimer" onClick={() => onRemove(inst.id)}>
+                <X size={14} />
+              </IconButton>
+            ) : (
+              <span title="Prévue, non appariée" style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                à venir
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Affichage lecture seule de l'échéancier (cartes de la liste des achats). */
+function InstallmentList({ purchase }: { purchase: PurchaseWithDetails }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
+        Mensualités prévisionnelles
+      </span>
+      <InstallmentRows purchase={purchase} />
+    </div>
+  );
+}
+
+/** Édition de l'échéancier (modale d'édition) : suppression ligne à ligne +
+ *  ajout d'une mensualité. En-tête porté par le `FormField` « Échéancier ». */
 function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
   const router = useRouter();
   const toast = useToast();
@@ -64,43 +128,7 @@ function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
-        Mensualités prévisionnelles
-      </span>
-      {purchase.installments.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-          {purchase.installments.map((inst) => {
-            // Mensualités triées par mois : la 1re est le mois de départ.
-            const startMonth = purchase.installments[0]?.month ?? inst.month;
-            const total = purchase.installments.length;
-            const occurrence = installmentOccurrence(startMonth, inst.month);
-            // Abonnement sans fin : total inconnu → « N/∞ ».
-            const endless = purchase.is_recurring && !purchase.recurrence_end;
-            return (
-            <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
-              <span style={{ flex: 1, textTransform: "capitalize" }}>
-                {formatMonthLabel(inst.month)}
-                {(total > 1 || endless) && (
-                  <span style={{ marginLeft: 6, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "none", fontFamily: "var(--font-mono)" }}>
-                    {occurrence}/{endless ? "∞" : total}
-                  </span>
-                )}
-              </span>
-              <Amount value={Number(inst.amount)} size="sm" tone="neutral" />
-              {inst.transaction_id ? (
-                <span title="Appariée à une transaction" style={{ color: "var(--color-success)", display: "inline-flex" }}>
-                  <Check size={15} aria-hidden />
-                </span>
-              ) : (
-                <IconButton label="Supprimer" onClick={() => remove(inst.id)}>
-                  <X size={14} />
-                </IconButton>
-              )}
-            </div>
-            );
-          })}
-        </div>
-      )}
+      <InstallmentRows purchase={purchase} onRemove={remove} />
       <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
         <input
           type="month"
@@ -140,6 +168,13 @@ export function PurchasesManager({
 
   const visible = purchases.filter((p) => showArchived || !p.is_archived);
   const archivedCount = purchases.filter((p) => p.is_archived).length;
+
+  // Résolu depuis les props (et non figé dans l'état) : après ajout/suppression
+  // d'une mensualité + refresh, la modale reflète l'échéancier à jour.
+  const editingPurchase =
+    modal?.mode === "edit"
+      ? purchases.find((p) => p.id === modal.purchaseId) ?? null
+      : null;
 
   async function handleDelete() {
     if (!toDelete) return;
@@ -211,7 +246,7 @@ export function PurchasesManager({
                   <IconButton label={p.is_archived ? "Désarchiver" : "Archiver"} onClick={() => toggleArchive(p)}>
                     {p.is_archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
                   </IconButton>
-                  <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", purchase: p })}>
+                  <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", purchaseId: p.id })}>
                     <Pencil size={16} />
                   </IconButton>
                   <IconButton label="Supprimer" onClick={() => setToDelete(p)}>
@@ -239,9 +274,11 @@ export function PurchasesManager({
                   )}
                 </div>
 
-                <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
-                  <InstallmentEditor purchase={p} />
-                </div>
+                {p.installments.length > 0 && (
+                  <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
+                    <InstallmentList purchase={p} />
+                  </div>
+                )}
               </div>
             </Card>
           ))}
@@ -256,19 +293,22 @@ export function PurchasesManager({
         {modal && (
           <PurchaseForm
             mode={modal.mode}
-            id={modal.mode === "edit" ? modal.purchase.id : undefined}
+            id={modal.mode === "edit" ? modal.purchaseId : undefined}
             initial={
-              modal.mode === "edit"
+              editingPurchase
                 ? {
-                    name: modal.purchase.name,
-                    description: modal.purchase.description,
-                    subcategoryId: modal.purchase.subcategory_id,
-                    merchantId: modal.purchase.merchant_id,
+                    name: editingPurchase.name,
+                    description: editingPurchase.description,
+                    subcategoryId: editingPurchase.subcategory_id,
+                    merchantId: editingPurchase.merchant_id,
                   }
                 : undefined
             }
             subcategoryOptions={subcategoryOptions}
             merchantOptions={merchantOptions}
+            installmentsEditor={
+              editingPurchase ? <InstallmentEditor purchase={editingPurchase} /> : null
+            }
             onDone={() => setModal(null)}
           />
         )}

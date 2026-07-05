@@ -1267,6 +1267,8 @@ body {
   font-family: var(--font-primary); font-size: var(--text-sm); color: var(--color-text-primary);
   position: relative;
 }
+/* En-tête de catégorie cliquable (sélectionne la catégorie parente). */
+.cat-combobox__opt[data-cat="true"] { font-weight: var(--fw-medium); }
 .cat-combobox__opt[data-indent="true"] { padding-left: var(--space-6); }
 .cat-combobox__opt[data-indent="true"]::before {
   content: ""; position: absolute; left: var(--space-3); top: 0; bottom: 0;

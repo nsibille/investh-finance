@@ -26,12 +26,24 @@ export async function createCategory(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalide");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("categories").insert({
-    category_type_id: parsed.data.category_type_id,
-    name: parsed.data.name,
-    color: parsed.data.color ? parsed.data.color : null,
-  });
-  if (error) return fail(error.message);
+  const { data: category, error } = await supabase
+    .from("categories")
+    .insert({
+      category_type_id: parsed.data.category_type_id,
+      name: parsed.data.name,
+      color: parsed.data.color ? parsed.data.color : null,
+    })
+    .select("id")
+    .single();
+  if (error || !category) return fail(error?.message ?? "Création impossible");
+
+  // Sous-catégorie « — » par défaut : garantit que la catégorie parente est
+  // toujours sélectionnable dans les pickers.
+  const { error: subError } = await supabase
+    .from("subcategories")
+    .insert({ category_id: category.id, name: "—", sort_order: 0 });
+  if (subError) return fail(subError.message);
+
   revalidatePath("/categories");
   return { ok: true };
 }

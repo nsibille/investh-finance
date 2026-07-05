@@ -23,6 +23,8 @@ export function NoteCell({
   const [value, setValue] = useState(note ?? "");
   const [saving, setSaving] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  // Aperçu au survol : lecture instantanée du commentaire sans ouvrir l'éditeur.
+  const [hoverCoords, setHoverCoords] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -41,7 +43,18 @@ export function NoteCell({
 
   function openPopover() {
     setValue(note ?? "");
+    setHoverCoords(null);
     setOpen(true);
+  }
+
+  function showHover() {
+    if (!hasNote || open) return;
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = 260;
+    const left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8));
+    setHoverCoords({ top: r.bottom + 4, left });
   }
 
   useEffect(() => {
@@ -90,12 +103,26 @@ export function NoteCell({
         type="button"
         className="note-cell__btn"
         data-filled={hasNote || undefined}
-        aria-label={hasNote ? "Modifier la note" : "Ajouter une note"}
-        title={hasNote ? (note ?? undefined) : "Ajouter une note"}
+        aria-label={hasNote ? "Lire ou modifier la note" : "Ajouter une note"}
         onClick={() => (open ? setOpen(false) : openPopover())}
+        onMouseEnter={showHover}
+        onMouseLeave={() => setHoverCoords(null)}
+        onFocus={showHover}
+        onBlur={() => setHoverCoords(null)}
       >
         <StickyNote size={15} aria-hidden />
       </button>
+
+      {hoverCoords &&
+        !open &&
+        hasNote &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="note-tooltip" style={{ top: hoverCoords.top, left: hoverCoords.left }}>
+            {note}
+          </div>,
+          document.body,
+        )}
 
       {open &&
         coords &&

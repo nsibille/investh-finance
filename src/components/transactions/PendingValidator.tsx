@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
 import { Dot } from "@/components/ui/Badge";
 import { CategorySelect } from "./CategorySelect";
+import { NoteCell } from "./NoteCell";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
@@ -17,6 +18,7 @@ import { formatShortDate } from "@/lib/format/date";
 import {
   validateTransaction,
   setTransactionStatus,
+  updateTransactionNote,
 } from "@/server/actions/transactions";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -35,6 +37,17 @@ export function PendingValidator({
   );
   const [ruleFor, setRuleFor] = useState<TransactionRow | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [notes, setNotes] = useState<Record<string, string | null>>(
+    Object.fromEntries(rows.map((r) => [r.id, r.note])),
+  );
+
+  async function saveNote(id: string, value: string) {
+    const next = value.trim() ? value.trim() : null;
+    const res = await updateTransactionNote(id, value);
+    if (!res.ok) return toast.error(res.error);
+    setNotes((n) => ({ ...n, [id]: next }));
+    toast.success("Note enregistrée");
+  }
 
   function hide(id: string) {
     setHidden((h) => new Set(h).add(id));
@@ -131,6 +144,7 @@ export function PendingValidator({
               <Button variant="ghost" size="sm" leftIcon={<Ban size={14} />} onClick={() => ignore(row)}>
                 Ignorer
               </Button>
+              <NoteCell note={notes[row.id] ?? null} onSave={(v) => saveNote(row.id, v)} />
             </div>
           </div>
         ))}

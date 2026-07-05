@@ -785,11 +785,15 @@ d'import : colonnes "Compte", "Catégorie" (édition inline `import-cat-edit`),
 "Action" (switch include/exclude) + colonne dedup status.
 
 ### `note-cell`
-**Annotation inline d'une transaction** — icône « note » par ligne
-(`note-cell__btn`, pleine `[data-filled]` en primaire si une note existe) qui
-ouvre un éditeur en popover (`note-popover` : `input-textarea-md` +
-Annuler/Enregistrer). Persistance selon le contexte : store d'import ou
-`updateTransactionNote` pour une transaction existante.
+**Annotation / commentaire inline d'une transaction** — icône « note » par ligne
+(`note-cell__btn`, pleine `[data-filled]` en primaire si une note existe).
+- **Survol** (`note-tooltip`) : aperçu en lecture seule du commentaire (max 6
+  lignes) — lecture instantanée sans ouvrir l'éditeur.
+- **Clic** (`note-popover` : `input-textarea-md` + Annuler/Enregistrer) : lecture
+  et édition ; `⌘/Ctrl+Entrée` enregistre, `Échap` ferme.
+- Présent sur tous les listings de transactions (liste, « À valider », aperçu
+  d'import). Persistance selon le contexte : store d'import ou
+  `updateTransactionNote` pour une transaction existante.
 
 ### `import-cat-edit`
 **Bouton d'édition inline de catégorie dans l'aperçu d'import** — bordure

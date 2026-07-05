@@ -25,6 +25,8 @@ import {
 import { createCategoryOnTheFly } from "@/server/actions/categories";
 import {
   attachTransactionToPurchase,
+  attachTransactionToInstallment,
+  createInstallmentForTransaction,
   detachTransaction,
 } from "@/server/actions/purchases";
 import {
@@ -47,7 +49,7 @@ import {
 } from "@/server/actions/persons";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
-import type { PurchaseOption } from "@/lib/purchases/types";
+import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
 import type { PersonOption, SplitNature } from "@/lib/persons/types";
@@ -175,19 +177,35 @@ export function TransactionsManager({
   }
 
   // --- Achat ---------------------------------------------------------------
-  async function attachPurchase(id: string, option: PurchaseOption) {
-    const res = await attachTransactionToPurchase(id, option.id);
+  async function attachPurchase(
+    id: string,
+    option: PurchaseOption,
+    choice: InstallmentChoice,
+  ) {
+    const res =
+      choice.mode === "existing"
+        ? await attachTransactionToInstallment(id, choice.installmentId)
+        : choice.mode === "create"
+          ? await createInstallmentForTransaction(id, option.id)
+          : await attachTransactionToPurchase(id, option.id);
     if (!res.ok) return toast.error(res.error);
     const row = rowById.get(id);
     const startMonth = option.installmentMonths[0] ?? null;
-    const txMonth = row?.operation_date.slice(0, 7) ?? null;
+    // Occurrence : mois de l'échéance remplie, sinon mois de l'opération.
+    const refMonth =
+      choice.mode === "existing"
+        ? choice.month.slice(0, 7)
+        : (row?.operation_date.slice(0, 7) ?? null);
+    // Créer une échéance ajoute une ligne à l'échéancier.
+    const total =
+      option.installmentMonths.length + (choice.mode === "create" ? 1 : 0);
     patch(id, {
       purchase: {
         id: option.id,
         name: option.name,
         occurrence:
-          startMonth && txMonth ? installmentOccurrence(startMonth, txMonth) : null,
-        installmentTotal: option.installmentMonths.length,
+          startMonth && refMonth ? installmentOccurrence(startMonth, refMonth) : null,
+        installmentTotal: total,
         endless: option.endless,
       },
       ...(option.subcategoryId
@@ -198,7 +216,13 @@ export function TransactionsManager({
         : {}),
     });
     router.refresh();
-    toast.success(`Rattachée à l'achat « ${option.name} »`);
+    const suffix =
+      choice.mode === "existing"
+        ? " · échéance remplie"
+        : choice.mode === "create"
+          ? " · échéance créée"
+          : "";
+    toast.success(`Rattachée à l'achat « ${option.name} »${suffix}`);
   }
 
   async function detachPurchase(id: string) {

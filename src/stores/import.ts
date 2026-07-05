@@ -21,6 +21,10 @@ export interface ImportPreviewRow extends ParsedTransaction {
   purchaseInstallmentTotal?: number | null;
   /** Abonnement sans fin : total inconnu (occurrence X/∞). */
   purchaseEndless?: boolean;
+  /** Échéance non appariée choisie à remplir à l'import (adopte le montant réel). */
+  installmentId?: string | null;
+  /** Créer une nouvelle échéance dans l'achat à l'import (mois + montant réel). */
+  installmentCreate?: boolean;
   /** Enseigne rattachée (règle, achat ou choix manuel). */
   merchantId?: string | null;
   merchantName?: string | null;

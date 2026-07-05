@@ -34,6 +34,7 @@ function fail(message: string): { ok: false; error: string } {
 function revalidate() {
   revalidatePath("/achats");
   revalidatePath("/transactions");
+  revalidatePath("/transactions/pending");
 }
 
 export interface PurchaseInput {
@@ -176,6 +177,111 @@ export async function attachTransactionToPurchase(
     .eq("id", purchaseId)
     .maybeSingle();
   if (!purchase) return fail("Achat introuvable");
+
+  const patch: TransactionUpdate = { purchase_id: purchaseId };
+  if (purchase.subcategory_id) {
+    patch.subcategory_id = purchase.subcategory_id;
+    patch.status = "validated";
+    patch.validated_at = new Date().toISOString();
+  }
+  const { error } = await supabase
+    .from("transactions")
+    .update(patch)
+    .eq("id", transactionId);
+  if (error) return fail(error.message);
+  // Appariement automatique : remplit une échéance prévisionnelle non appariée
+  // si le mois + le montant correspondent (comportement « auto »).
+  await matchPurchaseInstallments(purchaseId);
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Rattache une transaction à un achat en remplissant une échéance
+ * prévisionnelle précise (« transaction non matchée » de l'achat). L'échéance
+ * adopte le montant réel de la transaction ; la catégorie de l'achat est héritée.
+ */
+export async function attachTransactionToInstallment(
+  transactionId: string,
+  installmentId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: inst } = await supabase
+    .from("purchase_installments")
+    .select("id, purchase_id, transaction_id")
+    .eq("id", installmentId)
+    .maybeSingle();
+  if (!inst) return fail("Échéance introuvable");
+  if (inst.transaction_id) return fail("Cette échéance est déjà appariée.");
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("amount")
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (!tx) return fail("Transaction introuvable");
+
+  const { data: purchase } = await supabase
+    .from("purchases")
+    .select("subcategory_id")
+    .eq("id", inst.purchase_id)
+    .maybeSingle();
+  if (!purchase) return fail("Achat introuvable");
+
+  // L'échéance adopte le montant réellement constaté et pointe la transaction.
+  const { error: instErr } = await supabase
+    .from("purchase_installments")
+    .update({ transaction_id: transactionId, amount: Number(tx.amount) })
+    .eq("id", installmentId);
+  if (instErr) return fail(instErr.message);
+
+  const patch: TransactionUpdate = { purchase_id: inst.purchase_id };
+  if (purchase.subcategory_id) {
+    patch.subcategory_id = purchase.subcategory_id;
+    patch.status = "validated";
+    patch.validated_at = new Date().toISOString();
+  }
+  const { error } = await supabase
+    .from("transactions")
+    .update(patch)
+    .eq("id", transactionId);
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Crée une nouvelle échéance dans un achat à partir d'une transaction (mois +
+ * montant de l'opération) puis la lui apparie. La catégorie de l'achat est
+ * héritée par la transaction.
+ */
+export async function createInstallmentForTransaction(
+  transactionId: string,
+  purchaseId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("amount, operation_date")
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (!tx) return fail("Transaction introuvable");
+
+  const { data: purchase } = await supabase
+    .from("purchases")
+    .select("subcategory_id")
+    .eq("id", purchaseId)
+    .maybeSingle();
+  if (!purchase) return fail("Achat introuvable");
+
+  const month = `${tx.operation_date.slice(0, 7)}-01`;
+  const { error: instErr } = await supabase.from("purchase_installments").insert({
+    purchase_id: purchaseId,
+    month,
+    amount: Number(tx.amount),
+    transaction_id: transactionId,
+  });
+  if (instErr) return fail(instErr.message);
 
   const patch: TransactionUpdate = { purchase_id: purchaseId };
   if (purchase.subcategory_id) {

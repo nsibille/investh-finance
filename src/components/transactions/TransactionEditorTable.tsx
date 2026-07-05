@@ -13,7 +13,7 @@ import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
 import { PersonAttachModal } from "@/components/import/PersonAttachModal";
 import { formatShortDate } from "@/lib/format/date";
 import type { SubcategoryOption } from "@/lib/categories/types";
-import type { PurchaseOption } from "@/lib/purchases/types";
+import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
 import type { PersonOption, SplitNature } from "@/lib/persons/types";
@@ -53,7 +53,11 @@ export interface EditorRowVM {
 export interface EditorHandlers {
   onAssignCategory: (key: string, subId: string | null) => void;
   onCreateCategory: (key: string, name: string) => void;
-  onAttachPurchase: (key: string, option: PurchaseOption) => void;
+  onAttachPurchase: (
+    key: string,
+    option: PurchaseOption,
+    choice: InstallmentChoice,
+  ) => void;
   onDetachPurchase: (key: string) => void;
   onAttachMerchant: (key: string, option: MerchantOption) => void;
   onDetachMerchant: (key: string) => void;
@@ -321,8 +325,9 @@ export function TransactionEditorTable({
               }
             : null
         }
-        onAttach={(option) => {
-          if (purchaseKey !== null) handlers.onAttachPurchase(purchaseKey, option);
+        onAttach={(option, choice) => {
+          if (purchaseKey !== null)
+            handlers.onAttachPurchase(purchaseKey, option, choice);
         }}
       />
 

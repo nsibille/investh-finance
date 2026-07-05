@@ -170,6 +170,44 @@ export async function importParsedTransactions(
     const rowsAutoValidated = insertedRows.filter(
       (r) => r.status === "validated",
     ).length;
+    // Id des transactions réellement insérées, par dedup_hash (les doublons
+    // ignorés n'en ont pas). Sert à la ventilation et aux échéances d'achats.
+    const idByHash = new Map(
+      insertedRows.map((r) => [r.dedup_hash, r.id] as const),
+    );
+
+    // Échéances d'achats choisies dans l'aperçu (« transaction non matchée » ou
+    // création d'une nouvelle échéance) : appariées après l'insertion, en
+    // adoptant le montant réel. Fait avant le matchPurchaseInstallments global.
+    const newInstallments: {
+      purchase_id: string;
+      month: string;
+      amount: number;
+      transaction_id: string;
+    }[] = [];
+    for (let i = 0; i < parsed.length; i++) {
+      const p = parsed[i];
+      if (!p.purchase_id) continue;
+      const txId = idByHash.get(rows[i].dedup_hash);
+      if (!txId) continue; // doublon non importé
+      if (p.installment_id) {
+        await supabase
+          .from("purchase_installments")
+          .update({ transaction_id: txId, amount: p.amount })
+          .eq("id", p.installment_id)
+          .is("transaction_id", null);
+      } else if (p.installment_create) {
+        newInstallments.push({
+          purchase_id: p.purchase_id,
+          month: `${p.operation_date.slice(0, 7)}-01`,
+          amount: p.amount,
+          transaction_id: txId,
+        });
+      }
+    }
+    if (newInstallments.length > 0) {
+      await supabase.from("purchase_installments").insert(newInstallments);
+    }
 
     // Increment rule hit counts for matched & inserted transactions.
     const hitDelta = new Map<string, number>();
@@ -193,9 +231,6 @@ export async function importParsedTransactions(
     // Ventilation entre personnes : parts égales insérées pour les lignes
     // réellement importées (les doublons ignorés n'ont pas d'id).
     if (personPlans.length > 0) {
-      const idByHash = new Map(
-        insertedRows.map((r) => [r.dedup_hash, r.id] as const),
-      );
       const shareRows: {
         transaction_id: string;
         person_id: string;

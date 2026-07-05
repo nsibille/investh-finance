@@ -35,6 +35,7 @@ import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import { installmentOccurrence } from "@/lib/purchases/installments";
 import type { PurchaseOption } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
@@ -93,9 +94,17 @@ export function StatementImport({
 
   function attachPurchase(index: number, option: PurchaseOption) {
     setExtraPurchases((prev) => (prev.some((p) => p.id === option.id) ? prev : [...prev, option]));
+    // Occurrence X/Y : rang du mois de la ligne dans l'échéancier de l'achat.
+    const startMonth = option.installmentMonths[0] ?? null;
+    const txMonth = preview?.rows[index]?.operation_date.slice(0, 7) ?? null;
+    const occurrence =
+      startMonth && txMonth ? installmentOccurrence(startMonth, txMonth) : null;
     patchRow(index, {
       purchaseId: option.id,
       purchaseName: option.name,
+      purchaseOccurrence: occurrence,
+      purchaseInstallmentTotal: option.installmentMonths.length,
+      purchaseEndless: option.endless,
       // La catégorie de l'achat prime (héritée) si elle existe.
       ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
       // L'enseigne de l'achat est imposée (non éditable) si l'achat en a une.
@@ -107,7 +116,14 @@ export function StatementImport({
 
   function detachPurchase(index: number) {
     // L'enseigne imposée par l'achat redevient éditable une fois l'achat détaché.
-    patchRow(index, { purchaseId: null, purchaseName: null, merchantLocked: false });
+    patchRow(index, {
+      purchaseId: null,
+      purchaseName: null,
+      purchaseOccurrence: null,
+      purchaseInstallmentTotal: null,
+      purchaseEndless: false,
+      merchantLocked: false,
+    });
   }
 
   // Rattache une enseigne et crée automatiquement sa règle (même logique que
@@ -608,9 +624,8 @@ export function StatementImport({
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                               <Store size={12} aria-hidden />
                               {r.merchantLocked ? (
-                                <span title="Enseigne de l'achat rattaché">
+                                <span title="Enseigne imposée par l'achat rattaché">
                                   {r.merchantName}
-                                  <span style={{ opacity: 0.7 }}> · achat</span>
                                 </span>
                               ) : (
                                 <>
@@ -669,20 +684,37 @@ export function StatementImport({
                         {r.purchaseId ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                             <span className="import-purchase-chip">
+                          {r.purchaseId && (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
                               <ShoppingBag size={12} aria-hidden />
-                              {r.purchaseName}
+                              <span>{r.purchaseName}</span>
+                              {(() => {
+                                const total = r.purchaseInstallmentTotal ?? 0;
+                                // Occurrence affichée dès qu'il y a un échéancier (> 1) ou un abonnement sans fin.
+                                if (r.purchaseOccurrence == null || (!r.purchaseEndless && total <= 1)) return null;
+                                return (
+                                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
+                                    {r.purchaseOccurrence}/{r.purchaseEndless ? "∞" : total}
+                                  </span>
+                                );
+                              })()}
                               <button
                                 type="button"
                                 aria-label="Détacher l'achat"
                                 onClick={() => detachPurchase(i)}
+                                style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
                               >
-                                <X size={12} aria-hidden />
+                                <X size={11} aria-hidden />
                               </button>
                             </span>
-                            <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                              {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Catégorie de l'achat"}
-                            </span>
-                          </div>
+                          )}
+                        </div>
+                      </td>
+                      <td data-col="category">
+                        {r.purchaseId ? (
+                          <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                            {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Catégorie de l'achat"}
+                          </span>
                         ) : editing === i ? (
                           <ImportCategoryEditor
                             options={allOptions}

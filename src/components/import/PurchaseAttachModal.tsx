@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/hooks/useToast";
 import { createPurchase } from "@/server/actions/purchases";
+import { generateInstallments } from "@/lib/purchases/installments";
 import type { PurchaseOption } from "@/lib/purchases/types";
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -97,7 +98,22 @@ export function PurchaseAttachModal({
       return;
     }
     toast.success("Achat créé");
-    attach({ id: res.id, name, subcategoryId: null, merchantId: null, merchantName: null });
+    const installmentMonths = installmentPlan
+      ? generateInstallments({
+          startMonth: installmentPlan.startMonth,
+          count: installmentPlan.count,
+          amount: installmentPlan.amount,
+        }).map((i) => i.month)
+      : [];
+    attach({
+      id: res.id,
+      name,
+      subcategoryId: null,
+      merchantId: null,
+      merchantName: null,
+      installmentMonths,
+      endless: false,
+    });
   }
 
   return (

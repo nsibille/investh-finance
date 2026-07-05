@@ -75,7 +75,9 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
   const supabase = await createClient();
   const { data } = await supabase
     .from("purchases")
-    .select("id, name, subcategory_id, merchant_id, merchant:merchants(name)")
+    .select(
+      "id, name, subcategory_id, merchant_id, is_recurring, recurrence_end, merchant:merchants(name), installments:purchase_installments(month)",
+    )
     .order("name", { ascending: true });
   return (data ?? []).map((p) => ({
     id: p.id,
@@ -83,5 +85,9 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
     subcategoryId: p.subcategory_id,
     merchantId: p.merchant_id,
     merchantName: p.merchant?.name ?? null,
+    installmentMonths: (p.installments ?? [])
+      .map((i) => i.month)
+      .sort((a, b) => a.localeCompare(b)),
+    endless: !!(p.is_recurring && !p.recurrence_end),
   }));
 });

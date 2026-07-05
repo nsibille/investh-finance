@@ -4,8 +4,22 @@ import { frDateToISO, cleanLabel } from "./util";
 
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
 
-/** En-têtes attendus (export Bankin', tab-séparé). */
+/** En-têtes attendus (export Bankin'). */
 const REQUIRED_HEADERS = ["Date", "Libellé", "Montant"];
+
+/**
+ * Bankin' exporte selon la locale avec une tabulation OU un point-virgule
+ * comme séparateur. On le déduit de la ligne d'en-tête (le caractère le plus
+ * présent), avec repli sur la tabulation. La virgule n'est jamais candidate :
+ * c'est le séparateur décimal des montants (« -15,98 »).
+ */
+function detectDelimiter(text: string): string {
+  const nl = text.search(/\r?\n/);
+  const header = nl === -1 ? text : text.slice(0, nl);
+  const tabs = (header.match(/\t/g) ?? []).length;
+  const semicolons = (header.match(/;/g) ?? []).length;
+  return semicolons > tabs ? ";" : "\t";
+}
 
 /**
  * Montant Bankin' : décimales en virgule, signe optionnel, séparateur de
@@ -31,9 +45,10 @@ export interface BankinCsvResult {
  * choisie dans l'UI et la catégorisation passe par les règles de l'app.
  */
 export function parseBankinCsv(text: string): BankinCsvResult {
-  const parsed = Papa.parse<Record<string, string>>(text.trim(), {
+  const trimmed = text.trim();
+  const parsed = Papa.parse<Record<string, string>>(trimmed, {
     header: true,
-    delimiter: "\t",
+    delimiter: detectDelimiter(trimmed),
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
   });

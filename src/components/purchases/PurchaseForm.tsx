@@ -13,14 +13,17 @@ import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { useToast } from "@/hooks/useToast";
 import { createPurchase, updatePurchase } from "@/server/actions/purchases";
+import { descendantIdsOf, type PurchaseEdge } from "@/lib/purchases/tree";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
+import type { PurchaseParentOption } from "@/lib/purchases/types";
 
 export interface PurchaseFormInitial {
   name: string;
   description: string | null;
   subcategoryId: string | null;
   merchantId: string | null;
+  parentId: string | null;
 }
 
 export function PurchaseForm({
@@ -29,6 +32,8 @@ export function PurchaseForm({
   initial,
   subcategoryOptions,
   merchantOptions,
+  parentOptions,
+  defaultParentId,
   installmentsEditor,
   onDone,
 }: {
@@ -37,6 +42,10 @@ export function PurchaseForm({
   initial?: PurchaseFormInitial;
   subcategoryOptions: SubcategoryOption[];
   merchantOptions: MerchantOption[];
+  /** Achats candidats comme groupe parent. */
+  parentOptions: PurchaseParentOption[];
+  /** Parent pré-sélectionné (ex. « Nouvel achat dans ce groupe »). */
+  defaultParentId?: string | null;
   /** Éditeur de mensualités affiché en mode édition (l'échéancier n'est
    *  paramétrable à la volée qu'en création ; en édition on gère ligne à ligne). */
   installmentsEditor?: ReactNode;
@@ -52,6 +61,25 @@ export function PurchaseForm({
   const [merchantId, setMerchantId] = useState<string | null>(
     initial?.merchantId ?? null,
   );
+  const [parentId, setParentId] = useState<string | null>(
+    initial?.parentId ?? defaultParentId ?? null,
+  );
+
+  // Groupes candidats : on exclut l'achat lui-même et ses descendants (cycle),
+  // ainsi que les archivés (sauf le parent actuel s'il l'est).
+  const parentCandidates = (() => {
+    const edges: PurchaseEdge[] = parentOptions.map((o) => ({
+      id: o.id,
+      parentId: o.parentId,
+    }));
+    const excluded = id ? descendantIdsOf(id, edges) : new Set<string>();
+    return parentOptions.filter(
+      (o) =>
+        o.id !== id &&
+        !excluded.has(o.id) &&
+        (!o.isArchived || o.id === parentId),
+    );
+  })();
 
   // Échéancier (création uniquement).
   const [planKind, setPlanKind] = useState<"none" | "installments" | "recurring">("none");
@@ -90,8 +118,8 @@ export function PurchaseForm({
     setSaving(true);
     const res =
       mode === "create"
-        ? await createPurchase({ name, description, subcategoryId, merchantId, installmentPlan, recurrencePlan })
-        : await updatePurchase(id!, { name, description, subcategoryId, merchantId });
+        ? await createPurchase({ name, description, subcategoryId, merchantId, parentId, installmentPlan, recurrencePlan })
+        : await updatePurchase(id!, { name, description, subcategoryId, merchantId, parentId });
     setSaving(false);
     if (!res.ok) {
       setError(res.error);
@@ -144,6 +172,21 @@ export function PurchaseForm({
           onChange={setSubcategoryId}
           allowCreate
         />
+      </FormField>
+
+      <FormField label="Groupe parent (optionnel — pour budgéter un ensemble)">
+        <Select
+          value={parentId ?? ""}
+          onChange={(e) => setParentId(e.target.value || null)}
+        >
+          <option value="">Aucun (achat racine)</option>
+          {parentCandidates.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+              {o.isArchived ? " (archivé)" : ""}
+            </option>
+          ))}
+        </Select>
       </FormField>
 
       {mode === "create" && (

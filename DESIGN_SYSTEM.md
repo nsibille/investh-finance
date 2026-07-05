@@ -533,6 +533,9 @@ Idem avec `--color-warning-light` / `--color-warning-dark` (import preview, doub
 }
 ```
 
+### `badge-group`
+**Badge groupe d'achats** : bleu (`--color-info-light` / `--color-info-dark`), icône `layers` Lucide + libellé « Groupe · N sous-achats ». Marque un achat qui agrège des sous-achats (arborescence via `purchases.parent_id`).
+
 ### `badge-recurring-active`
 Vert (`--color-success-light` / `--color-success-dark`), icône `repeat` Lucide.
 
@@ -1122,6 +1125,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-category` | Status | Badge catégorie avec pastille couleur | auto |
 | `badge-count` | Status | Pastille numérique compteur | auto |
 | `badge-dot` | Status | Pastille colorée simple | auto |
+| `badge-group` | Status | Badge groupe d'achats (achat agrégeant des sous-achats) | auto |
 | `badge-recurring-active` | Status | Badge récurrente OK | auto |
 | `badge-recurring-missing` | Status | Badge récurrente manquante | auto |
 | `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |

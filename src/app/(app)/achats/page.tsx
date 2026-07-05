@@ -20,7 +20,7 @@ export default async function AchatsPage() {
     <>
       <PageHeader
         title="Achats"
-        subtitle="Regroupe des transactions sous un même achat, avec catégorie héritée et mensualités."
+        subtitle="Regroupe des transactions sous un même achat (catégorie héritée, mensualités), ou en groupes pour budgéter un voyage ou un projet et suivre le total dépensé."
       />
       <PurchasesManager
         purchases={purchases}

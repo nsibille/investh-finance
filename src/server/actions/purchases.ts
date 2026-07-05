@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateInstallments } from "@/lib/purchases/installments";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
+import { isValidParent, type PurchaseEdge } from "@/lib/purchases/tree";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -42,6 +43,8 @@ export interface PurchaseInput {
   subcategoryId?: string | null;
   /** Enseigne rattachée (sa catégorie sert de défaut, surchargeable). */
   merchantId?: string | null;
+  /** Achat parent (groupe). null = achat racine. */
+  parentId?: string | null;
   /** Plan de mensualités (optionnel : achat direct si absent ou count = 0). */
   installmentPlan?: InstallmentPlan | null;
   /** Plan récurrent (abonnement/loyer). Exclusif de `installmentPlan`. */
@@ -50,6 +53,14 @@ export interface PurchaseInput {
 
 function toMonthDate(ym: string): string {
   return `${ym.slice(0, 7)}-01`;
+}
+
+/** Charge toutes les arêtes parent→enfant (pour valider un rattachement). */
+async function loadPurchaseEdges(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<PurchaseEdge[]> {
+  const { data } = await supabase.from("purchases").select("id, parent_id");
+  return (data ?? []).map((p) => ({ id: p.id, parentId: p.parent_id }));
 }
 
 export async function createPurchase(input: PurchaseInput): Promise<CreateResult> {
@@ -61,6 +72,9 @@ export async function createPurchase(input: PurchaseInput): Promise<CreateResult
   );
 
   const supabase = await createClient();
+  // Un achat parent inexistant est simplement ignoré (rattachement à la racine) ;
+  // un nouvel achat n'a pas encore de descendant, donc pas de risque de cycle.
+  const parentId = input.parentId ?? null;
   const { data, error } = await supabase
     .from("purchases")
     .insert({
@@ -68,6 +82,7 @@ export async function createPurchase(input: PurchaseInput): Promise<CreateResult
       description: input.description?.trim() || null,
       subcategory_id: input.subcategoryId ?? null,
       merchant_id: input.merchantId ?? null,
+      parent_id: parentId,
       is_recurring: isRecurring,
       recurrence_amount: isRecurring ? rec!.amount : null,
       recurrence_start: isRecurring ? toMonthDate(rec!.startMonth) : null,
@@ -133,15 +148,28 @@ export async function updatePurchase(
   if (!name || name.length > 120) return fail("Nom invalide (1–120 caractères)");
   const supabase = await createClient();
   const subcategoryId = input.subcategoryId ?? null;
-  const { error } = await supabase
-    .from("purchases")
-    .update({
-      name,
-      description: input.description?.trim() || null,
-      subcategory_id: subcategoryId,
-      merchant_id: input.merchantId ?? null,
-    })
-    .eq("id", id);
+
+  const patch: Database["public"]["Tables"]["purchases"]["Update"] = {
+    name,
+    description: input.description?.trim() || null,
+    subcategory_id: subcategoryId,
+    merchant_id: input.merchantId ?? null,
+  };
+  // parent_id n'est mis à jour que s'il est explicitement fourni.
+  if (input.parentId !== undefined) {
+    const parentId = input.parentId;
+    if (parentId !== null) {
+      const edges = await loadPurchaseEdges(supabase);
+      if (!isValidParent(id, parentId, edges)) {
+        return fail(
+          "Rattachement impossible : un achat ne peut pas se référencer lui-même ni créer une boucle.",
+        );
+      }
+    }
+    patch.parent_id = parentId;
+  }
+
+  const { error } = await supabase.from("purchases").update(patch).eq("id", id);
   if (error) return fail(error.message);
 
   // La catégorie de l'achat est héritée : on la propage aux transactions liées.
@@ -150,6 +178,34 @@ export async function updatePurchase(
     .update({ subcategory_id: subcategoryId })
     .eq("purchase_id", id);
 
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Rattache un achat à un groupe parent (ou le détache si `parentId` est null).
+ * Refuse l'auto-référence et toute référence circulaire (double garde-fou avec
+ * le trigger SQL). Utilisé par le glisser dans/hors d'un groupe.
+ */
+export async function setPurchaseParent(
+  id: string,
+  parentId: string | null,
+): Promise<ActionResult> {
+  if (parentId === id) return fail("Un achat ne peut pas se référencer lui-même.");
+  const supabase = await createClient();
+  if (parentId !== null) {
+    const edges = await loadPurchaseEdges(supabase);
+    if (!isValidParent(id, parentId, edges)) {
+      return fail(
+        "Rattachement impossible : cela créerait une référence circulaire.",
+      );
+    }
+  }
+  const { error } = await supabase
+    .from("purchases")
+    .update({ parent_id: parentId })
+    .eq("id", id);
+  if (error) return fail(error.message);
   revalidate();
   return { ok: true };
 }

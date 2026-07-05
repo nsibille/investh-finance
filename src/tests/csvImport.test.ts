@@ -38,6 +38,28 @@ describe("parseBankinCsv", () => {
     expect(transactions[2].amount).toBe(2500.5);
   });
 
+  it("parses a Bankin' semicolon-separated export (CRLF)", () => {
+    const header =
+      "Date;Libellé;Catégorie;Montant;Notes;N° de chèque;Labels;Nom du compte;Nom de la connexion";
+    const text = [
+      header,
+      "31/07/2026;Deuxpointzero;Transports en commun;-5;;;;NICOLAS SIBILLE;BforBank",
+      "31/07/2026;Paypal Paiemen;Services;-15,98;;;;NICOLAS SIBILLE;BforBank",
+      "01/07/2026;Salaire;Revenus;2 500,50;;;;NICOLAS SIBILLE;BforBank",
+    ].join("\r\n");
+    const { transactions, unrecognized } = parseBankinCsv(text);
+    expect(unrecognized).toBe(false);
+    expect(transactions).toHaveLength(3);
+    expect(transactions[0]).toMatchObject({
+      operation_date: "2026-07-31",
+      label: "Deuxpointzero",
+      amount: -5,
+      connection_name: "BforBank",
+    });
+    expect(transactions[1].amount).toBe(-15.98);
+    expect(transactions[2].amount).toBe(2500.5);
+  });
+
   it("flags an unrecognized file (missing columns)", () => {
     const text = "Foo\tBar\r\n1\t2";
     const { transactions, unrecognized } = parseBankinCsv(text);

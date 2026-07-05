@@ -1,0 +1,103 @@
+import type { SubcategoryOption } from "./types";
+
+/** Un groupe de niveau 2 (catégorie) contenant les items rattachés. */
+export interface CategoryGroup<T> {
+  categoryName: string;
+  categoryColor: string | null;
+  items: T[];
+}
+
+/** Un groupe de niveau 1 (type) contenant ses catégories non vides. */
+export interface TypeGroup<T> {
+  typeName: string;
+  categories: CategoryGroup<T>[];
+}
+
+// Séparateur improbable dans un nom de type/catégorie, pour construire les clés.
+const SEP = "";
+const UNCAT = `${SEP}__uncat__`;
+
+/**
+ * Libellé de la catégorie la plus précise d'une option : la sous-catégorie si
+ * elle est nommée, sinon la catégorie parente (cas de la sous-catégorie
+ * « défaut » `—`). Règle d'affichage générale des colonnes « Catégorie ».
+ */
+export function preciseSubName(opt: {
+  subName: string | null;
+  categoryName: string;
+}): string {
+  return opt.subName ?? opt.categoryName;
+}
+
+/**
+ * Regroupe des items rattachés à une sous-catégorie en respectant la
+ * hiérarchie définie (Type → Catégorie), dans l'ordre des `options`
+ * (déjà triées par `sort_order`). Les catégories/types sans item sont omis.
+ * Les items sans catégorie (id absent ou `null`) atterrissent dans un groupe
+ * final « Sans catégorie ».
+ */
+export function groupByCategory<T>(
+  items: T[],
+  getSubId: (item: T) => string | null,
+  options: SubcategoryOption[],
+): TypeGroup<T>[] {
+  const optById = new Map(options.map((o) => [o.id, o]));
+
+  // Ordre défini des couples (type, catégorie) + métadonnées associées.
+  const order: string[] = [];
+  const meta = new Map<
+    string,
+    { typeName: string; categoryName: string; categoryColor: string | null }
+  >();
+  for (const o of options) {
+    const key = `${o.typeName}${SEP}${o.categoryName}`;
+    if (!meta.has(key)) {
+      meta.set(key, {
+        typeName: o.typeName,
+        categoryName: o.categoryName,
+        categoryColor: o.categoryColor,
+      });
+      order.push(key);
+    }
+  }
+
+  const buckets = new Map<string, T[]>();
+  for (const item of items) {
+    const subId = getSubId(item);
+    const opt = subId ? optById.get(subId) : undefined;
+    const key = opt ? `${opt.typeName}${SEP}${opt.categoryName}` : UNCAT;
+    const list = buckets.get(key) ?? [];
+    list.push(item);
+    buckets.set(key, list);
+  }
+
+  // Reconstruit la hiérarchie Type → Catégorie dans l'ordre défini.
+  const types: TypeGroup<T>[] = [];
+  const typeIndex = new Map<string, TypeGroup<T>>();
+  for (const key of order) {
+    const list = buckets.get(key);
+    if (!list || list.length === 0) continue;
+    const m = meta.get(key)!;
+    let group = typeIndex.get(m.typeName);
+    if (!group) {
+      group = { typeName: m.typeName, categories: [] };
+      typeIndex.set(m.typeName, group);
+      types.push(group);
+    }
+    group.categories.push({
+      categoryName: m.categoryName,
+      categoryColor: m.categoryColor,
+      items: list,
+    });
+  }
+
+  const uncat = buckets.get(UNCAT);
+  if (uncat && uncat.length > 0) {
+    types.push({
+      typeName: "Sans catégorie",
+      categories: [{ categoryName: "", categoryColor: null, items: uncat }],
+    });
+  }
+
+  return types;
+}

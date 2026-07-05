@@ -190,13 +190,19 @@ export async function matchPurchaseInstallments(
     const subId = subByPurchase.get(purchaseId) ?? null;
 
     for (const { installmentId, transactionId } of pairs) {
+      const tx = candidates.find((c) => c.id === transactionId);
+      // Aligne le prévisionnel sur le montant réellement matché : la tolérance
+      // ±5c peut lier une transaction d'un montant légèrement différent, on
+      // remplace alors l'estimation par le montant exact constaté.
       await supabase
         .from("purchase_installments")
-        .update({ transaction_id: transactionId })
+        .update({
+          transaction_id: transactionId,
+          ...(tx ? { amount: tx.amount } : {}),
+        })
         .eq("id", installmentId);
       linked.add(transactionId);
 
-      const tx = candidates.find((c) => c.id === transactionId);
       if (tx && !tx.purchase_id) {
         const patch: TransactionUpdate = { purchase_id: purchaseId };
         if (subId) {

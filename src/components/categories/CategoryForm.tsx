@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -19,6 +20,8 @@ interface CategoryFormProps {
   id?: string;
   initialName?: string;
   initialColor?: string | null;
+  /** Types disponibles : permet de déplacer la catégorie sous un autre parent. */
+  types?: { id: string; name: string }[];
   onDone: () => void;
 }
 
@@ -28,12 +31,14 @@ export function CategoryForm({
   id,
   initialName = "",
   initialColor,
+  types,
   onDone,
 }: CategoryFormProps) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor ?? "");
+  const [categoryTypeId, setCategoryTypeId] = useState(typeId);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,7 +46,7 @@ export function CategoryForm({
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const payload = { category_type_id: typeId, name, color };
+    const payload = { category_type_id: categoryTypeId, name, color };
     const res =
       mode === "create"
         ? await createCategory(payload)
@@ -59,6 +64,20 @@ export function CategoryForm({
       style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
     >
       {error && <Alert variant="danger">{error}</Alert>}
+      {types && types.length > 0 && (
+        <FormField label="Type parent">
+          <Select
+            value={categoryTypeId}
+            onChange={(e) => setCategoryTypeId(e.target.value)}
+          >
+            {types.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      )}
       <FormField label="Nom de la catégorie">
         <Input
           autoFocus

@@ -517,6 +517,91 @@ export type Database = {
           },
         ]
       }
+      person_repayments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          note: string | null
+          person_id: string
+          repaid_on: string
+          transaction_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          person_id: string
+          repaid_on?: string
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          person_id?: string
+          repaid_on?: string
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_repayments_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "person_balances"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "person_repayments_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_repayments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      persons: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_archived: boolean
+          is_self: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          is_self?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          is_self?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       purchase_installments: {
         Row: {
           amount: number
@@ -706,6 +791,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "recurring_patterns_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "recurring_patterns_subcategory_id_fkey"
             columns: ["subcategory_id"]
             isOneToOne: false
@@ -790,6 +882,49 @@ export type Database = {
         }
         Relationships: []
       }
+      transaction_persons: {
+        Row: {
+          created_at: string
+          person_id: string
+          share_amount: number
+          transaction_id: string
+        }
+        Insert: {
+          created_at?: string
+          person_id: string
+          share_amount?: number
+          transaction_id: string
+        }
+        Update: {
+          created_at?: string
+          person_id?: string
+          share_amount?: number
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_persons_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "person_balances"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "transaction_persons_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_persons_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transaction_tags: {
         Row: {
           created_at: string
@@ -842,6 +977,7 @@ export type Database = {
           raw_label: string
           recurring_pattern_id: string | null
           search_vector: unknown
+          split_nature: Database["public"]["Enums"]["split_nature"] | null
           status: Database["public"]["Enums"]["transaction_status"]
           subcategory_id: string | null
           updated_at: string
@@ -866,6 +1002,7 @@ export type Database = {
           raw_label: string
           recurring_pattern_id?: string | null
           search_vector?: unknown
+          split_nature?: Database["public"]["Enums"]["split_nature"] | null
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory_id?: string | null
           updated_at?: string
@@ -890,6 +1027,7 @@ export type Database = {
           raw_label?: string
           recurring_pattern_id?: string | null
           search_vector?: unknown
+          split_nature?: Database["public"]["Enums"]["split_nature"] | null
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory_id?: string | null
           updated_at?: string
@@ -992,6 +1130,35 @@ export type Database = {
         }
         Relationships: []
       }
+      person_balances: {
+        Row: {
+          color: string | null
+          is_archived: boolean | null
+          is_self: boolean | null
+          name: string | null
+          outstanding_debt: number | null
+          person_id: string | null
+          total_debt: number | null
+          total_gift: number | null
+          total_repaid: number | null
+        }
+        Relationships: []
+      }
+      transaction_debt_adjustments: {
+        Row: {
+          debt_amount: number | null
+          transaction_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_persons_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       is_owner: { Args: never; Returns: boolean }
@@ -1008,6 +1175,7 @@ export type Database = {
         | "other"
       import_status: "processing" | "completed" | "failed"
       rule_match_type: "regex" | "exact" | "contains"
+      split_nature: "debt" | "gift"
       transaction_status: "pending" | "validated" | "ignored"
     }
     CompositeTypes: {
@@ -1146,6 +1314,7 @@ export const Constants = {
       ],
       import_status: ["processing", "completed", "failed"],
       rule_match_type: ["regex", "exact", "contains"],
+      split_nature: ["debt", "gift"],
       transaction_status: ["pending", "validated", "ignored"],
     },
   },

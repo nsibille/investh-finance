@@ -3,6 +3,7 @@ import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryDisplayMap } from "@/lib/transactions/queries";
 import { getTransferSubcategoryIds } from "@/lib/categories/queries";
+import { getPersonalAmountAdjustments } from "@/lib/persons/queries";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -41,7 +42,7 @@ export interface Analytics {
 
 export async function getAnalytics(ref: Date): Promise<Analytics> {
   const supabase = await createClient();
-  const [{ data: txs }, { data: accounts }, categories, transferIds] =
+  const [{ data: txs }, { data: accounts }, categories, transferIds, { debtByTx, repaymentTxIds }] =
     await Promise.all([
       supabase
         .from("transactions")
@@ -50,40 +51,49 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
       supabase.from("accounts").select("initial_balance, is_archived"),
       getCategoryDisplayMap(),
       getTransferSubcategoryIds(),
+      getPersonalAmountAdjustments(),
     ]);
 
-  const all = (txs ?? []).map((t) => ({
-    id: t.id,
-    label: t.label,
-    amount: Number(t.amount),
-    date: t.operation_date,
-    cat: t.subcategory_id ? categories.get(t.subcategory_id) : undefined,
-    // Les virements internes sont exclus des revenus/dépenses mais conservés
-    // pour le patrimoine (ils s'annulent entre comptes).
-    isTransfer: t.subcategory_id ? transferIds.has(t.subcategory_id) : false,
-  }));
+  const all = (txs ?? []).map((t) => {
+    const rawAmount = Number(t.amount);
+    return {
+      id: t.id,
+      label: t.label,
+      // `amount` : brut (patrimoine, mouvement de cash réel).
+      amount: rawAmount,
+      // `spend` : ma part réelle (créances déduites) pour les dépenses/analyses.
+      spend: rawAmount + (debtByTx.get(t.id) ?? 0),
+      date: t.operation_date,
+      cat: t.subcategory_id ? categories.get(t.subcategory_id) : undefined,
+      // Les virements internes sont exclus des revenus/dépenses mais conservés
+      // pour le patrimoine (ils s'annulent entre comptes).
+      isTransfer: t.subcategory_id ? transferIds.has(t.subcategory_id) : false,
+      // Remboursement rattaché : exclu des dépenses/revenus, gardé pour le cash.
+      isRepayment: repaymentTxIds.has(t.id),
+    };
+  });
 
   const monthStart = iso(startOfMonth(ref));
   const monthEnd = iso(endOfMonth(ref));
   const window12Start = iso(startOfMonth(subMonths(ref, 11)));
 
-  // Top 10 expenses over the last 12 months.
+  // Top 10 expenses over the last 12 months (ma part réelle, créances déduites).
   const topTransactions: TopTransaction[] = all
-    .filter((t) => !t.isTransfer && t.amount < 0 && t.date >= window12Start && t.date <= monthEnd)
-    .sort((a, b) => a.amount - b.amount)
+    .filter((t) => !t.isTransfer && !t.isRepayment && t.spend < 0 && t.date >= window12Start && t.date <= monthEnd)
+    .sort((a, b) => a.spend - b.spend)
     .slice(0, 10)
     .map((t) => ({
       id: t.id,
       date: t.date,
       label: t.label,
-      amount: t.amount,
+      amount: t.spend,
       category: t.cat ? t.cat.categoryName : null,
     }));
 
   // Top categories (expenses) over the last 12 months.
   const catTotals = new Map<string, TopCategory>();
   for (const t of all) {
-    if (t.isTransfer || t.amount >= 0 || !t.cat) continue;
+    if (t.isTransfer || t.isRepayment || t.spend >= 0 || !t.cat) continue;
     if (t.date < window12Start || t.date > monthEnd) continue;
     const key = t.cat.categoryName;
     const entry = catTotals.get(key) ?? {
@@ -91,7 +101,7 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
       total: 0,
       color: t.cat.color,
     };
-    entry.total += -t.amount;
+    entry.total += -t.spend;
     catTotals.set(key, entry);
   }
   const topCategories = [...catTotals.values()]
@@ -106,8 +116,8 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
     let previous = 0;
     let total12 = 0;
     for (const t of all) {
-      if (t.amount >= 0 || t.cat?.categoryName !== c.name) continue;
-      const v = -t.amount;
+      if (t.isRepayment || t.spend >= 0 || t.cat?.categoryName !== c.name) continue;
+      const v = -t.spend;
       if (t.date >= monthStart && t.date <= monthEnd) current += v;
       if (t.date >= prevStart && t.date <= prevEnd) previous += v;
       if (t.date >= window12Start && t.date <= monthEnd) total12 += v;

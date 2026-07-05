@@ -15,6 +15,7 @@ import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { RecurringSelect } from "@/components/recurring/RecurringSelect";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { TagPicker } from "@/components/tags/TagPicker";
+import { PersonSharePicker } from "@/components/persons/PersonSharePicker";
 import { AttachmentManager } from "@/components/attachments/AttachmentManager";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
@@ -45,6 +46,7 @@ import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
 import type { Tag } from "@/lib/tags/queries";
 import type { AttachmentView } from "@/lib/attachments/types";
+import type { PersonOption, TransactionSplit } from "@/lib/persons/types";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -65,6 +67,8 @@ export function TransactionDetail({
   tags,
   allTags,
   attachments,
+  personOptions,
+  split,
 }: {
   tx: TransactionRow;
   subcategoryOptions: SubcategoryOption[];
@@ -73,6 +77,8 @@ export function TransactionDetail({
   tags: Tag[];
   allTags: Tag[];
   attachments: AttachmentView[];
+  personOptions: PersonOption[];
+  split: TransactionSplit;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -395,6 +401,16 @@ export function TransactionDetail({
 
           <FormField label="Tags">
             <TagPicker transactionId={tx.id} tags={tags} allTags={allTags} />
+          </FormField>
+
+          <FormField label="Partage entre personnes">
+            <PersonSharePicker
+              transactionId={tx.id}
+              amount={tx.amount}
+              currency={tx.currency}
+              persons={personOptions}
+              initial={split}
+            />
           </FormField>
 
           <FormField label="Justificatifs">

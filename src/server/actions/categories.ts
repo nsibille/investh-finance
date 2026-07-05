@@ -57,6 +57,137 @@ export async function updateCategory(
   return { ok: true };
 }
 
+export interface CategoryDeletionImpact {
+  categoryName: string;
+  /** Ids des sous-catégories de la catégorie (cibles des réaffectations). */
+  subcategoryIds: string[];
+  rules: number;
+  merchants: number;
+  recurring: number;
+  transactions: number;
+  purchases: number;
+}
+
+/**
+ * Récapitulatif des objets rattachés aux sous-catégories d'une catégorie, pour
+ * confirmer une suppression en connaissance de cause.
+ */
+export async function getCategoryDeletionImpact(
+  categoryId: string,
+): Promise<
+  { ok: true; impact: CategoryDeletionImpact } | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("id", categoryId)
+    .maybeSingle();
+  if (!cat) return fail("Catégorie introuvable");
+
+  const { data: subs } = await supabase
+    .from("subcategories")
+    .select("id")
+    .eq("category_id", categoryId);
+  const subcategoryIds = (subs ?? []).map((s) => s.id);
+
+  const empty: CategoryDeletionImpact = {
+    categoryName: cat.name,
+    subcategoryIds,
+    rules: 0,
+    merchants: 0,
+    recurring: 0,
+    transactions: 0,
+    purchases: 0,
+  };
+  if (subcategoryIds.length === 0) return { ok: true, impact: empty };
+
+  const countIn = async (
+    table:
+      | "categorization_rules"
+      | "merchants"
+      | "recurring_patterns"
+      | "transactions"
+      | "purchases",
+  ) => {
+    const { count } = await supabase
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .in("subcategory_id", subcategoryIds);
+    return count ?? 0;
+  };
+
+  const [rules, merchants, recurring, transactions, purchases] =
+    await Promise.all([
+      countIn("categorization_rules"),
+      countIn("merchants"),
+      countIn("recurring_patterns"),
+      countIn("transactions"),
+      countIn("purchases"),
+    ]);
+
+  return {
+    ok: true,
+    impact: { ...empty, rules, merchants, recurring, transactions, purchases },
+  };
+}
+
+/**
+ * Supprime une catégorie (et ses sous-catégories en cascade).
+ * - Avec `substituteSubcategoryId` : réaffecte d'abord tous les objets rattachés
+ *   (règles, enseignes, récurrences, transactions, achats) à cette sous-catégorie
+ *   de substitution — les règles seraient sinon supprimées en cascade.
+ * - Sans substitution : les FK `ON DELETE` s'appliquent (règles et budgets
+ *   supprimés ; transactions/récurrences/achats/enseignes décatégorisés).
+ */
+export async function deleteCategory(
+  categoryId: string,
+  substituteSubcategoryId?: string | null,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: subs } = await supabase
+    .from("subcategories")
+    .select("id")
+    .eq("category_id", categoryId);
+  const subIds = (subs ?? []).map((s) => s.id);
+
+  if (substituteSubcategoryId) {
+    if (subIds.includes(substituteSubcategoryId))
+      return fail("La catégorie de substitution doit être différente.");
+
+    if (subIds.length > 0) {
+      const tables = [
+        "transactions",
+        "recurring_patterns",
+        "purchases",
+        "merchants",
+        "categorization_rules",
+      ] as const;
+      for (const table of tables) {
+        const { error } = await supabase
+          .from(table)
+          .update({ subcategory_id: substituteSubcategoryId })
+          .in("subcategory_id", subIds);
+        if (error) return fail(error.message);
+      }
+      // Budgets (niche) : supprimés plutôt que réaffectés (contrainte d'unicité).
+      await supabase.from("budgets").delete().in("subcategory_id", subIds);
+    }
+    await supabase.from("budgets").delete().eq("category_id", categoryId);
+  }
+
+  const { error } = await supabase.from("categories").delete().eq("id", categoryId);
+  if (error) return fail(error.message);
+
+  revalidatePath("/categories");
+  revalidatePath("/rules");
+  revalidatePath("/recurring");
+  revalidatePath("/enseignes");
+  revalidatePath("/achats");
+  revalidatePath("/transactions");
+  return { ok: true };
+}
+
 export async function setCategoryArchived(
   id: string,
   archived: boolean,

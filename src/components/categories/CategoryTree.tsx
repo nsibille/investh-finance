@@ -10,6 +10,7 @@ import {
   Archive,
   ArchiveRestore,
   GripVertical,
+  Trash2,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -21,6 +22,7 @@ import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { CategoryForm } from "./CategoryForm";
 import { SubcategoryForm } from "./SubcategoryForm";
+import { CategoryDeleteModal } from "./CategoryDeleteModal";
 import {
   setCategoryArchived,
   setSubcategoryArchived,
@@ -33,6 +35,7 @@ import type {
   CategoryTypeNode,
   CategoryNode,
   Subcategory,
+  SubcategoryOption,
 } from "@/lib/categories/types";
 
 type CategoryModal =
@@ -45,13 +48,20 @@ type SubModal =
   | { mode: "edit"; categoryId: string; sub: Subcategory }
   | null;
 
-export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
+export function CategoryTree({
+  tree,
+  subcategoryOptions,
+}: {
+  tree: CategoryTypeNode[];
+  subcategoryOptions: SubcategoryOption[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [categoryModal, setCategoryModal] = useState<CategoryModal>(null);
   const [subModal, setSubModal] = useState<SubModal>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CategoryNode | null>(null);
 
   const [localTree, setLocalTree] = useState(tree);
   const [prevTree, setPrevTree] = useState(tree);
@@ -343,6 +353,12 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
                         >
                           {cat.is_archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
                         </IconButton>
+                        <IconButton
+                          label="Supprimer la catégorie"
+                          onClick={() => setDeleteTarget(cat)}
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
                       </div>
 
                       {isOpen && (
@@ -462,10 +478,20 @@ export function CategoryTree({ tree }: { tree: CategoryTypeNode[] }) {
             id={categoryModal.mode === "edit" ? categoryModal.category.id : undefined}
             initialName={categoryModal.mode === "edit" ? categoryModal.category.name : ""}
             initialColor={categoryModal.mode === "edit" ? categoryModal.category.color : null}
+            types={localTree.map((t) => ({ id: t.id, name: t.name }))}
             onDone={() => setCategoryModal(null)}
           />
         )}
       </Modal>
+
+      {deleteTarget && (
+        <CategoryDeleteModal
+          categoryId={deleteTarget.id}
+          categoryName={deleteTarget.name}
+          subcategoryOptions={subcategoryOptions}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
 
       <Modal
         open={subModal !== null}

@@ -1,11 +1,17 @@
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryTree } from "@/components/categories/CategoryTree";
-import { getCategoryTree } from "@/lib/categories/queries";
+import {
+  getCategoryTree,
+  getSubcategoryOptions,
+} from "@/lib/categories/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function CategoriesPage() {
-  const tree = await getCategoryTree();
+  const [tree, subcategoryOptions] = await Promise.all([
+    getCategoryTree(),
+    getSubcategoryOptions(),
+  ]);
 
   return (
     <>
@@ -13,7 +19,7 @@ export default async function CategoriesPage() {
         title="Catégories"
         subtitle="Organise tes types, catégories et sous-catégories."
       />
-      <CategoryTree tree={tree} />
+      <CategoryTree tree={tree} subcategoryOptions={subcategoryOptions} />
     </>
   );
 }

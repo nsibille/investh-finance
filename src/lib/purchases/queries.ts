@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
+import { computeRollups, type PurchaseAmounts } from "./tree";
 import type {
   PurchaseWithDetails,
   PurchaseInstallment,
@@ -43,7 +44,8 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
     byPurchase.set(i.purchase_id, list);
   }
 
-  return (purchases ?? []).map((p) => {
+  // 1er passage : montants propres à chaque achat (hors descendants).
+  const own = (purchases ?? []).map((p) => {
     const a = agg.get(p.id) ?? { count: 0, sum: 0 };
     const inst = byPurchase.get(p.id) ?? [];
     const cat = p.subcategory_id ? subInfo.get(p.subcategory_id) : null;
@@ -64,6 +66,30 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
       matchedInstallments: matched,
       isFullyPaid,
       remaining,
+    };
+  });
+
+  // 2e passage : agrégats de groupe (self + descendants) via l'arborescence.
+  const rollupInput: PurchaseAmounts[] = own.map((p) => ({
+    id: p.id,
+    parentId: p.parent_id,
+    paidAmount: p.paidAmount,
+    transactionCount: p.transactionCount,
+    forecastAmount: p.forecastAmount,
+    remaining: p.remaining,
+  }));
+  const rollups = computeRollups(rollupInput);
+
+  return own.map((p): PurchaseWithDetails => {
+    const r = rollups.get(p.id);
+    return {
+      ...p,
+      childIds: r?.childIds ?? [],
+      descendantCount: r?.descendantCount ?? 0,
+      totalPaidAmount: r?.totalPaidAmount ?? p.paidAmount,
+      totalTransactionCount: r?.totalTransactionCount ?? p.transactionCount,
+      totalForecastAmount: r?.totalForecastAmount ?? p.forecastAmount,
+      totalRemaining: r?.totalRemaining ?? p.remaining,
     };
   });
 }

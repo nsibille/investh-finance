@@ -749,6 +749,7 @@ body {
 .badge-status-duplicate-file,
 .badge-recurring-active,
 .badge-recurring-missing,
+.badge-group,
 .badge-tag-md {
   display: inline-flex; align-items: center; gap: var(--space-1);
   height: 22px; padding: 0 var(--space-2); border-radius: var(--radius-full);
@@ -763,6 +764,7 @@ body {
 .badge-status-duplicate-file { background: var(--color-warning-light); color: var(--color-warning-dark); }
 .badge-recurring-active { background: var(--color-success-light); color: var(--color-success-dark); }
 .badge-recurring-missing { background: var(--color-warning-light); color: var(--color-warning-dark); }
+.badge-group { background: var(--color-info-light); color: var(--color-info-dark); }
 .badge-tag-md { background: var(--color-brand-primary-50); color: var(--color-brand-primary-700); }
 
 .badge-category {

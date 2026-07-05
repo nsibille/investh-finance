@@ -20,6 +20,28 @@ export interface PurchaseWithDetails extends Purchase {
   isFullyPaid: boolean;
   /** Reste à payer (somme des mensualités non appariées). */
   remaining: number;
+
+  // ----- Groupes (arborescence via parent_id) -----
+  /** IDs des enfants directs (achats rattachés à celui-ci). */
+  childIds: string[];
+  /** Nombre de descendants (enfants + petits-enfants…). Groupe si > 0. */
+  descendantCount: number;
+  /** Réalisé agrégé sur le sous-arbre (self + descendants). */
+  totalPaidAmount: number;
+  /** Transactions agrégées sur le sous-arbre. */
+  totalTransactionCount: number;
+  /** Prévisionnel agrégé sur le sous-arbre. */
+  totalForecastAmount: number;
+  /** Reste à payer agrégé sur le sous-arbre. */
+  totalRemaining: number;
+}
+
+/** Élément léger pour peupler un sélecteur d'achat parent (groupe). */
+export interface PurchaseParentOption {
+  id: string;
+  name: string;
+  parentId: string | null;
+  isArchived: boolean;
 }
 
 export interface PurchaseOption {

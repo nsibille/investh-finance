@@ -659,6 +659,7 @@ export type Database = {
           is_recurring: boolean
           merchant_id: string | null
           name: string
+          parent_id: string | null
           recurrence_amount: number | null
           recurrence_end: string | null
           recurrence_label: string | null
@@ -674,6 +675,7 @@ export type Database = {
           is_recurring?: boolean
           merchant_id?: string | null
           name: string
+          parent_id?: string | null
           recurrence_amount?: number | null
           recurrence_end?: string | null
           recurrence_label?: string | null
@@ -689,6 +691,7 @@ export type Database = {
           is_recurring?: boolean
           merchant_id?: string | null
           name?: string
+          parent_id?: string | null
           recurrence_amount?: number | null
           recurrence_end?: string | null
           recurrence_label?: string | null
@@ -702,6 +705,13 @@ export type Database = {
             columns: ["merchant_id"]
             isOneToOne: false
             referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
             referencedColumns: ["id"]
           },
           {

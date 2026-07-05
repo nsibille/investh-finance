@@ -102,6 +102,9 @@ type PreviewRowLike = {
   initialSubcategoryId?: string | null;
   purchaseId?: string;
   purchaseName?: string;
+  purchaseOccurrence?: number | null;
+  purchaseInstallmentTotal?: number | null;
+  purchaseEndless?: boolean;
   merchantId?: string | null;
   merchantName?: string | null;
   merchantLocked?: boolean;
@@ -172,6 +175,9 @@ async function annotatePurchaseMatches<T extends PreviewRowLike>(
       ...r,
       purchaseId: m.purchaseId,
       purchaseName: m.purchaseName,
+      purchaseOccurrence: m.occurrence,
+      purchaseInstallmentTotal: m.installmentTotal,
+      purchaseEndless: m.endless,
       // Catégorie héritée de l'achat (surchargeable dans l'aperçu).
       initialSubcategoryId: m.subcategoryId ?? r.initialSubcategoryId,
       // L'enseigne de l'achat prime et n'est pas éditable pour cette ligne.

@@ -21,7 +21,8 @@ export interface ImportPreviewRow extends ParsedTransaction {
   merchantName?: string | null;
   /** Enseigne imposée par l'achat rattaché (non éditable). */
   merchantLocked?: boolean;
-  /** Nom du modèle récurrent détecté (opération récurrente). */
+  /** Modèle récurrent détecté / rattaché (opération récurrente). */
+  recurringId?: string | null;
   recurringName?: string | null;
   include: boolean;
 }

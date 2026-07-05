@@ -81,15 +81,27 @@ export async function getMissingRecurring(): Promise<RecurringPatternView[]> {
 export interface RecurringOption {
   id: string;
   name: string;
+  subcategoryId: string | null;
+  merchantId: string | null;
+  merchantName: string | null;
 }
 
-/** Options légères (id, nom) pour rattacher une transaction à une récurrente. */
+/** Options (id, nom, catégorie, enseigne) pour rattacher une transaction. */
 export async function getRecurringOptions(): Promise<RecurringOption[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("recurring_patterns")
-    .select("id, name")
+    .select("id, name, subcategory_id, merchant_id, merchant:merchants(name)")
     .eq("is_active", true)
     .order("name", { ascending: true });
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name }));
+  return (data ?? []).map((r) => {
+    const m = r.merchant as { name: string } | { name: string }[] | null;
+    return {
+      id: r.id,
+      name: r.name,
+      subcategoryId: r.subcategory_id,
+      merchantId: r.merchant_id,
+      merchantName: Array.isArray(m) ? (m[0]?.name ?? null) : (m?.name ?? null),
+    };
+  });
 }

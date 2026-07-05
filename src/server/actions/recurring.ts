@@ -314,6 +314,41 @@ export async function associateTransactionToRecurring(
   return { ok: true, applied: res.applied, addedLabel, ids: res.ids };
 }
 
+/**
+ * Ajoute un motif de libellé à une récurrente (depuis l'aperçu d'import, sans
+ * transaction encore importée) et applique la récurrente aux transactions
+ * existantes. Le motif ajouté fera aussi matcher la ligne à l'import.
+ */
+export async function associateLabelToRecurring(
+  recurringId: string,
+  rawLabel: string,
+): Promise<
+  | { ok: true; applied: number; addedLabel: string | null; ids: string[] }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data: p } = await supabase
+    .from("recurring_patterns")
+    .select("label_pattern")
+    .eq("id", recurringId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: "Récurrente introuvable" };
+
+  const key = recurringKey(rawLabel);
+  const existing = labelPatterns(p.label_pattern);
+  let addedLabel: string | null = null;
+  if (key && !existing.some((l) => l.toUpperCase() === key.toUpperCase())) {
+    await supabase
+      .from("recurring_patterns")
+      .update({ label_pattern: [...existing, key].join("\n") })
+      .eq("id", recurringId);
+    addedLabel = key;
+  }
+  const res = await applyRecurringPattern(recurringId);
+  if (!res.ok) return res;
+  return { ok: true, applied: res.applied, addedLabel, ids: res.ids };
+}
+
 /** Annule une association : retire le motif ajouté et détache les transactions. */
 export async function undoAssociateRecurring(
   recurringId: string,

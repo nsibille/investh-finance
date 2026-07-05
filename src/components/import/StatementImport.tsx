@@ -17,11 +17,16 @@ import { Toggle, Checkbox } from "@/components/ui/Checkbox";
 import { ImportCategoryEditor } from "./ImportCategoryEditor";
 import { PurchaseAttachModal } from "./PurchaseAttachModal";
 import { MerchantAttachModal } from "./MerchantAttachModal";
+import { RecurringAttachModal } from "./RecurringAttachModal";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
 import { confirmImport, confirmCsvImport } from "@/server/actions/import";
 import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
 import { addMerchantRule, createMerchantRuleFromLabel } from "@/server/actions/merchants";
+import {
+  associateLabelToRecurring,
+  undoAssociateRecurring,
+} from "@/server/actions/recurring";
 import { createCategoryOnTheFly } from "@/server/actions/categories";
 import { useImportStore, type ImportPreviewRow } from "@/stores/import";
 import type { ParsedTransaction } from "@/lib/import/types";
@@ -29,17 +34,20 @@ import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
+import type { RecurringOption } from "@/lib/recurring/queries";
 
 export function StatementImport({
   accountOptions,
   subcategoryOptions,
   purchaseOptions,
   merchantOptions,
+  recurringOptions,
 }: {
   accountOptions: AccountOption[];
   subcategoryOptions: SubcategoryOption[];
   purchaseOptions: PurchaseOption[];
   merchantOptions: MerchantOption[];
+  recurringOptions: RecurringOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -62,6 +70,8 @@ export function StatementImport({
   // Enseignes (dont créées à la volée) + ligne dont on rattache une enseigne.
   const [extraMerchants, setExtraMerchants] = useState<MerchantOption[]>([]);
   const [merchantRow, setMerchantRow] = useState<number | null>(null);
+  // Ligne dont on associe une récurrente.
+  const [recurringRow, setRecurringRow] = useState<number | null>(null);
 
   const allPurchases = useMemo(() => {
     const seen = new Set(purchaseOptions.map((p) => p.id));
@@ -135,6 +145,40 @@ export function StatementImport({
 
   function detachMerchant(index: number) {
     patchRow(index, { merchantId: null, merchantName: null });
+  }
+
+  // Associe une ligne à une récurrente : ajoute le motif du libellé à la
+  // récurrente (fera matcher à l'import), hérite catégorie + enseigne, applique
+  // aux transactions existantes, avec un toaster « Annuler ».
+  async function attachRecurring(index: number, option: RecurringOption) {
+    patchRow(index, {
+      recurringId: option.id,
+      recurringName: option.name,
+      ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+      ...(option.merchantId
+        ? { merchantId: option.merchantId, merchantName: option.merchantName }
+        : {}),
+    });
+    const rawLabel = useImportStore.getState().preview?.rows[index]?.raw_label ?? "";
+    if (!rawLabel) return;
+    const res = await associateLabelToRecurring(option.id, rawLabel);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(
+      res.applied > 0
+        ? `Associée à « ${option.name} » · ${res.applied} transaction(s) existante(s) rattachée(s)`
+        : `Associée à « ${option.name} »`,
+      {
+        duration: 10000,
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            await undoAssociateRecurring(option.id, res.addedLabel, res.ids);
+            patchRow(index, { recurringId: null, recurringName: null });
+            toast.info("Association annulée.");
+          },
+        },
+      },
+    );
   }
 
   // Rattache l'enseigne à toutes les lignes de l'aperçu dont le libellé contient
@@ -604,6 +648,9 @@ export function StatementImport({
                             <IconButton label="Rattacher un achat" onClick={() => setPurchaseRow(i)}>
                               <ShoppingBag size={15} />
                             </IconButton>
+                            <IconButton label="Associer une récurrente" onClick={() => setRecurringRow(i)}>
+                              <Repeat size={15} />
+                            </IconButton>
                           </div>
                         )}
                       </td>
@@ -654,6 +701,15 @@ export function StatementImport({
         merchantOptions={allMerchants}
         onAttach={(option) => {
           if (merchantRow !== null) attachMerchant(merchantRow, option);
+        }}
+      />
+
+      <RecurringAttachModal
+        open={recurringRow !== null}
+        onClose={() => setRecurringRow(null)}
+        options={recurringOptions}
+        onAttach={(option) => {
+          if (recurringRow !== null) attachRecurring(recurringRow, option);
         }}
       />
     </Card>

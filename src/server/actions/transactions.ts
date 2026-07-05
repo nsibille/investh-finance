@@ -17,6 +17,27 @@ function fail(message: string): ActionResult {
   return { ok: false, error: message };
 }
 
+/**
+ * Enrobe le corps d'une action pour renvoyer toute exception sous forme de
+ * `{ ok: false, error }` plutôt que de la laisser remonter. En production, Next
+ * masque le message des exceptions *jetées* (« An error occurred in the Server
+ * Components render… », remplacé par un digest) : impossible à diagnostiquer
+ * côté client. Une valeur *retournée* n'est pas masquée — on récupère donc le
+ * vrai message dans le toast. On log aussi côté serveur pour la stack complète.
+ */
+async function guard(
+  label: string,
+  fn: () => Promise<ActionResult>,
+): Promise<ActionResult> {
+  try {
+    return await fn();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`[transactions:${label}] exception non gérée:`, e);
+    return fail(message || "Erreur serveur inconnue.");
+  }
+}
+
 function revalidate() {
   revalidatePath("/transactions");
   revalidatePath("/transactions/pending");
@@ -27,24 +48,26 @@ export async function setTransactionSubcategory(
   id: string,
   subcategoryId: string | null,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  // Catégorie héritée d'un achat : non modifiable tant que la transaction y est
-  // rattachée.
-  const { data: tx } = await supabase
-    .from("transactions")
-    .select("purchase_id")
-    .eq("id", id)
-    .maybeSingle();
-  if (tx?.purchase_id) {
-    return fail("Catégorie héritée de l'achat — détache la transaction pour la changer.");
-  }
-  const { error } = await supabase
-    .from("transactions")
-    .update({ subcategory_id: subcategoryId })
-    .eq("id", id);
-  if (error) return fail(error.message);
-  revalidate();
-  return { ok: true };
+  return guard("setSubcategory", async () => {
+    const supabase = await createClient();
+    // Catégorie héritée d'un achat : non modifiable tant que la transaction y est
+    // rattachée.
+    const { data: tx } = await supabase
+      .from("transactions")
+      .select("purchase_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (tx?.purchase_id) {
+      return fail("Catégorie héritée de l'achat — détache la transaction pour la changer.");
+    }
+    const { error } = await supabase
+      .from("transactions")
+      .update({ subcategory_id: subcategoryId })
+      .eq("id", id);
+    if (error) return fail(error.message);
+    revalidate();
+    return { ok: true };
+  });
 }
 
 export async function validateTransaction(
@@ -52,63 +75,71 @@ export async function validateTransaction(
   subcategoryId: string | null,
 ): Promise<ActionResult> {
   if (!subcategoryId) return fail("Choisis une sous-catégorie avant de valider.");
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("transactions")
-    .update({
-      subcategory_id: subcategoryId,
-      status: "validated",
-      validated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (error) return fail(error.message);
-  revalidate();
-  return { ok: true };
+  return guard("validate", async () => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({
+        subcategory_id: subcategoryId,
+        status: "validated",
+        validated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return fail(error.message);
+    revalidate();
+    return { ok: true };
+  });
 }
 
 export async function setTransactionStatus(
   id: string,
   status: "pending" | "validated" | "ignored",
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("transactions")
-    .update({
-      status,
-      validated_at: status === "validated" ? new Date().toISOString() : null,
-    })
-    .eq("id", id);
-  if (error) return fail(error.message);
-  revalidate();
-  return { ok: true };
+  return guard("setStatus", async () => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({
+        status,
+        validated_at: status === "validated" ? new Date().toISOString() : null,
+      })
+      .eq("id", id);
+    if (error) return fail(error.message);
+    revalidate();
+    return { ok: true };
+  });
 }
 
 export async function updateTransactionNote(
   id: string,
   note: string,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("transactions")
-    .update({ note: note.trim() || null })
-    .eq("id", id);
-  if (error) return fail(error.message);
-  revalidatePath(`/transactions/${id}`);
-  revalidate();
-  return { ok: true };
+  return guard("updateNote", async () => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({ note: note.trim() || null })
+      .eq("id", id);
+    if (error) return fail(error.message);
+    revalidatePath(`/transactions/${id}`);
+    revalidate();
+    return { ok: true };
+  });
 }
 
 export async function bulkValidate(ids: string[]): Promise<ActionResult> {
   if (ids.length === 0) return fail("Aucune transaction sélectionnée");
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("transactions")
-    .update({ status: "validated", validated_at: new Date().toISOString() })
-    .in("id", ids)
-    .not("subcategory_id", "is", null);
-  if (error) return fail(error.message);
-  revalidate();
-  return { ok: true };
+  return guard("bulkValidate", async () => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({ status: "validated", validated_at: new Date().toISOString() })
+      .in("id", ids)
+      .not("subcategory_id", "is", null);
+    if (error) return fail(error.message);
+    revalidate();
+    return { ok: true };
+  });
 }
 
 /** Counts existing transactions whose raw label would match a candidate rule. */

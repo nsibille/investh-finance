@@ -1049,6 +1049,24 @@ body {
   font-size: var(--text-sm); font-weight: var(--fw-semibold);
   color: var(--color-text-primary);
 }
+/* Variante alignée : `table-layout: fixed` + `<colgroup>` identique sur toutes
+   les tables d'un groupe → colonnes alignées d'un groupe à l'autre. Contenu
+   tronqué par défaut, sauf cellules `data-wrap` (nom, motif) qui reviennent
+   à la ligne. */
+.table-grouped { table-layout: fixed; }
+.table-grouped th,
+.table-grouped td {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.table-grouped th[data-wrap="true"],
+.table-grouped td[data-wrap="true"] {
+  white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+}
+/* Ligne de détail dépliée (éditeur de règles enseigne) : pas de troncature. */
+.table-grouped tr[data-expand="true"] td {
+  white-space: normal; overflow: visible;
+  background: var(--color-bg-subtle);
+}
 
 /* ================================================================
    COMPOSANTS — Feedback (spinner, skeleton, progress, tooltip)

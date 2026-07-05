@@ -15,7 +15,7 @@ import { runOptimistic } from "@/lib/optimistic";
 import { RuleForm } from "./RuleForm";
 import { RuleImport } from "./RuleImport";
 import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
-import { groupByCategory } from "@/lib/categories/group";
+import { groupByCategory, preciseSubName } from "@/lib/categories/group";
 import { setRuleActive, deleteRule } from "@/server/actions/rules";
 import type { Rule, AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -55,8 +55,8 @@ export function RulesManager({
     setLocalRules(rules);
   }
 
-  const subNames = useMemo(
-    () => new Map(subcategoryOptions.map((o) => [o.id, o.subName])),
+  const preciseNames = useMemo(
+    () => new Map(subcategoryOptions.map((o) => [o.id, preciseSubName(o)])),
     [subcategoryOptions],
   );
   const accountNames = useMemo(
@@ -105,13 +105,23 @@ export function RulesManager({
 
   function renderTable(rules: Rule[]) {
     return (
-      <table className="table-transactions">
+      <table className="table-transactions table-grouped">
+        <colgroup>
+          <col style={{ width: 64 }} />
+          <col />
+          <col />
+          <col style={{ width: 170 }} />
+          <col style={{ width: 120 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 72 }} />
+          <col style={{ width: 88 }} />
+        </colgroup>
         <thead>
           <tr>
             <th>Active</th>
             <th>Nom</th>
             <th>Match</th>
-            <th>Sous-catégorie</th>
+            <th>Catégorie</th>
             <th>Compte</th>
             <th>Priorité</th>
             <th>Hits</th>
@@ -128,8 +138,8 @@ export function RulesManager({
                   aria-label="Activer/désactiver"
                 />
               </td>
-              <td style={{ fontWeight: "var(--fw-medium)" }}>{rule.name}</td>
-              <td>
+              <td data-wrap="true" style={{ fontWeight: "var(--fw-medium)" }}>{rule.name}</td>
+              <td data-wrap="true">
                 <span style={{ color: "var(--color-text-muted)", marginRight: "var(--space-2)" }}>
                   {MATCH_LABELS[rule.match_type]}
                 </span>
@@ -137,9 +147,7 @@ export function RulesManager({
                   {rule.pattern}
                 </code>
               </td>
-              <td style={{ color: subNames.get(rule.subcategory_id) ? undefined : "var(--color-text-muted)" }}>
-                {subNames.get(rule.subcategory_id) ?? "(défaut)"}
-              </td>
+              <td>{preciseNames.get(rule.subcategory_id) ?? "—"}</td>
               <td>{rule.account_id ? accountNames.get(rule.account_id) ?? "—" : "Tous"}</td>
               <td style={{ fontFamily: "var(--font-mono)" }}>{rule.priority}</td>
               <td style={{ fontFamily: "var(--font-mono)" }}>{rule.hit_count}</td>

@@ -780,19 +780,26 @@ fois pour tenir des milliers de lignes).
 Variante compact pour widgets analytics (top 10 dépenses).
 
 ### `category-group`
-**Regroupement d'items par catégorie** (règles, récurrentes) en respectant la
-hiérarchie définie Type → Catégorie (ordre `sort_order`).
+**Regroupement d'items par catégorie** (règles, récurrentes, enseignes) en
+respectant la hiérarchie définie Type → Catégorie (ordre `sort_order`).
 - Composition : `category-group__type` (header niveau 1, majuscule muted) →
   pour chaque catégorie `category-group__cat-head` (pastille `badge-dot` +
   `category-group__cat-name` + `badge-count`) → une `table-transactions`
-  (ou variante) listant les items de la catégorie.
+  listant les items de la catégorie.
 - Les catégories/types sans item sont omis ; les items non catégorisés
   atterrissent dans un groupe final « Sans catégorie » (sans header catégorie).
-- Colonnes : le Type/Catégorie étant portés par les headers, la table n'affiche
-  que la **sous-catégorie** (niveau 3) en colonne, pas le libellé complet.
+- **Alignement (règle générale)** : les tables de chaque groupe portent la
+  classe `table-grouped` (`table-layout: fixed`) + un `<colgroup>` **identique**
+  → les colonnes sont alignées d'un groupe à l'autre. Cellules tronquées
+  (ellipsis) par défaut, `data-wrap="true"` pour celles qui reviennent à la
+  ligne (nom, motif). Ligne de détail dépliée : `tr[data-expand="true"]`.
+- **Colonne « Catégorie » (règle générale)** : afficher la catégorie la plus
+  précise via `preciseSubName` — la sous-catégorie si nommée, sinon la
+  catégorie parente (pas de libellé « défaut »).
 - Implémentation : `src/components/categories/GroupedByCategory.tsx` (rendu
-  générique, prop `renderTable`) + helper `src/lib/categories/group.ts`
-  (`groupByCategory`). CSS section `.category-group*` dans `globals.css`.
+  générique, prop `renderTable`) + helpers `src/lib/categories/group.ts`
+  (`groupByCategory`, `preciseSubName`). CSS sections `.category-group*` et
+  `.table-grouped*` dans `globals.css`.
 
 ---
 

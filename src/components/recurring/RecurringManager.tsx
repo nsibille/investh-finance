@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RecurringForm } from "./RecurringForm";
 import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
-import { groupByCategory } from "@/lib/categories/group";
+import { groupByCategory, preciseSubName } from "@/lib/categories/group";
 import { formatShortDate } from "@/lib/format/date";
 import { useImportStore } from "@/stores/import";
 import {
@@ -60,8 +60,8 @@ export function RecurringManager({
     setLocalPatterns(patterns);
   }
 
-  const subNames = useMemo(
-    () => new Map(subcategoryOptions.map((o) => [o.id, o.subName])),
+  const preciseNames = useMemo(
+    () => new Map(subcategoryOptions.map((o) => [o.id, preciseSubName(o)])),
     [subcategoryOptions],
   );
 
@@ -147,12 +147,23 @@ export function RecurringManager({
 
   function renderTable(items: RecurringPatternView[]) {
     return (
-      <table className="table-transactions">
+      <table className="table-transactions table-grouped">
+        <colgroup>
+          <col style={{ width: 64 }} />
+          <col />
+          <col style={{ width: 170 }} />
+          <col style={{ width: 110 }} />
+          <col style={{ width: 120 }} />
+          <col style={{ width: 100 }} />
+          <col style={{ width: 210 }} />
+          <col style={{ width: 110 }} />
+          <col style={{ width: 88 }} />
+        </colgroup>
         <thead>
           <tr>
             <th>Active</th>
             <th>Nom</th>
-            <th>Sous-catégorie</th>
+            <th>Catégorie</th>
             <th>Compte</th>
             <th>Montant</th>
             <th>Fréquence</th>
@@ -171,7 +182,7 @@ export function RecurringManager({
                   aria-label="Activer/désactiver"
                 />
               </td>
-              <td>
+              <td data-wrap="true">
                 <div style={{ fontWeight: "var(--fw-medium)" }}>{p.name}</div>
                 {p.merchantName && (
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
@@ -179,8 +190,8 @@ export function RecurringManager({
                   </div>
                 )}
               </td>
-              <td style={{ color: subNames.get(p.subcategory_id ?? "") ? undefined : "var(--color-text-muted)" }}>
-                {p.subcategory_id ? subNames.get(p.subcategory_id) ?? "(défaut)" : "—"}
+              <td style={{ color: p.subcategory_id ? undefined : "var(--color-text-muted)" }}>
+                {p.subcategory_id ? preciseNames.get(p.subcategory_id) ?? "—" : "—"}
               </td>
               <td>{p.accountName ?? "Tous"}</td>
               <td>

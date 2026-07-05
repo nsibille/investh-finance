@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, ShoppingBag, Store, Repeat, Users, X } from "lucide-react";
-import { FileText, ShoppingBag, Store, Repeat, RefreshCw, X } from "lucide-react";
+import { FileText, ShoppingBag, Store, Repeat, Users, RefreshCw, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -765,12 +764,6 @@ export function StatementImport({
                               Partager…
                             </button>
                           )}
-                        </div>
-                      </td>
-                      <td data-col="category">
-                        {r.purchaseId ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                            <span className="import-purchase-chip">
                           {r.purchaseId && (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
                               <ShoppingBag size={12} aria-hidden />

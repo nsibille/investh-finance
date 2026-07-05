@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, ShoppingBag, Store, Repeat, X } from "lucide-react";
+import { FileText, ShoppingBag, Store, Repeat, RefreshCw, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -20,7 +20,7 @@ import { MerchantAttachModal } from "./MerchantAttachModal";
 import { RecurringAttachModal } from "./RecurringAttachModal";
 import { useToast } from "@/hooks/useToast";
 import { formatShortDate } from "@/lib/format/date";
-import { confirmImport, confirmCsvImport } from "@/server/actions/import";
+import { confirmImport, confirmCsvImport, rematchPreviewPurchases } from "@/server/actions/import";
 import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
 import { addMerchantRule, createMerchantRuleFromLabel } from "@/server/actions/merchants";
 import {
@@ -75,6 +75,8 @@ export function StatementImport({
   const [merchantRow, setMerchantRow] = useState<number | null>(null);
   // Ligne dont on associe une récurrente.
   const [recurringRow, setRecurringRow] = useState<number | null>(null);
+  // Recalcul des rattachements d'achats (achats créés après le parse).
+  const [rematching, setRematching] = useState(false);
 
   const allPurchases = useMemo(() => {
     const seen = new Set(purchaseOptions.map((p) => p.id));
@@ -119,6 +121,81 @@ export function StatementImport({
       merchantLocked: false,
     });
   }
+
+  // Rejoue l'appariement aux achats sur l'aperçu courant : reconnaît les achats
+  // créés après l'analyse du fichier, sans re-uploader. Ne touche qu'aux lignes
+  // sans achat (les rattachements manuels/détachements sont préservés).
+  async function runRematch(opts?: { notify?: boolean }) {
+    const cur = useImportStore.getState().preview;
+    if (!cur) return;
+    setRematching(true);
+    try {
+      const candidates = cur.rows
+        .map((r, index) => ({
+          index,
+          operation_date: r.operation_date,
+          amount: r.amount,
+          raw_label: r.raw_label,
+          dup: r.duplicateReason === "existing",
+        }))
+        .filter((r) => !r.dup)
+        .map(({ index, operation_date, amount, raw_label }) => ({
+          index,
+          operation_date,
+          amount,
+          raw_label,
+        }));
+      const res = await rematchPreviewPurchases(candidates);
+      if (!res.ok) {
+        if (opts?.notify) toast.error(res.error);
+        return;
+      }
+      let applied = 0;
+      for (const { index, match } of res.matches) {
+        const row = useImportStore.getState().preview?.rows[index];
+        // N'écrase pas un rattachement déjà présent (auto ou manuel).
+        if (!row || row.purchaseId) continue;
+        patchRow(index, {
+          purchaseId: match.purchaseId,
+          purchaseName: match.purchaseName,
+          purchaseOccurrence: match.occurrence,
+          purchaseInstallmentTotal: match.installmentTotal,
+          purchaseEndless: match.endless,
+          ...(match.subcategoryId ? { categoryId: match.subcategoryId } : {}),
+          ...(match.merchantId
+            ? {
+                merchantId: match.merchantId,
+                merchantName: match.merchantName,
+                merchantLocked: true,
+              }
+            : {}),
+        });
+        applied += 1;
+      }
+      if (opts?.notify) {
+        toast.success(
+          applied > 0
+            ? `${applied} achat${applied > 1 ? "s" : ""} rattaché${applied > 1 ? "s" : ""}`
+            : "Aucun nouvel achat à rattacher",
+        );
+      }
+    } finally {
+      setRematching(false);
+    }
+  }
+
+  // Au montage : si un aperçu est déjà en cache (retour sur /import), on rejoue
+  // l'appariement pour capter les achats créés entre-temps.
+  const didMountRematch = useRef(false);
+  useEffect(() => {
+    if (didMountRematch.current) return;
+    didMountRematch.current = true;
+    // Différé hors du corps de l'effet : évite un setState synchrone au montage.
+    if (useImportStore.getState().preview?.rows.length) {
+      void Promise.resolve().then(() => runRematch());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Rattache une enseigne et crée automatiquement sa règle (même logique que
   // pour les catégories : toaster récap / annuler / appliquer partout).
@@ -566,7 +643,7 @@ export function StatementImport({
               </Alert>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)", flexWrap: "wrap" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
                 <Checkbox
                   checked={onlyUncat}
@@ -575,6 +652,15 @@ export function StatementImport({
                 />
                 Sans catégorie uniquement ({uncategorizedCount})
               </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={rematching}
+                leftIcon={<RefreshCw size={14} />}
+                onClick={() => runRematch({ notify: true })}
+              >
+                Ré-analyser les achats
+              </Button>
             </div>
 
             <table className="table-import-preview">

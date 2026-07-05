@@ -19,11 +19,12 @@ import { useImportStore } from "@/stores/import";
 import {
   detectRecurring,
   createFromCandidate,
+  applyRecurringPattern,
   deleteRecurringPattern,
   setRecurringActive,
+  type DetectedRecurring,
 } from "@/server/actions/recurring";
 import type { RecurringPatternView } from "@/lib/recurring/queries";
-import type { RecurringCandidate } from "@/lib/recurring/detector";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
@@ -47,7 +48,7 @@ export function RecurringManager({
   const router = useRouter();
   const toast = useToast();
   const [modal, setModal] = useState<ModalState>(null);
-  const [candidates, setCandidates] = useState<RecurringCandidate[] | null>(null);
+  const [candidates, setCandidates] = useState<DetectedRecurring[] | null>(null);
   const [detecting, setDetecting] = useState(false);
 
   const [localPatterns, setLocalPatterns] = useState(patterns);
@@ -76,10 +77,23 @@ export function RecurringManager({
     }
   }
 
-  async function addCandidate(c: RecurringCandidate) {
+  async function addCandidate(c: DetectedRecurring) {
     const res = await createFromCandidate(c);
     if (!res.ok) return toast.error(res.error);
     toast.success("Récurrente ajoutée");
+    setCandidates((prev) => prev?.filter((x) => x !== c) ?? null);
+    router.refresh();
+  }
+
+  async function assignCandidate(c: DetectedRecurring) {
+    if (!c.existingPatternId) return;
+    const res = await applyRecurringPattern(c.existingPatternId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(
+      res.applied > 0
+        ? `${res.applied} transaction${res.applied > 1 ? "s" : ""} rattachée${res.applied > 1 ? "s" : ""} à « ${c.name} »`
+        : "Aucune transaction à rattacher",
+    );
     setCandidates((prev) => prev?.filter((x) => x !== c) ?? null);
     router.refresh();
   }
@@ -132,14 +146,29 @@ export function RecurringManager({
             {candidates.map((c, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", justifyContent: "space-between", padding: "var(--space-2) 0", borderTop: i ? "1px solid var(--color-border)" : "none" }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: "var(--fw-medium)" }}>{c.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: "var(--fw-medium)" }}>{c.name}</span>
+                    {c.existingPatternId && (
+                      <span className="badge-status-validated">Règle détectée</span>
+                    )}
+                  </div>
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                    {c.occurrences} occurrences · ~{c.frequency_days} j · dernière {formatShortDate(c.last_seen_at)}
+                    {c.existingPatternId
+                      ? `${c.occurrences} transaction${c.occurrences > 1 ? "s" : ""} à rattacher`
+                      : `${c.occurrences} occurrences · ~${c.frequency_days} j · dernière ${formatShortDate(c.last_seen_at)}`}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                   <Amount value={c.expected_amount} />
-                  <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => addCandidate(c)}>Ajouter</Button>
+                  {c.existingPatternId ? (
+                    <Button variant="secondary" size="sm" onClick={() => assignCandidate(c)}>
+                      Assigner ({c.occurrences})
+                    </Button>
+                  ) : (
+                    <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => addCandidate(c)}>
+                      Ajouter
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

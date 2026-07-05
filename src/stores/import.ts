@@ -16,6 +16,11 @@ export interface ImportPreviewRow extends ParsedTransaction {
   /** Achat rattaché (la catégorie devient héritée/verrouillée). */
   purchaseId?: string | null;
   purchaseName?: string | null;
+  /** Occurrence 1-based de la mensualité (X) et total (Y) — affiché « X/Y ». */
+  purchaseOccurrence?: number | null;
+  purchaseInstallmentTotal?: number | null;
+  /** Abonnement sans fin : total inconnu (occurrence X/∞). */
+  purchaseEndless?: boolean;
   /** Enseigne rattachée (règle, achat ou choix manuel). */
   merchantId?: string | null;
   merchantName?: string | null;

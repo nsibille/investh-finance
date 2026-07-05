@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   matchInstallmentsToTransactions,
+  installmentOccurrence,
   type MatchableInstallment,
   type MatchableTx,
 } from "./installments";
@@ -22,6 +23,12 @@ export interface PreviewPurchaseMatch {
   /** Enseigne de l'achat (imposée à la transaction rattachée). */
   merchantId: string | null;
   merchantName: string | null;
+  /** Occurrence 1-based de la mensualité appariée (X). */
+  occurrence: number | null;
+  /** Nombre total de mensualités de l'achat (Y). */
+  installmentTotal: number;
+  /** Abonnement sans fin : total inconnu (occurrence X/∞). */
+  endless: boolean;
 }
 
 /**
@@ -42,20 +49,40 @@ export async function matchPreviewRowsToPurchases(
   if (!insts || insts.length === 0) return new Map();
 
   const purchaseIds = [...new Set(insts.map((i) => i.purchase_id))];
-  const [{ data: purchases }, { data: attached }] = await Promise.all([
-    supabase
-      .from("purchases")
-      .select("id, name, subcategory_id, is_archived, merchant_id")
-      .in("id", purchaseIds),
-    supabase
-      .from("transactions")
-      .select("purchase_id")
-      .in("purchase_id", purchaseIds),
-  ]);
+  const [{ data: purchases }, { data: attached }, { data: allInsts }] =
+    await Promise.all([
+      supabase
+        .from("purchases")
+        .select(
+          "id, name, subcategory_id, is_archived, merchant_id, is_recurring, recurrence_end",
+        )
+        .in("id", purchaseIds),
+      supabase
+        .from("transactions")
+        .select("purchase_id")
+        .in("purchase_id", purchaseIds),
+      // Toutes les mensualités (appariées comprises) : occurrence X/Y fiable.
+      supabase
+        .from("purchase_installments")
+        .select("purchase_id, month")
+        .in("purchase_id", purchaseIds),
+    ]);
   const pInfo = new Map((purchases ?? []).map((p) => [p.id, p]));
   const hasAttached = new Set(
     (attached ?? []).map((t) => t.purchase_id).filter((x): x is string => !!x),
   );
+
+  // Mois triés par achat → mois de départ (X=1) et total (Y).
+  const monthsByPurchase = new Map<string, string[]>();
+  for (const i of allInsts ?? []) {
+    const list = monthsByPurchase.get(i.purchase_id) ?? [];
+    list.push(i.month);
+    monthsByPurchase.set(i.purchase_id, list);
+  }
+  for (const list of monthsByPurchase.values())
+    list.sort((a, b) => a.localeCompare(b));
+  // Mois de la mensualité appariée (pour l'occurrence).
+  const monthByInst = new Map(insts.map((i) => [i.id, i.month]));
 
   const merchantIds = [
     ...new Set((purchases ?? []).map((p) => p.merchant_id).filter((x): x is string => !!x)),
@@ -101,12 +128,22 @@ export async function matchPreviewRowsToPurchases(
     if (!pid) continue;
     const p = pInfo.get(pid);
     const merchantId = p?.merchant_id ?? null;
+    const months = monthsByPurchase.get(pid) ?? [];
+    const instMonth = monthByInst.get(installmentId);
+    const startMonth = months[0] ?? instMonth;
+    const occurrence =
+      instMonth && startMonth
+        ? installmentOccurrence(startMonth, instMonth)
+        : null;
     out.set(Number(transactionId), {
       purchaseId: pid,
       purchaseName: p?.name ?? "",
       subcategoryId: p?.subcategory_id ?? null,
       merchantId,
       merchantName: merchantId ? (merchantNames.get(merchantId) ?? null) : null,
+      occurrence,
+      installmentTotal: months.length,
+      endless: !!(p?.is_recurring && !p?.recurrence_end),
     });
   }
   return out;

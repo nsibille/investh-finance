@@ -29,4 +29,8 @@ export interface PurchaseOption {
   /** Enseigne de l'achat (imposée à la transaction rattachée). */
   merchantId: string | null;
   merchantName: string | null;
+  /** Mois des mensualités (triés) — sert à calculer l'occurrence X/Y. */
+  installmentMonths: string[];
+  /** Abonnement sans fin : total inconnu (occurrence X/∞). */
+  endless: boolean;
 }

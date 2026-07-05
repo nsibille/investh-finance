@@ -13,7 +13,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
 import { Amount } from "@/components/ui/Amount";
 import { ImportRowBadge } from "@/components/ui/Badge";
-import { Toggle } from "@/components/ui/Checkbox";
+import { Toggle, Checkbox } from "@/components/ui/Checkbox";
 import { ImportCategoryEditor } from "./ImportCategoryEditor";
 import { PurchaseAttachModal } from "./PurchaseAttachModal";
 import { MerchantAttachModal } from "./MerchantAttachModal";
@@ -52,6 +52,8 @@ export function StatementImport({
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
+  // Filtre rapide : n'afficher que les lignes sans catégorie.
+  const [onlyUncat, setOnlyUncat] = useState(false);
   // Catégories créées à la volée pendant cette session d'import.
   const [extraOptions, setExtraOptions] = useState<SubcategoryOption[]>([]);
   // Achats (dont créés à la volée) + ligne dont on rattache un achat.
@@ -389,6 +391,10 @@ export function StatementImport({
   }
 
   const includedCount = preview?.rows.filter((r) => r.include).length ?? 0;
+  const totalRows = preview?.rows.length ?? 0;
+  const categorizedCount = preview?.rows.filter((r) => r.categoryId).length ?? 0;
+  const uncategorizedCount = totalRows - categorizedCount;
+  const catPct = totalRows > 0 ? Math.round((categorizedCount / totalRows) * 100) : 0;
 
   return (
     <Card>
@@ -434,7 +440,8 @@ export function StatementImport({
                 <FileText size={16} />
                 <strong>{preview.bankLabel}</strong>
                 <span style={{ color: "var(--color-text-muted)" }}>
-                  · {preview.rows.length} opérations détectées
+                  · {preview.rows.length} opérations détectées · {catPct}% catégorisées
+                  {" "}automatiquement
                 </span>
               </div>
               <div style={{ display: "flex", gap: "var(--space-2)" }}>
@@ -468,6 +475,17 @@ export function StatementImport({
               </Alert>
             )}
 
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+                <Checkbox
+                  checked={onlyUncat}
+                  onChange={(e) => setOnlyUncat(e.target.checked)}
+                  disabled={uncategorizedCount === 0}
+                />
+                Sans catégorie uniquement ({uncategorizedCount})
+              </label>
+            </div>
+
             <table className="table-import-preview">
               <thead>
                 <tr>
@@ -481,7 +499,9 @@ export function StatementImport({
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((r, i) => (
+                {preview.rows.map((r, i) => {
+                  if (onlyUncat && r.categoryId) return null;
+                  return (
                     <tr
                       key={i}
                       data-excluded={!r.include || undefined}
@@ -602,7 +622,8 @@ export function StatementImport({
                         />
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
               </tbody>
             </table>
           </>

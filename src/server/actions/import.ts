@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { importParsedTransactions } from "@/lib/import/importer";
 import {
   importCsvTransactions,
@@ -8,7 +9,12 @@ import {
 } from "@/lib/import/csvImporter";
 import { detectAndTagInternalTransfers } from "@/lib/import/transfers";
 import { detectAndTagDeferredDebits } from "@/lib/import/deferred";
-import { matchPurchaseInstallments } from "@/lib/purchases/match";
+import {
+  matchPurchaseInstallments,
+  matchPreviewRowsToPurchases,
+  type PreviewRow,
+  type PreviewPurchaseMatch,
+} from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import type { ParsedTransaction, ImportSummary } from "@/lib/import/types";
 
@@ -79,5 +85,35 @@ export async function confirmCsvImport(
     return { ok: true, summary, transfersDetected };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erreur d'import" };
+  }
+}
+
+type RematchResult =
+  | { ok: true; matches: { index: number; match: PreviewPurchaseMatch }[] }
+  | { ok: false; error: string };
+
+/**
+ * Rejoue l'appariement des lignes de l'aperçu aux mensualités d'achats, à la
+ * demande. Le pré-rattachement de l'aperçu est calculé une seule fois au parse
+ * du fichier ; ce recalcul permet de reconnaître les achats créés *après* (au
+ * retour sur /import ou via le bouton « Ré-analyser ») sans re-uploader.
+ * `rows` porte l'index d'origine dans l'aperçu ; les doublons existants sont
+ * exclus en amont (comme au parse).
+ */
+export async function rematchPreviewPurchases(
+  rows: PreviewRow[],
+): Promise<RematchResult> {
+  try {
+    const supabase = await createClient();
+    const map = await matchPreviewRowsToPurchases(supabase, rows);
+    return {
+      ok: true,
+      matches: [...map.entries()].map(([index, match]) => ({ index, match })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Erreur d'analyse",
+    };
   }
 }

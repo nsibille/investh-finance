@@ -29,6 +29,17 @@ export interface RecurrencePlan {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string };
 
+/**
+ * Champs remis à zéro sur une transaction désassignée d'un achat : sa catégorie
+ * était héritée de l'achat, elle repasse donc « non catégorisée / à valider ».
+ */
+const DETACHED_TX_RESET = {
+  purchase_id: null,
+  subcategory_id: null,
+  status: "pending",
+  validated_at: null,
+} satisfies TransactionUpdate;
+
 function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
 }
@@ -331,11 +342,12 @@ export async function attachTransactionToInstallment(
   if (!purchase) return fail("Achat introuvable");
 
   // Réassignation : l'échéance était déjà appariée à une autre transaction.
-  // On détache d'abord l'ancienne de l'achat avant de la remplacer.
+  // On détache d'abord l'ancienne de l'achat (remise à « à valider ») avant de
+  // la remplacer.
   if (inst.transaction_id) {
     await supabase
       .from("transactions")
-      .update({ purchase_id: null })
+      .update(DETACHED_TX_RESET)
       .eq("id", inst.transaction_id);
   }
 
@@ -418,9 +430,11 @@ export async function detachTransaction(transactionId: string): Promise<ActionRe
     .update({ transaction_id: null })
     .eq("transaction_id", transactionId);
   if (instErr) return fail(instErr.message);
+  // Désassignation : la transaction reperd la catégorie héritée de l'achat et
+  // repasse « à valider ».
   const { error } = await supabase
     .from("transactions")
-    .update({ purchase_id: null })
+    .update(DETACHED_TX_RESET)
     .eq("id", transactionId);
   if (error) return fail(error.message);
   revalidate();
@@ -429,8 +443,9 @@ export async function detachTransaction(transactionId: string): Promise<ActionRe
 
 /**
  * Désassigne une échéance (« paiement programmé ») : vide son appariement et
- * détache de l'achat la transaction qui la réglait. L'échéance repasse « à
- * venir ». Sans transaction appariée, ne fait qu'un no-op sûr.
+ * détache de l'achat la transaction qui la réglait (remise à « non catégorisée /
+ * à valider »). L'échéance repasse « à venir ». Sans transaction appariée, ne
+ * fait qu'un no-op sûr.
  */
 export async function unassignInstallment(
   installmentId: string,
@@ -450,7 +465,7 @@ export async function unassignInstallment(
   if (inst.transaction_id) {
     const { error: txErr } = await supabase
       .from("transactions")
-      .update({ purchase_id: null })
+      .update(DETACHED_TX_RESET)
       .eq("id", inst.transaction_id);
     if (txErr) return fail(txErr.message);
   }

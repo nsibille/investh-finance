@@ -249,7 +249,10 @@ export function PendingValidator({
   async function detachPurchase(id: string) {
     const res = await detachTransaction(id);
     if (!res.ok) return toast.error(res.error);
-    patch(id, { purchase: null });
+    // La catégorie était héritée de l'achat : on la vide (la transaction reste
+    // « à valider » dans cette vue).
+    patch(id, { purchase: null, subcategory_id: null });
+    setSelected((m) => ({ ...m, [id]: null }));
     router.refresh();
   }
 

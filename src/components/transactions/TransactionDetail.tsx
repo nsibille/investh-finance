@@ -144,6 +144,10 @@ export function TransactionDetail({
   async function detach() {
     const res = await detachTransaction(tx.id);
     if (!res.ok) return toast.error(res.error);
+    // La catégorie était héritée de l'achat : on la vide et on repasse la
+    // transaction « à valider » (miroir de `detachTransaction`).
+    setSubcategoryId(null);
+    setStatus("pending");
     toast.success("Transaction détachée de l'achat");
     router.refresh();
   }

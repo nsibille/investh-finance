@@ -79,6 +79,21 @@ function toMonthDate(ym: string): string {
   return `${ym.slice(0, 7)}-01`;
 }
 
+/**
+ * « Touche » un achat (bump `updated_at` via le trigger) pour le faire remonter
+ * en tête du sélecteur de rattachement (`getPurchaseOptions`, trié par mise à
+ * jour) — pratique pour enchaîner une salve de rattachements sur le même achat.
+ */
+async function touchPurchase(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  purchaseId: string,
+): Promise<void> {
+  await supabase
+    .from("purchases")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", purchaseId);
+}
+
 /** Charge toutes les arêtes parent→enfant (pour valider un rattachement). */
 async function loadPurchaseEdges(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -316,6 +331,7 @@ export async function attachTransactionToPurchase(
   // Appariement automatique : remplit une échéance prévisionnelle non appariée
   // si le mois + le montant correspondent (comportement « auto »).
   await matchPurchaseInstallments(purchaseId);
+  await touchPurchase(supabase, purchaseId);
   revalidate();
   return { ok: true };
 }
@@ -387,6 +403,7 @@ export async function attachTransactionToInstallment(
     .update(patch)
     .eq("id", transactionId);
   if (error) return fail(error.message);
+  await touchPurchase(supabase, inst.purchase_id);
   revalidate();
   return { ok: true };
 }
@@ -439,6 +456,7 @@ export async function createInstallmentForTransaction(
     .update(patch)
     .eq("id", transactionId);
   if (error) return fail(error.message);
+  await touchPurchase(supabase, purchaseId);
   revalidate();
   return { ok: true };
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Wand2, Check, Ban, Store, ShoppingBag, X, Repeat, Users } from "lucide-react";
+import { Wand2, Check, Ban, Store, ShoppingBag, X, Repeat, Users, ArrowDownLeft } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -509,12 +509,25 @@ export function PendingValidator({
                   type="button"
                   onClick={() => openPersons(raw)}
                   disabled={loadingPersons === row.id}
-                  style={{ ...chipBtn, color: row.personsSummary ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}
+                  style={{
+                    ...chipBtn,
+                    color: row.repayment
+                      ? "var(--color-success)"
+                      : row.personsSummary
+                        ? "var(--color-text-secondary)"
+                        : "var(--color-text-muted)",
+                  }}
                 >
-                  <Users size={13} aria-hidden />
-                  {row.personsSummary
-                    ? `${row.personsSummary.count} personne${row.personsSummary.count > 1 ? "s" : ""}`
-                    : "Personnes…"}
+                  {row.repayment ? (
+                    <ArrowDownLeft size={13} aria-hidden />
+                  ) : (
+                    <Users size={13} aria-hidden />
+                  )}
+                  {row.repayment
+                    ? `Remboursement · ${row.repayment.personName}`
+                    : row.personsSummary
+                      ? `${row.personsSummary.count} personne${row.personsSummary.count > 1 ? "s" : ""}`
+                      : "Personnes…"}
                 </button>
 
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: row.note ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}>

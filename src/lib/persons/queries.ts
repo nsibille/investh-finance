@@ -9,6 +9,7 @@ import type {
   PersonRepaymentRow,
   PersonManualEntryRow,
   SplitNature,
+  TransactionRepaymentContext,
 } from "./types";
 import { debtDirection } from "./types";
 
@@ -145,6 +146,43 @@ export async function getCreditCandidates(): Promise<CreditCandidate[]> {
       operationDate: t.operation_date,
       amount: Number(t.amount),
     }));
+}
+
+/**
+ * Contexte de remboursement d'une transaction : date d'opération (pour
+ * pré-remplir le `repaidOn`) + éventuel remboursement déjà rattaché. Sert à
+ * l'éditeur de lien avec une personne pour marquer un crédit « remboursement ».
+ */
+export async function getRepaymentContextForTransaction(
+  transactionId: string,
+): Promise<TransactionRepaymentContext> {
+  const supabase = await createClient();
+  const [{ data: tx }, { data: rep }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("operation_date")
+      .eq("id", transactionId)
+      .maybeSingle(),
+    supabase
+      .from("person_repayments")
+      .select("id, person_id, amount, repaid_on, note")
+      .eq("transaction_id", transactionId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  return {
+    operationDate: tx?.operation_date ?? null,
+    repayment: rep
+      ? {
+          id: rep.id,
+          personId: rep.person_id,
+          amount: Number(rep.amount),
+          repaidOn: rep.repaid_on,
+          note: rep.note,
+        }
+      : null,
+  };
 }
 
 /**

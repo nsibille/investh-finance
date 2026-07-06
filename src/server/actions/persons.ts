@@ -2,8 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSharesForTransaction } from "@/lib/persons/queries";
-import type { SplitNature, TransactionSplit } from "@/lib/persons/types";
+import {
+  getSharesForTransaction,
+  getRepaymentContextForTransaction,
+} from "@/lib/persons/queries";
+import type {
+  SplitNature,
+  TransactionSplit,
+  TransactionRepaymentContext,
+} from "@/lib/persons/types";
 
 /**
  * Charge la ventilation d'une transaction à la demande (édition depuis un écran
@@ -13,6 +20,16 @@ export async function getTransactionSplit(
   transactionId: string,
 ): Promise<TransactionSplit> {
   return getSharesForTransaction(transactionId);
+}
+
+/**
+ * Charge le contexte de remboursement d'une transaction (date d'opération +
+ * remboursement déjà lié) pour l'éditeur de lien avec une personne.
+ */
+export async function getTransactionRepayment(
+  transactionId: string,
+): Promise<TransactionRepaymentContext> {
+  return getRepaymentContextForTransaction(transactionId);
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string };

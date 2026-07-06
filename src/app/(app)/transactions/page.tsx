@@ -28,6 +28,11 @@ export default async function TransactionsPage({
   const status = STATUSES.includes(sp.status as TransactionStatus)
     ? (sp.status as TransactionStatus)
     : undefined;
+  const parseList = (v?: string) => (v ? v.split(",").filter(Boolean) : undefined);
+  const parseAmount = (v?: string) => {
+    const n = Number(v);
+    return v && Number.isFinite(n) && n >= 0 ? n : undefined;
+  };
 
   const [
     data,
@@ -43,6 +48,10 @@ export default async function TransactionsPage({
       accountId: sp.account,
       status,
       subcategoryId: sp.subcategory,
+      merchantIds: parseList(sp.merchant),
+      purchaseIds: parseList(sp.purchase),
+      amountMin: parseAmount(sp.amin),
+      amountMax: parseAmount(sp.amax),
       search: sp.q,
       from: sp.from,
       to: sp.to,
@@ -79,6 +88,8 @@ export default async function TransactionsPage({
         <TransactionFilters
           accountOptions={accountOptions}
           subcategoryOptions={subcategoryOptions}
+          merchantOptions={merchantOptions}
+          purchaseOptions={purchaseOptions}
         />
         {data.rows.length === 0 ? (
           <Card>

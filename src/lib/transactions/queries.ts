@@ -124,6 +124,22 @@ export async function getTransactionsPage(
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.subcategoryId)
     query = query.eq("subcategory_id", filters.subcategoryId);
+  if (filters.merchantIds?.length)
+    query = query.in("merchant_id", filters.merchantIds);
+  if (filters.purchaseIds?.length)
+    query = query.in("purchase_id", filters.purchaseIds);
+  // Montant filtré en valeur absolue : les dépenses sont stockées négatives, on
+  // veut « entre 10 et 50 € » qu'il s'agisse d'un débit ou d'un crédit.
+  const { amountMin: aMin, amountMax: aMax } = filters;
+  if (aMin != null && aMax != null) {
+    query = query.or(
+      `and(amount.gte.${aMin},amount.lte.${aMax}),and(amount.gte.${-aMax},amount.lte.${-aMin})`,
+    );
+  } else if (aMin != null) {
+    query = query.or(`amount.gte.${aMin},amount.lte.${-aMin}`);
+  } else if (aMax != null) {
+    query = query.gte("amount", -aMax).lte("amount", aMax);
+  }
   if (filters.from) query = query.gte("operation_date", filters.from);
   if (filters.to) query = query.lte("operation_date", filters.to);
   if (filters.search) {

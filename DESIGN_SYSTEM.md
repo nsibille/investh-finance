@@ -1003,7 +1003,19 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 **Row de transaction** — défini dans `table-transactions`.
 
 ### `transaction-filters`
-**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`.
+**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `multi-select-combobox` (enseignes, achats) + `filter-amount-range` (2× `input-currency-md` min/max, montant en valeur absolue) + `input-date-md` (du/au) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`. Le paramètre `showStatus={false}` masque le sélecteur de statut (page « À valider », toujours `pending`). Sous la toolbar, `filter-chips` remonte chaque filtre actif (surtout les multiselect) en chip retirable + bouton « Tout effacer ». État porté par l'URL (`merchant`/`purchase` en CSV, `amin`/`amax`, `from`/`to`, `q`, `account`, `subcategory`, `sort`). Implémentation : `src/components/transactions/TransactionFilters.tsx`.
+
+### `multi-select-combobox`
+**Filtre multi-sélection avec recherche** (enseignes, achats…). Trigger `input-select-md`-like (40px) : icône optionnelle + placeholder ou compteur « N enseignes » + croix d'effacement ; état `data-active` (bordure/fond `--color-brand-primary`) quand ≥ 1 sélection. Panneau en portal (`position: fixed`, `z-popover`, `max-height: 320px`) : champ recherche insensible casse/accents multi-tokens + liste d'options avec case `ms-combobox__check` (✓ indigo si cochée). **Les options cochées sont triées en tête de liste.** Footer « Tout désélectionner ». Navigation clavier ↑/↓/Entrée (toggle)/Échap. Multi-toggle sans fermer le panneau.
+```css
+.ms-combobox__trigger[data-active="true"] { border-color: var(--color-brand-primary); background: var(--color-brand-primary-50); }
+.ms-combobox__check[data-on="true"] { background: var(--color-brand-primary); border-color: var(--color-brand-primary); }
+.ms-combobox__panel { position: fixed; z-index: var(--z-popover); max-height: 320px; }
+```
+> Implémentation : `src/components/ui/MultiSelectCombobox.tsx` (section CSS `multi-select-combobox` dans `globals.css`).
+
+### `filter-chips`
+**Barre de filtres actifs** sous une toolbar : chaque critère actif rendu en `filter-chip` (pilule `radius-full`, fond `--color-brand-primary-50`, bordure indigo, croix) qui se retire au clic ; termine par `btn-ghost-sm` « Tout effacer ». Rend les filtres (notamment multiselect) évidents et réversibles.
 
 ### `file-dropzone`
 **Zone upload fichier (import)**
@@ -1191,6 +1203,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `empty-state` | Feedback | État vide générique | auto |
 | `file-dropzone` | Métier | Zone upload fichier import | auto |
 | `file-dropzone-mini` | Métier | Zone upload justificatif | auto |
+| `filter-amount-range` | Form | Range de montant (2 champs devise min/max) | auto |
+| `filter-chips` | Métier | Barre de filtres actifs retirables | auto |
 | `form-error-msg` | Form | Message erreur sous un champ | auto |
 | `form-field` | Form | Wrapper label+input+erreur | auto |
 | `form-help-text` | Form | Texte d'aide sous un champ | auto |
@@ -1210,6 +1224,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `input-toggle` | Form | Switch on/off | auto |
 | `layout-page-header` | Layout | Header de page avec titre + actions | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
+| `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |
 | `modal-export-options` | Modal | Variante options export | auto |
 | `modal-surface` | Modal | Modale standard | auto |

@@ -65,6 +65,13 @@ export interface TransactionFilters {
   accountId?: string;
   status?: TransactionStatus;
   subcategoryId?: string;
+  /** Enseignes (OR) : la transaction doit être rattachée à l'une d'elles. */
+  merchantIds?: string[];
+  /** Achats (OR) : la transaction doit être rattachée à l'un d'eux. */
+  purchaseIds?: string[];
+  /** Bornes de montant en valeur absolue (dépense ou revenu). */
+  amountMin?: number;
+  amountMax?: number;
   search?: string;
   from?: string;
   to?: string;

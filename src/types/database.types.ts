@@ -1027,6 +1027,7 @@ export type Database = {
           split_nature: Database["public"]["Enums"]["split_nature"] | null
           status: Database["public"]["Enums"]["transaction_status"]
           subcategory_id: string | null
+          transfer_group_id: string | null
           updated_at: string
           validated_at: string | null
           value_date: string | null
@@ -1052,6 +1053,7 @@ export type Database = {
           split_nature?: Database["public"]["Enums"]["split_nature"] | null
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory_id?: string | null
+          transfer_group_id?: string | null
           updated_at?: string
           validated_at?: string | null
           value_date?: string | null
@@ -1077,6 +1079,7 @@ export type Database = {
           split_nature?: Database["public"]["Enums"]["split_nature"] | null
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory_id?: string | null
+          transfer_group_id?: string | null
           updated_at?: string
           validated_at?: string | null
           value_date?: string | null

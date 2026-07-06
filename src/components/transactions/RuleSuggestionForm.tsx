@@ -14,8 +14,8 @@ import { fullPattern } from "@/lib/rules/suggester";
 import {
   createRuleFromTransaction,
   previewRuleMatches,
-  type RuleApplyScope,
 } from "@/server/actions/transactions";
+import type { RuleApplyScope } from "@/server/rules/apply";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { RuleInput } from "@/lib/rules/schema";
 

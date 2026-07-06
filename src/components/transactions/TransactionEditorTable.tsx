@@ -125,6 +125,7 @@ export function TransactionEditorTable({
 
   const purchaseRow = purchaseKey ? rowByKey.get(purchaseKey) : null;
   const personRow = personKey ? rowByKey.get(personKey) : null;
+  const merchantRow = merchantKey ? rowByKey.get(merchantKey) : null;
 
   return (
     <>
@@ -335,6 +336,7 @@ export function TransactionEditorTable({
         open={merchantKey !== null}
         onClose={() => setMerchantKey(null)}
         merchantOptions={merchantOptions}
+        defaultSubcategoryId={merchantRow?.categoryId ?? null}
         onAttach={(option) => {
           if (merchantKey !== null) handlers.onAttachMerchant(merchantKey, option);
         }}

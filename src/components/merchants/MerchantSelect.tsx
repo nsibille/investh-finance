@@ -21,12 +21,18 @@ export function MerchantSelect({
   onChange,
   placeholder = "Aucune enseigne",
   allowCreate = true,
+  defaultSubcategoryId = null,
 }: {
   value: string | null;
   options: MerchantOption[];
   onChange: (id: string | null, option: MerchantOption | null) => void;
   placeholder?: string;
   allowCreate?: boolean;
+  /**
+   * Catégorie héritée à la création « à la volée » (ex. catégorie de la
+   * transaction depuis laquelle on crée l'enseigne).
+   */
+  defaultSubcategoryId?: string | null;
 }) {
   const toast = useToast();
   const [extra, setExtra] = useState<MerchantOption[]>([]);
@@ -96,11 +102,13 @@ export function MerchantSelect({
     const name = query.trim();
     if (!name) return;
     setCreating(true);
-    const res = await createMerchant({ name });
+    const res = await createMerchant({ name, subcategoryId: defaultSubcategoryId });
     setCreating(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success("Enseigne créée");
-    const option: MerchantOption = { id: res.id, name, subcategoryId: null };
+    toast.success(
+      res.subcategoryId ? "Enseigne créée (catégorie héritée)" : "Enseigne créée",
+    );
+    const option: MerchantOption = { id: res.id, name, subcategoryId: res.subcategoryId };
     setExtra((prev) => (prev.some((m) => m.id === option.id) ? prev : [...prev, option]));
     pick(option);
   }

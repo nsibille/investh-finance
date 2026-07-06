@@ -8,7 +8,9 @@ import type { Database } from "@/types/database.types";
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
-export type CreateResult = { ok: true; id: string } | { ok: false; error: string };
+export type CreateResult =
+  | { ok: true; id: string; subcategoryId: string | null }
+  | { ok: false; error: string };
 
 function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
@@ -23,6 +25,11 @@ function revalidate() {
 
 export interface MerchantInput {
   name: string;
+  /**
+   * Catégorie par défaut de l'enseigne. Créée « à la volée » depuis une
+   * transaction, l'enseigne hérite automatiquement de la catégorie de celle-ci
+   * (le client passe la sous-catégorie courante de la transaction).
+   */
   subcategoryId?: string | null;
   /** Pays de l'enseigne (libre) ; ignoré si `isOnline`. */
   country?: string | null;
@@ -43,27 +50,29 @@ export async function createMerchant(input: MerchantInput): Promise<CreateResult
       is_online: isOnline,
       country: isOnline ? null : input.country?.trim() || null,
     })
-    .select("id")
+    .select("id, subcategory_id")
     .single();
 
   // Nom déjà pris (index unique lower(name)) : on renvoie l'enseigne existante
-  // pour que la création « à la volée » reste idempotente.
+  // pour que la création « à la volée » reste idempotente. On ne touche pas à sa
+  // catégorie (elle prime sur celle qu'on aurait héritée).
   if (error) {
     if (error.code === "23505") {
       const { data: existing } = await supabase
         .from("merchants")
-        .select("id")
+        .select("id, subcategory_id")
         .ilike("name", name)
         .limit(1)
         .maybeSingle();
-      if (existing) return { ok: true, id: existing.id };
+      if (existing)
+        return { ok: true, id: existing.id, subcategoryId: existing.subcategory_id };
     }
     return fail(error.message);
   }
   if (!data) return fail("Création impossible");
 
   revalidate();
-  return { ok: true, id: data.id };
+  return { ok: true, id: data.id, subcategoryId: data.subcategory_id };
 }
 
 export async function updateMerchant(
@@ -100,14 +109,29 @@ export async function deleteMerchant(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+export type AttachMerchantResult =
+  | {
+      ok: true;
+      /** Catégorie par défaut effective de l'enseigne après rattachement. */
+      subcategoryId: string | null;
+      /** L'enseigne vient d'hériter de la catégorie de la transaction. */
+      merchantCategorized: boolean;
+    }
+  | { ok: false; error: string };
+
 /**
- * Rattache une transaction à une enseigne : applique la catégorie par défaut de
- * l'enseigne (surchargeable — le sélecteur de catégorie reste actif).
+ * Rattache une transaction à une enseigne.
+ * - Enseigne avec catégorie par défaut : elle est appliquée à la transaction
+ *   (surchargeable — le sélecteur de catégorie reste actif) et la transaction
+ *   est validée.
+ * - Enseigne sans catégorie mais transaction catégorisée : l'enseigne hérite de
+ *   la catégorie de la transaction (première transaction rattachée → catégorie
+ *   de l'enseigne parente).
  */
 export async function attachTransactionToMerchant(
   transactionId: string,
   merchantId: string,
-): Promise<ActionResult> {
+): Promise<AttachMerchantResult> {
   const supabase = await createClient();
   const { data: merchant } = await supabase
     .from("merchants")
@@ -117,10 +141,26 @@ export async function attachTransactionToMerchant(
   if (!merchant) return fail("Enseigne introuvable");
 
   const patch: TransactionUpdate = { merchant_id: merchantId };
+  let subcategoryId = merchant.subcategory_id;
+  let merchantCategorized = false;
   if (merchant.subcategory_id) {
     patch.subcategory_id = merchant.subcategory_id;
     patch.status = "validated";
     patch.validated_at = new Date().toISOString();
+  } else {
+    const { data: tx } = await supabase
+      .from("transactions")
+      .select("subcategory_id")
+      .eq("id", transactionId)
+      .maybeSingle();
+    if (tx?.subcategory_id) {
+      await supabase
+        .from("merchants")
+        .update({ subcategory_id: tx.subcategory_id })
+        .eq("id", merchantId);
+      subcategoryId = tx.subcategory_id;
+      merchantCategorized = true;
+    }
   }
   const { error } = await supabase
     .from("transactions")
@@ -128,7 +168,7 @@ export async function attachTransactionToMerchant(
     .eq("id", transactionId);
   if (error) return fail(error.message);
   revalidate();
-  return { ok: true };
+  return { ok: true, subcategoryId, merchantCategorized };
 }
 
 export async function detachTransactionFromMerchant(

@@ -31,11 +31,17 @@ export function MerchantAttachModal({
   onClose,
   merchantOptions,
   onAttach,
+  defaultSubcategoryId = null,
 }: {
   open: boolean;
   onClose: () => void;
   merchantOptions: MerchantOption[];
   onAttach: (option: MerchantOption) => void;
+  /**
+   * Catégorie héritée à la création « à la volée » : l'enseigne créée depuis une
+   * transaction hérite de la catégorie de celle-ci.
+   */
+  defaultSubcategoryId?: string | null;
 }) {
   const toast = useToast();
   const [query, setQuery] = useState("");
@@ -60,14 +66,16 @@ export function MerchantAttachModal({
     const name = query.trim();
     if (!name) return;
     setCreating(true);
-    const res = await createMerchant({ name });
+    const res = await createMerchant({ name, subcategoryId: defaultSubcategoryId });
     setCreating(false);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    toast.success("Enseigne créée");
-    attach({ id: res.id, name, subcategoryId: null });
+    toast.success(
+      res.subcategoryId ? "Enseigne créée (catégorie héritée)" : "Enseigne créée",
+    );
+    attach({ id: res.id, name, subcategoryId: res.subcategoryId });
   }
 
   return (

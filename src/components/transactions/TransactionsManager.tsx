@@ -149,6 +149,11 @@ export function TransactionsManager({
     });
     if (res.ok) {
       router.refresh();
+      if (res.merchantCategorized) {
+        toast.success(
+          `L'enseigne « ${res.merchantCategorized.name} » n'avait pas de catégorie : elle hérite de celle-ci.`,
+        );
+      }
       toast.success("Validée", {
         duration: 8000,
         action: {
@@ -238,13 +243,20 @@ export function TransactionsManager({
     if (!res.ok) return toast.error(res.error);
     patch(id, {
       merchant: { id: option.id, name: option.name },
-      ...(option.subcategoryId
-        ? { subcategory_id: option.subcategoryId, status: "validated" as const }
+      // Enseigne déjà catégorisée : sa catégorie est appliquée + validée. En cas
+      // d'héritage (enseigne sans catégorie), la transaction garde son état.
+      ...(res.subcategoryId && !res.merchantCategorized
+        ? { subcategory_id: res.subcategoryId, status: "validated" as const }
         : {}),
     });
     router.refresh();
+    if (res.merchantCategorized) {
+      toast.success(
+        `L'enseigne « ${option.name} » a hérité de la catégorie de la transaction.`,
+      );
+    }
     const row = rowById.get(id);
-    if (!option.subcategoryId) {
+    if (!res.subcategoryId) {
       toast.info(
         `Enseigne « ${option.name} » rattachée. Définis une catégorie par défaut pour créer une règle automatiquement.`,
       );

@@ -107,6 +107,11 @@ export function TransactionDetail({
     });
     if (res.ok) {
       router.refresh();
+      if (res.merchantCategorized) {
+        toast.success(
+          `L'enseigne « ${res.merchantCategorized.name} » n'avait pas de catégorie : elle hérite de celle-ci.`,
+        );
+      }
       if (subId) {
         toast.info("Catégorie mise à jour", {
           duration: 8000,
@@ -149,13 +154,18 @@ export function TransactionDetail({
     const res = await attachTransactionToMerchant(tx.id, merchantId);
     setAttachingMerchant(false);
     if (!res.ok) return toast.error(res.error);
-    const merchant = merchantOptions.find((m) => m.id === merchantId);
-    // La catégorie par défaut de l'enseigne vient d'être appliquée côté serveur.
-    if (merchant?.subcategoryId) setSubcategoryId(merchant.subcategoryId);
+    const name = merchantOptions.find((m) => m.id === merchantId)?.name ?? "l'enseigne";
+    // Enseigne déjà catégorisée : sa catégorie vient d'être appliquée à la
+    // transaction côté serveur — on reflète l'état localement.
+    if (res.subcategoryId && !res.merchantCategorized) setSubcategoryId(res.subcategoryId);
     router.refresh();
 
+    if (res.merchantCategorized) {
+      toast.success(`L'enseigne « ${name} » a hérité de la catégorie de la transaction.`);
+    }
+
     // Règle créée automatiquement (comme pour les catégories), avec annulation.
-    if (!merchant?.subcategoryId) {
+    if (!res.subcategoryId) {
       toast.info(
         "Enseigne rattachée. Définis une catégorie par défaut pour créer une règle automatiquement.",
       );
@@ -168,8 +178,8 @@ export function TransactionDetail({
     if (!ruleRes.ok) return toast.error(ruleRes.error);
     toast.success(
       ruleRes.applied > 0
-        ? `Règle créée pour « ${merchant.name} » · ${ruleRes.applied} transaction${ruleRes.applied > 1 ? "s" : ""} rattachée${ruleRes.applied > 1 ? "s" : ""}`
-        : `Règle créée pour « ${merchant.name} »`,
+        ? `Règle créée pour « ${name} » · ${ruleRes.applied} transaction${ruleRes.applied > 1 ? "s" : ""} rattachée${ruleRes.applied > 1 ? "s" : ""}`
+        : `Règle créée pour « ${name} »`,
       {
         duration: 10000,
         action: {
@@ -357,6 +367,7 @@ export function TransactionDetail({
                 value={null}
                 options={merchantOptions}
                 placeholder="Rattacher à une enseigne…"
+                defaultSubcategoryId={subcategoryId}
                 onChange={(id) => {
                   if (id) attachMerchant(id);
                 }}

@@ -59,6 +59,11 @@ export interface TransactionRow {
    * depuis la liste. `null` quand la transaction n'est pas ventilée.
    */
   split?: import("@/lib/persons/types").TransactionSplit | null;
+  /**
+   * Remboursement lié (crédit marqué « remboursement d'une dette ») : nom de la
+   * personne remboursée. `null` quand la transaction n'est pas un remboursement.
+   */
+  repayment?: { personName: string } | null;
 }
 
 export interface TransactionFilters {

@@ -212,8 +212,9 @@ async function attachRelations(
   const merchantIds = uniq(records.map((r) => r.merchant_id));
   const recurringIds = uniq(records.map((r) => r.recurring_pattern_id));
   const txWithSplit = records.filter((r) => r.split_nature).map((r) => r.id);
+  const allIds = records.map((r) => r.id);
 
-  const [purchases, merchants, recurrings, shares] = await Promise.all([
+  const [purchases, merchants, recurrings, shares, repayments] = await Promise.all([
     purchaseIds.length
       ? supabase
           .from("purchases")
@@ -236,7 +237,23 @@ async function attachRelations(
           )
           .in("transaction_id", txWithSplit)
       : Promise.resolve({ data: [] }),
+    allIds.length
+      ? supabase
+          .from("person_repayments")
+          .select("transaction_id, persons(name)")
+          .in("transaction_id", allIds)
+      : Promise.resolve({ data: [] }),
   ]);
+
+  // Remboursements liés (crédit → nom de la personne remboursée) par transaction.
+  const repaymentByTx = new Map<string, string>();
+  for (const r of (repayments.data ?? []) as unknown as {
+    transaction_id: string | null;
+    persons: { name: string } | null;
+  }[]) {
+    if (r.transaction_id && r.persons)
+      repaymentByTx.set(r.transaction_id, r.persons.name);
+  }
 
   const nameMap = (data: { id: string; name: string }[] | null) =>
     new Map((data ?? []).map((x) => [x.id, x.name]));
@@ -325,6 +342,8 @@ async function attachRelations(
       row.personsSummary = { count: shareList.length, nature: rec.split_nature };
       row.split = { nature: rec.split_nature, shares: shareList };
     }
+    const repaidName = repaymentByTx.get(rec.id);
+    if (repaidName) row.repayment = { personName: repaidName };
   });
 }
 

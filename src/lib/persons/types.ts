@@ -51,6 +51,24 @@ export function debtDirection(txAmount: number): DebtDirection {
   return txAmount > 0 ? "i_owe" : "owed_to_me";
 }
 
+/** Remboursement bancaire déjà lié à une transaction (rattaché à une personne). */
+export interface TransactionRepaymentInfo {
+  id: string;
+  personId: string;
+  amount: number;
+  repaidOn: string;
+  note: string | null;
+}
+
+/**
+ * Contexte de remboursement d'une transaction pour l'éditeur de lien :
+ * date d'opération (défaut du `repaidOn`) + éventuel remboursement déjà lié.
+ */
+export interface TransactionRepaymentContext {
+  operationDate: string | null;
+  repayment: TransactionRepaymentInfo | null;
+}
+
 /** Remboursement enrichi du libellé de la transaction liée éventuelle. */
 export interface PersonRepaymentRow {
   id: string;

@@ -33,6 +33,7 @@ import { PurchaseForm } from "./PurchaseForm";
 import { InstallmentEditor } from "./InstallmentEditor";
 import { PurchaseGalaxy } from "./PurchaseGalaxy";
 import { PurchaseAssignments } from "./PurchaseAssignments";
+import { CategoryOverridePicker } from "./CategoryOverridePicker";
 import {
   deletePurchase,
   setPurchaseArchived,
@@ -41,6 +42,7 @@ import {
   setPurchaseSubcategory,
 } from "@/server/actions/purchases";
 import type {
+  CategoryOverrideMode,
   PurchaseDetail,
   PurchaseParentOption,
   PurchaseTxLine,
@@ -96,6 +98,13 @@ export function PurchaseDetailView({
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Transaction dont on édite le partage entre personnes (depuis la galaxie).
   const [shareTx, setShareTx] = useState<PurchaseTxLine | null>(null);
+  // Changement de catégorie en attente : on demande la politique de surcharge
+  // des transactions rattachées avant d'appliquer (`pendingCat` non null =
+  // modale ouverte). `overrideMode` = choix courant dans la modale.
+  const [pendingCat, setPendingCat] = useState<{ subId: string | null } | null>(
+    null,
+  );
+  const [overrideMode, setOverrideMode] = useState<CategoryOverrideMode>("empty");
 
   const isGroup = p.childIds.length > 0 || p.descendantCount > 0;
   const endless = p.is_recurring && !p.recurrence_end;
@@ -133,11 +142,23 @@ export function PurchaseDetailView({
     router.refresh();
   }
 
-  async function changeCategory(subId: string | null) {
-    const res = await setPurchaseSubcategory(p.id, subId);
+  async function applyCategory(subId: string | null, mode: CategoryOverrideMode) {
+    const res = await setPurchaseSubcategory(p.id, subId, mode);
     if (!res.ok) return toast.error(res.error);
     toast.success("Catégorie mise à jour");
     router.refresh();
+  }
+
+  function changeCategory(subId: string | null) {
+    if (subId === p.subcategory_id) return; // pas de changement
+    // Sans transaction rattachée en direct : rien à surcharger, on applique.
+    if (p.transactionCount === 0) {
+      void applyCategory(subId, "none");
+      return;
+    }
+    // Sinon : on demande la politique de surcharge avant d'appliquer.
+    setOverrideMode("empty");
+    setPendingCat({ subId });
   }
 
   return (
@@ -349,6 +370,7 @@ export function PurchaseDetailView({
             merchantOptions={merchantOptions}
             parentOptions={parentOptions}
             defaultParentId={modal.mode === "create" ? modal.parentId : null}
+            attachedTransactionCount={modal.mode === "edit" ? p.transactionCount : 0}
             installmentsEditor={modal.mode === "edit" ? <InstallmentEditor purchase={p} /> : null}
             onDone={() => setModal(null)}
           />
@@ -377,6 +399,41 @@ export function PurchaseDetailView({
           </div>
         </Modal>
       )}
+
+      <Modal
+        open={pendingCat !== null}
+        onClose={() => setPendingCat(null)}
+        title="Appliquer aux transactions rattachées ?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingCat(null)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingCat) void applyCategory(pendingCat.subId, overrideMode);
+                setPendingCat(null);
+              }}
+            >
+              Appliquer
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+          <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", margin: 0 }}>
+            Cet achat a {p.transactionCount} transaction
+            {p.transactionCount > 1 ? "s" : ""} rattachée
+            {p.transactionCount > 1 ? "s" : ""}. Choisis comment répercuter la
+            nouvelle catégorie.
+          </p>
+          <CategoryOverridePicker
+            value={overrideMode}
+            onChange={setOverrideMode}
+            count={p.transactionCount}
+          />
+        </div>
+      </Modal>
 
       <Modal
         open={confirmDelete}

@@ -11,12 +11,16 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { MerchantSelect } from "@/components/merchants/MerchantSelect";
+import { CategoryOverridePicker } from "./CategoryOverridePicker";
 import { useToast } from "@/hooks/useToast";
 import { createPurchase, updatePurchase } from "@/server/actions/purchases";
 import { descendantIdsOf, type PurchaseEdge } from "@/lib/purchases/tree";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
-import type { PurchaseParentOption } from "@/lib/purchases/types";
+import type {
+  CategoryOverrideMode,
+  PurchaseParentOption,
+} from "@/lib/purchases/types";
 
 export interface PurchaseFormInitial {
   name: string;
@@ -34,6 +38,7 @@ export function PurchaseForm({
   merchantOptions,
   parentOptions,
   defaultParentId,
+  attachedTransactionCount = 0,
   installmentsEditor,
   onDone,
 }: {
@@ -46,6 +51,11 @@ export function PurchaseForm({
   parentOptions: PurchaseParentOption[];
   /** Parent pré-sélectionné (ex. « Nouvel achat dans ce groupe »). */
   defaultParentId?: string | null;
+  /**
+   * Nombre de transactions rattachées en direct (édition). Sert à proposer la
+   * politique de surcharge de leur catégorie quand celle de l'achat change.
+   */
+  attachedTransactionCount?: number;
   /** Éditeur de mensualités affiché en mode édition (l'échéancier n'est
    *  paramétrable à la volée qu'en création ; en édition on gère ligne à ligne). */
   installmentsEditor?: ReactNode;
@@ -64,6 +74,13 @@ export function PurchaseForm({
   const [parentId, setParentId] = useState<string | null>(
     initial?.parentId ?? defaultParentId ?? null,
   );
+  // Politique de surcharge de la catégorie des transactions rattachées : ne
+  // s'applique qu'en édition, si la catégorie change et qu'il y a des tx liées.
+  const [categoryOverride, setCategoryOverride] =
+    useState<CategoryOverrideMode>("empty");
+  const categoryChanged =
+    mode === "edit" && subcategoryId !== (initial?.subcategoryId ?? null);
+  const showOverride = categoryChanged && attachedTransactionCount > 0;
 
   // Groupes candidats : on exclut l'achat lui-même et ses descendants (cycle),
   // ainsi que les archivés (sauf le parent actuel s'il l'est).
@@ -119,7 +136,16 @@ export function PurchaseForm({
     const res =
       mode === "create"
         ? await createPurchase({ name, description, subcategoryId, merchantId, parentId, installmentPlan, recurrencePlan })
-        : await updatePurchase(id!, { name, description, subcategoryId, merchantId, parentId });
+        : await updatePurchase(id!, {
+            name,
+            description,
+            subcategoryId,
+            merchantId,
+            parentId,
+            // Catégorie inchangée : ne rien surcharger (évite d'écraser des
+            // catégories ajustées à la main sur les transactions liées).
+            categoryOverride: categoryChanged ? categoryOverride : "none",
+          });
     setSaving(false);
     if (!res.ok) {
       setError(res.error);
@@ -173,6 +199,16 @@ export function PurchaseForm({
           allowCreate
         />
       </FormField>
+
+      {showOverride && (
+        <FormField label="Surcharger la catégorie des transactions rattachées ?">
+          <CategoryOverridePicker
+            value={categoryOverride}
+            onChange={setCategoryOverride}
+            count={attachedTransactionCount}
+          />
+        </FormField>
+      )}
 
       <FormField label="Groupe parent (optionnel — pour budgéter un ensemble)">
         <Select

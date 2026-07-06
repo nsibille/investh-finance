@@ -4,12 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import { matchRule } from "@/lib/rules/matcher";
-import {
-  applyRuleToTransactions,
-  type RuleApplyScope,
-} from "@/server/rules/apply";
-
-export type { RuleApplyScope };
+import { applyRuleToTransactions } from "@/server/rules/apply";
+import type { RuleApplyScope } from "@/server/rules/apply";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 

@@ -6,6 +6,7 @@ import { generateInstallments } from "@/lib/purchases/installments";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import { isValidParent, type PurchaseEdge } from "@/lib/purchases/tree";
+import type { AttachableTransaction } from "@/lib/purchases/types";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -298,6 +299,8 @@ export async function attachTransactionToPurchase(
  * Rattache une transaction à un achat en remplissant une échéance
  * prévisionnelle précise (« transaction non matchée » de l'achat). L'échéance
  * adopte le montant réel de la transaction ; la catégorie de l'achat est héritée.
+ * Si l'échéance était déjà appariée à une autre transaction, celle-ci est
+ * détachée de l'achat (réassignation du paiement).
  */
 export async function attachTransactionToInstallment(
   transactionId: string,
@@ -310,7 +313,8 @@ export async function attachTransactionToInstallment(
     .eq("id", installmentId)
     .maybeSingle();
   if (!inst) return fail("Échéance introuvable");
-  if (inst.transaction_id) return fail("Cette échéance est déjà appariée.");
+  // Déjà appariée à cette même transaction : rien à faire.
+  if (inst.transaction_id === transactionId) return { ok: true };
 
   const { data: tx } = await supabase
     .from("transactions")
@@ -325,6 +329,15 @@ export async function attachTransactionToInstallment(
     .eq("id", inst.purchase_id)
     .maybeSingle();
   if (!purchase) return fail("Achat introuvable");
+
+  // Réassignation : l'échéance était déjà appariée à une autre transaction.
+  // On détache d'abord l'ancienne de l'achat avant de la remplacer.
+  if (inst.transaction_id) {
+    await supabase
+      .from("transactions")
+      .update({ purchase_id: null })
+      .eq("id", inst.transaction_id);
+  }
 
   // L'échéance adopte le montant réellement constaté et pointe la transaction.
   const { error: instErr } = await supabase
@@ -398,6 +411,13 @@ export async function createInstallmentForTransaction(
 
 export async function detachTransaction(transactionId: string): Promise<ActionResult> {
   const supabase = await createClient();
+  // Détache aussi l'échéance éventuellement appariée à cette transaction : sans
+  // ça, l'échéance resterait « payée » en pointant une transaction détachée.
+  const { error: instErr } = await supabase
+    .from("purchase_installments")
+    .update({ transaction_id: null })
+    .eq("transaction_id", transactionId);
+  if (instErr) return fail(instErr.message);
   const { error } = await supabase
     .from("transactions")
     .update({ purchase_id: null })
@@ -405,6 +425,81 @@ export async function detachTransaction(transactionId: string): Promise<ActionRe
   if (error) return fail(error.message);
   revalidate();
   return { ok: true };
+}
+
+/**
+ * Désassigne une échéance (« paiement programmé ») : vide son appariement et
+ * détache de l'achat la transaction qui la réglait. L'échéance repasse « à
+ * venir ». Sans transaction appariée, ne fait qu'un no-op sûr.
+ */
+export async function unassignInstallment(
+  installmentId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: inst } = await supabase
+    .from("purchase_installments")
+    .select("transaction_id")
+    .eq("id", installmentId)
+    .maybeSingle();
+  if (!inst) return fail("Échéance introuvable");
+  const { error } = await supabase
+    .from("purchase_installments")
+    .update({ transaction_id: null })
+    .eq("id", installmentId);
+  if (error) return fail(error.message);
+  if (inst.transaction_id) {
+    const { error: txErr } = await supabase
+      .from("transactions")
+      .update({ purchase_id: null })
+      .eq("id", inst.transaction_id);
+    if (txErr) return fail(txErr.message);
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Liste les transactions non rattachées à un achat, candidates à
+ * l'assignation depuis le détail d'un achat (rattacher / assigner une échéance /
+ * réassigner). Filtre optionnel sur le libellé ; bornée aux 25 plus récentes.
+ */
+export async function getAttachableTransactions(
+  search?: string,
+): Promise<AttachableTransaction[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("transactions")
+    .select("id, operation_date, label, amount, currency, status, account_id")
+    .is("purchase_id", null)
+    .order("operation_date", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(25);
+  const term = search?.trim();
+  if (term) query = query.ilike("label", `%${term}%`);
+  const { data } = await query;
+  if (!data || data.length === 0) return [];
+
+  const accountIds = [
+    ...new Set(data.map((t) => t.account_id).filter((x): x is string => !!x)),
+  ];
+  const { data: accounts } = accountIds.length
+    ? await supabase.from("accounts").select("id, name, color").in("id", accountIds)
+    : { data: [] as { id: string; name: string; color: string | null }[] };
+  const accMap = new Map((accounts ?? []).map((a) => [a.id, a]));
+
+  return data.map((t) => {
+    const acc = t.account_id ? accMap.get(t.account_id) : null;
+    return {
+      id: t.id,
+      operation_date: t.operation_date,
+      label: t.label,
+      amount: Number(t.amount),
+      currency: t.currency,
+      status: t.status,
+      accountName: acc?.name ?? null,
+      accountColor: acc?.color ?? null,
+    };
+  });
 }
 
 export async function addInstallment(

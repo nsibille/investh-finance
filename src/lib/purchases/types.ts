@@ -17,6 +17,21 @@ export interface PurchaseTxLine {
   accountColor: string | null;
 }
 
+/**
+ * Transaction non rattachée, candidate à l'assignation depuis le détail d'un
+ * achat (sélecteur « rattacher / assigner / réassigner une transaction »).
+ */
+export interface AttachableTransaction {
+  id: string;
+  operation_date: string;
+  label: string;
+  amount: number;
+  currency: string;
+  status: TransactionStatus;
+  accountName: string | null;
+  accountColor: string | null;
+}
+
 /** Part d'une personne sur un achat (agrégée sur ses transactions ventilées). */
 export interface PurchasePersonShare {
   personId: string;

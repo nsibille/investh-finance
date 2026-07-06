@@ -48,7 +48,8 @@ export interface RuleOutcome {
 }
 
 /**
- * Applies the active rules to a transaction, lowest `priority` first.
+ * Applies the active rules to a transaction. Rules attached to an enseigne
+ * always win over simple rules; ties are then broken by lowest `priority`.
  * Returns the first matching rule's outcome, otherwise a pending fallback.
  */
 export function applyRules(
@@ -57,12 +58,13 @@ export function applyRules(
 ): RuleOutcome {
   const ordered = rules
     .filter((r) => r.is_active)
-    // Priorité croissante ; à priorité égale, une règle rattachée à une enseigne
-    // l'emporte (elle catégorise ET rattache l'enseigne, donc plus informative).
+    // Les règles enseignes sont TOUJOURS prioritaires sur les règles simples
+    // (elles catégorisent ET rattachent l'enseigne). À rang égal, priorité
+    // croissante départage.
     .sort(
       (a, b) =>
-        a.priority - b.priority ||
-        (a.merchant_id ? 0 : 1) - (b.merchant_id ? 0 : 1),
+        (a.merchant_id ? 0 : 1) - (b.merchant_id ? 0 : 1) ||
+        a.priority - b.priority,
     );
 
   for (const rule of ordered) {

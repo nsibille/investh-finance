@@ -540,6 +540,8 @@ export function PendingValidator({
             accountId={ruleFor.account?.id ?? ""}
             defaultSubcategoryId={selected[ruleFor.id] ?? null}
             subcategoryOptions={subcategoryOptions}
+            merchantId={ruleFor.merchant?.id ?? null}
+            merchantName={ruleFor.merchant?.name ?? null}
             onDone={() => setRuleFor(null)}
           />
         )}

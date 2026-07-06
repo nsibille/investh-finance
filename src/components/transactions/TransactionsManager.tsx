@@ -556,6 +556,8 @@ export function TransactionsManager({
             accountId={ruleFor.account?.id ?? ""}
             defaultSubcategoryId={ruleFor.subcategory_id}
             subcategoryOptions={allOptions}
+            merchantId={ruleFor.merchant?.id ?? null}
+            merchantName={ruleFor.merchant?.name ?? null}
             onDone={() => setRuleFor(null)}
           />
         )}

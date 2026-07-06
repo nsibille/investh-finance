@@ -610,6 +610,7 @@ export function PendingValidator({
             currency={personsFor.row.currency}
             persons={personOptions}
             initial={personsFor.split}
+            onSaved={() => setPersonsFor(null)}
           />
         )}
       </Modal>

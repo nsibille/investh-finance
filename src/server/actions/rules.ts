@@ -5,8 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import {
   applyRuleToTransactions,
+  loadApplicableRule,
+  toApplicableRule,
   type RuleApplyScope,
 } from "@/server/rules/apply";
+import { ensureNamelessMerchant } from "@/server/merchants/nameless";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -18,10 +21,15 @@ function fail(message: string): ActionResult {
   return { ok: false, error: message };
 }
 
+function revalidate() {
+  revalidatePath("/enseignes");
+  revalidatePath("/transactions");
+}
+
 /**
- * Creates or updates a rule, then optionally replays it over existing
- * transactions (`uncategorized` or `all`). Same apply semantics as creating a
- * rule from a transaction.
+ * Crée ou met à jour un motif (rattaché à une enseigne), puis le rejoue
+ * optionnellement sur les transactions existantes (`uncategorized` ou `all`).
+ * La catégorie n'est plus portée par le motif : elle vient de l'enseigne.
  */
 export async function saveRule(
   input: RuleInput,
@@ -54,16 +62,11 @@ export async function saveRule(
   let applied = 0;
   const scope = options.applyScope ?? "none";
   if (scope !== "none") {
-    const { data: rule } = await supabase
-      .from("categorization_rules")
-      .select("*")
-      .eq("id", ruleId)
-      .single();
+    const rule = await loadApplicableRule(supabase, ruleId);
     if (rule) applied = await applyRuleToTransactions(supabase, rule, scope);
   }
 
-  revalidatePath("/rules");
-  revalidatePath("/transactions");
+  revalidate();
   return { ok: true, applied };
 }
 
@@ -77,7 +80,7 @@ export async function setRuleActive(
     .update({ is_active: active })
     .eq("id", id);
   if (error) return fail(error.message);
-  revalidatePath("/rules");
+  revalidate();
   return { ok: true };
 }
 
@@ -88,7 +91,7 @@ export async function deleteRule(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) return fail(error.message);
-  revalidatePath("/rules");
+  revalidate();
   return { ok: true };
 }
 
@@ -97,9 +100,10 @@ export type RuleFromLabelResult =
   | { ok: false; error: string };
 
 /**
- * Crée une règle « contient » à partir d'un libellé assigné (import) :
- * pattern = libellé, cible = sous-catégorie. Renvoie la règle existante si une
- * règle identique (contient + même pattern + même sous-catégorie) existe déjà.
+ * Crée un motif « contient » à partir d'un libellé assigné (import/validation) :
+ * pattern = libellé, catégorie = sous-catégorie fournie. Le motif est rattaché à
+ * l'enseigne SANS NOM de cette sous-catégorie (groupe « Sans enseigne »). Renvoie
+ * le motif existant si un doublon identique existe déjà sous cette enseigne.
  */
 export async function createRuleFromLabel(
   pattern: string,
@@ -110,11 +114,14 @@ export async function createRuleFromLabel(
   if (!subcategoryId) return { ok: false, error: "Catégorie manquante" };
 
   const supabase = await createClient();
+  const merchantId = await ensureNamelessMerchant(supabase, subcategoryId);
+  if (!merchantId) return { ok: false, error: "Enseigne sans nom impossible" };
+
   const { data: existing } = await supabase
     .from("categorization_rules")
     .select("id")
     .eq("match_type", "contains")
-    .eq("subcategory_id", subcategoryId)
+    .eq("merchant_id", merchantId)
     .ilike("pattern", p)
     .limit(1);
   if (existing && existing.length > 0) {
@@ -128,16 +135,16 @@ export async function createRuleFromLabel(
       match_type: "contains",
       pattern: p,
       case_sensitive: false,
-      subcategory_id: subcategoryId,
+      merchant_id: merchantId,
       auto_validate: true,
       priority: 100,
       is_active: true,
     })
     .select("id")
     .single();
-  if (error || !data) return { ok: false, error: error?.message ?? "Règle impossible" };
+  if (error || !data) return { ok: false, error: error?.message ?? "Motif impossible" };
 
-  revalidatePath("/rules");
+  revalidate();
   return { ok: true, ruleId: data.id, exists: false, pattern: p };
 }
 
@@ -154,11 +161,12 @@ export type RuleImportResult =
   | { ok: false; error: string };
 
 /**
- * Importe des règles depuis un fichier à 2 colonnes (catégorie « Cat.Sous-cat »,
+ * Importe des motifs depuis un fichier à 2 colonnes (catégorie « Cat.Sous-cat »,
  * motif « contient »). Crée les catégories/sous-catégories manquantes (une
- * catégorie inconnue est rattachée à un type « Importées » créé au besoin) et
- * les règles, en ignorant les doublons. Rejoue optionnellement les règles créées
- * sur les transactions non catégorisées.
+ * catégorie inconnue est rattachée à un type « Importées » créé au besoin) puis
+ * les motifs, rattachés à l'enseigne SANS NOM de chaque sous-catégorie, en
+ * ignorant les doublons. Rejoue optionnellement sur les transactions non
+ * catégorisées.
  */
 export async function importRules(
   rows: { category: string; subcategory: string; match: string }[],
@@ -176,7 +184,7 @@ export async function importRules(
       supabase.from("subcategories").select("id, name, category_id"),
       supabase
         .from("categorization_rules")
-        .select("pattern, match_type, subcategory_id"),
+        .select("pattern, match_type, merchant_id"),
     ]);
 
   const typeByName = new Map((types ?? []).map((t) => [norm(t.name), t.id]));
@@ -186,9 +194,10 @@ export async function importRules(
   const subByKey = new Map(
     (subs ?? []).map((s) => [`${s.category_id}|${norm(s.name)}`, s.id]),
   );
+  // Doublon = même motif « contient » déjà rattaché à la même enseigne.
   const ruleKeys = new Set(
     (existing ?? []).map(
-      (r) => `${r.match_type}|${r.subcategory_id}|${(r.pattern ?? "").toLowerCase()}`,
+      (r) => `${r.match_type}|${r.merchant_id}|${(r.pattern ?? "").toLowerCase()}`,
     ),
   );
 
@@ -206,6 +215,17 @@ export async function importRules(
     return data.id;
   }
 
+  // Enseigne sans nom par sous-catégorie, mémoïsée le temps de l'import.
+  const namelessBySub = new Map<string, string>();
+  async function namelessFor(subId: string): Promise<string> {
+    const cached = namelessBySub.get(subId);
+    if (cached) return cached;
+    const id = await ensureNamelessMerchant(supabase, subId);
+    if (!id) throw new Error("Enseigne sans nom impossible");
+    namelessBySub.set(subId, id);
+    return id;
+  }
+
   const summary: RuleImportSummary = {
     rulesCreated: 0,
     categoriesCreated: 0,
@@ -213,7 +233,7 @@ export async function importRules(
     skipped: 0,
     applied: 0,
   };
-  const createdRuleIds: string[] = [];
+  const createdRules: { id: string; subId: string }[] = [];
 
   try {
     for (const row of rows) {
@@ -245,7 +265,8 @@ export async function importRules(
         summary.subcategoriesCreated += 1;
       }
 
-      const key = `contains|${subId}|${row.match.toLowerCase()}`;
+      const merchantId = await namelessFor(subId);
+      const key = `contains|${merchantId}|${row.match.toLowerCase()}`;
       if (ruleKeys.has(key)) {
         summary.skipped += 1;
         continue;
@@ -257,33 +278,39 @@ export async function importRules(
           match_type: "contains",
           pattern: row.match,
           case_sensitive: false,
-          subcategory_id: subId,
+          merchant_id: merchantId,
           auto_validate: true,
           priority: 100,
           is_active: true,
         })
         .select("id")
         .single();
-      if (error || !created) throw new Error(error?.message ?? "Règle impossible");
+      if (error || !created) throw new Error(error?.message ?? "Motif impossible");
       ruleKeys.add(key);
-      createdRuleIds.push(created.id);
+      createdRules.push({ id: created.id, subId });
       summary.rulesCreated += 1;
     }
 
-    if (applyToUncategorized && createdRuleIds.length) {
+    if (applyToUncategorized && createdRules.length) {
+      const ids = createdRules.map((c) => c.id);
+      const subByRule = new Map(createdRules.map((c) => [c.id, c.subId]));
       const { data: toApply } = await supabase
         .from("categorization_rules")
         .select("*")
-        .in("id", createdRuleIds);
+        .in("id", ids);
       for (const r of toApply ?? []) {
-        summary.applied += await applyRuleToTransactions(supabase, r, "uncategorized");
+        // Enseigne sans nom → catégorie = sous-cat du motif, pas de rattachement.
+        const rule = toApplicableRule(r, {
+          name: null,
+          subcategory_id: subByRule.get(r.id) ?? null,
+        });
+        summary.applied += await applyRuleToTransactions(supabase, rule, "uncategorized");
       }
     }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erreur d'import" };
   }
 
-  revalidatePath("/rules");
-  revalidatePath("/transactions");
+  revalidate();
   return { ok: true, summary };
 }

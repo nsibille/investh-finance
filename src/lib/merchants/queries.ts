@@ -23,8 +23,9 @@ export async function getMerchants(): Promise<MerchantWithDetails[]> {
       .not("merchant_id", "is", null),
     supabase
       .from("categorization_rules")
-      .select("id, name, match_type, pattern, is_active, hit_count, merchant_id")
-      .not("merchant_id", "is", null)
+      .select(
+        "id, name, match_type, pattern, case_sensitive, is_active, hit_count, account_id, amount_min, amount_max, priority, auto_validate, merchant_id",
+      )
       .order("priority", { ascending: true }),
     getSubcategoryOptions(),
   ]);
@@ -52,8 +53,14 @@ export async function getMerchants(): Promise<MerchantWithDetails[]> {
       name: r.name,
       match_type: r.match_type,
       pattern: r.pattern,
+      case_sensitive: r.case_sensitive,
       is_active: r.is_active,
       hit_count: r.hit_count,
+      account_id: r.account_id,
+      amount_min: r.amount_min == null ? null : Number(r.amount_min),
+      amount_max: r.amount_max == null ? null : Number(r.amount_max),
+      priority: r.priority,
+      auto_validate: r.auto_validate,
     });
     rulesByMerchant.set(r.merchant_id, list);
   }
@@ -79,10 +86,13 @@ export const getMerchantOptions = cache(async function getMerchantOptions(): Pro
   const { data } = await supabase
     .from("merchants")
     .select("id, name, subcategory_id")
+    // Enseignes nommées uniquement : les enseignes « Sans enseigne » ne sont pas
+    // rattachables manuellement à une transaction/un achat.
+    .not("name", "is", null)
     .order("name", { ascending: true });
   return (data ?? []).map((m) => ({
     id: m.id,
-    name: m.name,
+    name: m.name ?? "",
     subcategoryId: m.subcategory_id,
   }));
 });

@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import { matchRule } from "@/lib/rules/matcher";
-import { applyRuleToTransactions } from "@/server/rules/apply";
+import { applyRuleToTransactions, toApplicableRule } from "@/server/rules/apply";
 import type { RuleApplyScope } from "@/server/rules/apply";
+import { ensureNamelessMerchant } from "@/server/merchants/nameless";
 import { backfillMerchantCategory } from "@/lib/merchants/backfill";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -177,14 +178,63 @@ export type RuleCreateResult =
   | { ok: false; error: string };
 
 export async function createRuleFromTransaction(
-  input: RuleInput,
+  input: {
+    name: string;
+    match_type: "regex" | "contains" | "exact";
+    pattern: string;
+    case_sensitive?: boolean;
+    account_id?: string | null;
+    auto_validate?: boolean;
+    priority?: number;
+    /** Catégorie cible choisie dans le formulaire. */
+    subcategoryId: string;
+    /** Enseigne à rattacher ; sinon motif sous l'enseigne « Sans enseigne ». */
+    merchantId?: string | null;
+  },
   options: { transactionId?: string; applyScope?: RuleApplyScope } = {},
 ): Promise<RuleCreateResult> {
-  const parsed = ruleSchema.safeParse(input);
+  if (!input.subcategoryId) return { ok: false, error: "Catégorie manquante" };
+  const supabase = await createClient();
+
+  // Enseigne propriétaire du motif : celle fournie (vraie marque), sinon
+  // l'enseigne « Sans enseigne » de la sous-catégorie. Une enseigne fournie sans
+  // catégorie hérite de la cible.
+  let merchantId = input.merchantId ?? null;
+  if (merchantId) {
+    const { data: m } = await supabase
+      .from("merchants")
+      .select("subcategory_id")
+      .eq("id", merchantId)
+      .maybeSingle();
+    if (!m) return { ok: false, error: "Enseigne introuvable" };
+    if (!m.subcategory_id) {
+      await supabase
+        .from("merchants")
+        .update({ subcategory_id: input.subcategoryId })
+        .eq("id", merchantId);
+    }
+  } else {
+    merchantId = await ensureNamelessMerchant(supabase, input.subcategoryId);
+    if (!merchantId) return { ok: false, error: "Enseigne sans nom impossible" };
+  }
+
+  const ruleInput: RuleInput = {
+    name: input.name,
+    match_type: input.match_type,
+    pattern: input.pattern,
+    case_sensitive: input.case_sensitive ?? false,
+    amount_min: "",
+    amount_max: "",
+    account_id: input.account_id ?? "",
+    merchant_id: merchantId,
+    auto_validate: input.auto_validate ?? true,
+    priority: input.priority ?? 100,
+    is_active: true,
+  };
+  const parsed = ruleSchema.safeParse(ruleInput);
   if (!parsed.success)
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalide" };
 
-  const supabase = await createClient();
   const { data: rule, error } = await supabase
     .from("categorization_rules")
     .insert({
@@ -196,13 +246,17 @@ export async function createRuleFromTransaction(
   if (error || !rule)
     return { ok: false, error: error?.message ?? "Création impossible" };
 
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("name, subcategory_id")
+    .eq("id", merchantId)
+    .maybeSingle();
   const applied = await applyRuleToTransactions(
     supabase,
-    rule,
+    toApplicableRule(rule, merchant ?? null),
     options.applyScope ?? "none",
   );
 
   revalidate();
-  revalidatePath("/rules");
   return { ok: true, applied };
 }

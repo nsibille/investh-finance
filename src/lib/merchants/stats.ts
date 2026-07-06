@@ -140,7 +140,7 @@ export async function getMerchantStats(
 
   return {
     id: merchant.id,
-    name: merchant.name,
+    name: merchant.name ?? "",
     categoryLabel: merchant.subcategory_id
       ? (categories.get(merchant.subcategory_id)?.categoryName ?? null)
       : null,

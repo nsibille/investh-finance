@@ -93,7 +93,7 @@ export async function matchPreviewRowsToPurchases(
       .from("merchants")
       .select("id, name")
       .in("id", merchantIds);
-    for (const m of merchants ?? []) merchantNames.set(m.id, m.name);
+    for (const m of merchants ?? []) merchantNames.set(m.id, m.name ?? "");
   }
 
   const items: MatchableInstallment[] = [];

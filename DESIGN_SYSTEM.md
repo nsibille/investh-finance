@@ -1002,8 +1002,36 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 ### `transaction-row`
 **Row de transaction** — défini dans `table-transactions`.
 
+### `table-transactions-list`
+**Table de la liste `/transactions`** (distincte de `table-transaction-editor`, réservée à l'aperçu d'import). Colonnes :
+- **Transaction** : titre = enseigne si connue (`tx-merchant`, cliquable → `merchant-quick-view`), sinon **libellé en style code** (`tx-label-code` : `font-mono`, fond `--color-bg-subtle`, bord + `radius-sm`). Sous-lignes `tx-main__meta` (xs, wrap) : libellé code réduit (`tx-label-code--sub`, quand l'enseigne occupe le titre) · achat (`tx-meta--purchase` + occurrence mono X/Y + croix détacher) · récurrence (`tx-meta--recurring` + croix) · personnes (`tx-meta--persons`, cliquable → éditeur de partage).
+- **Compte · date** mutualisés (`tx-acctdate` : `badge-dot` + nom de compte ellipsé au-dessus, date muette en dessous) — une seule colonne.
+- **Catégorie** (`tx-cat`) : `badge-dot` couleur + **nom complet sans retour à la ligne** ; le chemin parent (`tx-cat__path` : « Type / Catégorie / ») est ellipsé et révélé au survol (`title`), la feuille (`tx-cat__leaf`) n'est jamais tronquée. Cliquable → `CategoryInlineEditor`. Verrouillée si héritée d'un achat.
+- **Montant** (`tx-amount`) : `amount-display` + `badge-status-*` empilés à droite.
+- **Actions** (`tx-actions`, rangée de `btn-icon-md` 30px, `data-on` = indigo quand défini) : enseigne (`Store`) · achat (`ShoppingBag`) · récurrence (`Repeat`) · partage (`Users`) · valider (`Check`, `data-validate`) ou invalider/rétablir (`RotateCcw`, → `pending`) · détail/éditer (`Pencil`, lien `/transactions/[id]`).
+> Implémentation : `src/components/transactions/TransactionsTable.tsx` + `TransactionsManager.tsx` (état + actions serveur optimistes). Section CSS `table-transactions-list` dans `globals.css`.
+
+### `merchant-quick-view`
+**Aperçu (lecture seule) d'une enseigne** ouvert au clic sur son nom dans la liste (`tx-merchant`). Popover en portal (`mq-popover`, `position: fixed`, `z-popover`), stats chargées à la demande (`getMerchantQuickStats`) : en-tête (icône `Store` + nom + catégorie par défaut + En ligne/pays) → `mq-kpis` (Total dépensé · Transactions · Moy./mois, mono) → `mq-bars` (12 derniers mois, barres CSS normalisées) → `mq-cats` (top 4 catégories : pastille + nom + compteur + montant) → lien `mq-popover__link` « Voir la fiche de l'enseigne » (→ `merchant-detail-page`). Pas d'édition. Ferme au clic dehors / Échap.
+> Implémentation : `src/components/merchants/MerchantQuickView.tsx` + `src/lib/merchants/stats.ts`.
+
+### `merchant-detail-page`
+**Fiche détail d'une enseigne (`/enseignes/[id]`)** — lecture. `card-surface` en-tête (`merchant-detail__icon` + nom `text-2xl` + catégorie/pays + `btn-secondary-md` « Gérer les enseignes ») → grille `card-kpi` (Total dépensé · Transactions · Dépense moyenne/mois · Achats rattachés) → carte « 12 derniers mois » (`mq-bars mq-bars--lg`) → carte « Répartition par catégorie » (`md-cat` : libellé + montant + barre de proportion colorée) → `btn-secondary-md` « Voir les N transactions » (→ `/transactions?merchant=[id]`, réutilise le filtre enseigne). Implémentation : `src/components/merchants/MerchantDetailView.tsx`.
+
 ### `transaction-filters`
-**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`.
+**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `multi-select-combobox` (enseignes, achats) + `filter-amount-range` (2× `input-currency-md` min/max, montant en valeur absolue) + `input-date-md` (du/au) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`. Le paramètre `showStatus={false}` masque le sélecteur de statut (page « À valider », toujours `pending`). Sous la toolbar, `filter-chips` remonte chaque filtre actif (surtout les multiselect) en chip retirable + bouton « Tout effacer ». État porté par l'URL (`merchant`/`purchase` en CSV, `amin`/`amax`, `from`/`to`, `q`, `account`, `subcategory`, `sort`). Implémentation : `src/components/transactions/TransactionFilters.tsx`.
+
+### `multi-select-combobox`
+**Filtre multi-sélection avec recherche** (enseignes, achats…). Trigger `input-select-md`-like (40px) : icône optionnelle + placeholder ou compteur « N enseignes » + croix d'effacement ; état `data-active` (bordure/fond `--color-brand-primary`) quand ≥ 1 sélection. Panneau en portal (`position: fixed`, `z-popover`, `max-height: 320px`) : champ recherche insensible casse/accents multi-tokens + liste d'options avec case `ms-combobox__check` (✓ indigo si cochée). **Les options cochées sont triées en tête de liste.** Footer « Tout désélectionner ». Navigation clavier ↑/↓/Entrée (toggle)/Échap. Multi-toggle sans fermer le panneau.
+```css
+.ms-combobox__trigger[data-active="true"] { border-color: var(--color-brand-primary); background: var(--color-brand-primary-50); }
+.ms-combobox__check[data-on="true"] { background: var(--color-brand-primary); border-color: var(--color-brand-primary); }
+.ms-combobox__panel { position: fixed; z-index: var(--z-popover); max-height: 320px; }
+```
+> Implémentation : `src/components/ui/MultiSelectCombobox.tsx` (section CSS `multi-select-combobox` dans `globals.css`).
+
+### `filter-chips`
+**Barre de filtres actifs** sous une toolbar : chaque critère actif rendu en `filter-chip` (pilule `radius-full`, fond `--color-brand-primary-50`, bordure indigo, croix) qui se retire au clic ; termine par `btn-ghost-sm` « Tout effacer ». Rend les filtres (notamment multiselect) évidents et réversibles.
 
 ### `file-dropzone`
 **Zone upload fichier (import)**
@@ -1192,6 +1220,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `empty-state` | Feedback | État vide générique | auto |
 | `file-dropzone` | Métier | Zone upload fichier import | auto |
 | `file-dropzone-mini` | Métier | Zone upload justificatif | auto |
+| `filter-amount-range` | Form | Range de montant (2 champs devise min/max) | auto |
+| `filter-chips` | Métier | Barre de filtres actifs retirables | auto |
 | `form-error-msg` | Form | Message erreur sous un champ | auto |
 | `form-field` | Form | Wrapper label+input+erreur | auto |
 | `form-help-text` | Form | Texte d'aide sous un champ | auto |
@@ -1210,7 +1240,10 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `input-textarea-md` | Form | Zone texte multilignes | auto |
 | `input-toggle` | Form | Switch on/off | auto |
 | `layout-page-header` | Layout | Header de page avec titre + actions | auto |
+| `merchant-quick-view` | Métier | Aperçu stats enseigne (popover liste) | auto |
+| `merchant-detail-page` | Métier | Fiche détail d'une enseigne | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
+| `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |
 | `modal-export-options` | Modal | Variante options export | auto |
 | `modal-surface` | Modal | Modale standard | auto |
@@ -1236,7 +1269,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `spinner-lg` | Feedback | Spinner large | auto |
 | `spinner-md` | Feedback | Spinner medium (défaut) | auto |
 | `spinner-sm` | Feedback | Spinner small | auto |
-| `table-transaction-editor` | Table | Table éditrice mutualisée (import + liste) | auto |
+| `table-transaction-editor` | Table | Table éditrice de l'aperçu d'import | auto |
+| `table-transactions-list` | Table | Liste `/transactions` (titre enseigne + actions) | auto |
 | `table-import-preview` | Table | Déprécié — voir `table-transaction-editor` | auto |
 | `import-cat-edit` | Import | Édition inline catégorie (aperçu import) | auto |
 | `note-cell` | Table | Annotation inline (icône + popover note) | auto |

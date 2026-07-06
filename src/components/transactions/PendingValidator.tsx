@@ -112,6 +112,11 @@ export function PendingValidator({
     });
     if (res.ok) {
       router.refresh();
+      if (res.merchantCategorized) {
+        toast.success(
+          `L'enseigne « ${res.merchantCategorized.name} » n'avait pas de catégorie : elle hérite de celle-ci.`,
+        );
+      }
       toast.success("Validée", {
         duration: 8000,
         action: { label: "Créer une règle", onClick: () => setRuleFor(row) },
@@ -135,27 +140,39 @@ export function PendingValidator({
     if (!res.ok) return toast.error(res.error);
     patch(id, { merchant: { id: option.id, name: option.name } });
     const row = rowById.get(id);
-    // Enseigne sans catégorie par défaut : la transaction reste à valider.
-    if (!option.subcategoryId) {
+
+    if (res.merchantCategorized) {
+      toast.success(`L'enseigne « ${option.name} » a hérité de la catégorie de la transaction.`);
+    }
+
+    // Enseigne sans catégorie et transaction non catégorisée : rien à valider.
+    if (!res.subcategoryId) {
       router.refresh();
       toast.info(
         `Enseigne « ${option.name} » rattachée. Définis une catégorie par défaut pour créer une règle automatiquement.`,
       );
       return;
     }
-    // Catégorie héritée : la transaction est validée → elle quitte « à valider ».
-    hide(id);
-    if (!row) return;
+    // Enseigne déjà catégorisée : sa catégorie valide la transaction → elle
+    // quitte « à valider ». En cas d'héritage inverse, la transaction garde son
+    // statut (elle avait déjà sa catégorie).
+    const validated = !res.merchantCategorized;
+    if (validated) hide(id);
+    if (!row) {
+      router.refresh();
+      return;
+    }
     const ruleRes = await addMerchantRule(option.id, {
       pattern: row.label,
       matchType: "contains",
     });
     router.refresh();
     if (!ruleRes.ok) return toast.error(ruleRes.error);
+    const prefix = validated ? "Validée · règle" : "Règle";
     toast.success(
       ruleRes.applied > 0
-        ? `Validée · règle « ${option.name} » créée · ${ruleRes.applied} rattachée${ruleRes.applied > 1 ? "s" : ""}`
-        : `Validée · règle « ${option.name} » créée`,
+        ? `${prefix} « ${option.name} » créée · ${ruleRes.applied} rattachée${ruleRes.applied > 1 ? "s" : ""}`
+        : `${prefix} « ${option.name} » créée`,
       {
         duration: 10000,
         action: {
@@ -397,6 +414,9 @@ export function PendingValidator({
         open={merchantFor !== null}
         onClose={() => setMerchantFor(null)}
         merchantOptions={merchantOptions}
+        defaultSubcategoryId={
+          merchantFor ? (selected[merchantFor.id] ?? merchantFor.subcategory_id) : null
+        }
         onAttach={(option) => {
           if (merchantFor) attachMerchant(merchantFor.id, option);
         }}

@@ -6,10 +6,20 @@ import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import { matchRule } from "@/lib/rules/matcher";
 import { applyRuleToTransactions } from "@/server/rules/apply";
 import type { RuleApplyScope } from "@/server/rules/apply";
+import { backfillMerchantCategory } from "@/lib/merchants/backfill";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-function fail(message: string): ActionResult {
+/**
+ * Résultat d'un changement de catégorie. `merchantCategorized` est présent quand
+ * la transaction était rattachée à une enseigne sans catégorie qui vient donc
+ * d'hériter de cette catégorie (le client affiche un toaster explicatif).
+ */
+export type CategoryResult =
+  | { ok: true; merchantCategorized?: { id: string; name: string } }
+  | { ok: false; error: string };
+
+function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
 }
 
@@ -21,10 +31,10 @@ function fail(message: string): ActionResult {
  * côté client. Une valeur *retournée* n'est pas masquée — on récupère donc le
  * vrai message dans le toast. On log aussi côté serveur pour la stack complète.
  */
-async function guard(
+async function guard<T>(
   label: string,
-  fn: () => Promise<ActionResult>,
-): Promise<ActionResult> {
+  fn: () => Promise<T>,
+): Promise<T | { ok: false; error: string }> {
   try {
     return await fn();
   } catch (e) {
@@ -43,7 +53,7 @@ function revalidate() {
 export async function setTransactionSubcategory(
   id: string,
   subcategoryId: string | null,
-): Promise<ActionResult> {
+): Promise<CategoryResult> {
   return guard("setSubcategory", async () => {
     const supabase = await createClient();
     // Catégorie héritée d'un achat : non modifiable tant que la transaction y est
@@ -61,15 +71,17 @@ export async function setTransactionSubcategory(
       .update({ subcategory_id: subcategoryId })
       .eq("id", id);
     if (error) return fail(error.message);
+    // Enseigne parente sans catégorie : elle hérite de cette catégorie.
+    const merchantCategorized = await backfillMerchantCategory(supabase, id, subcategoryId);
     revalidate();
-    return { ok: true };
+    return { ok: true, merchantCategorized: merchantCategorized ?? undefined };
   });
 }
 
 export async function validateTransaction(
   id: string,
   subcategoryId: string | null,
-): Promise<ActionResult> {
+): Promise<CategoryResult> {
   if (!subcategoryId) return fail("Choisis une sous-catégorie avant de valider.");
   return guard("validate", async () => {
     const supabase = await createClient();
@@ -82,8 +94,10 @@ export async function validateTransaction(
       })
       .eq("id", id);
     if (error) return fail(error.message);
+    // Enseigne parente sans catégorie : elle hérite de cette catégorie.
+    const merchantCategorized = await backfillMerchantCategory(supabase, id, subcategoryId);
     revalidate();
-    return { ok: true };
+    return { ok: true, merchantCategorized: merchantCategorized ?? undefined };
   });
 }
 

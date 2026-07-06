@@ -40,6 +40,17 @@ export interface PersonShareRow {
   nature: SplitNature;
 }
 
+/**
+ * Direction d'une part « dette », déduite du signe de la transaction :
+ * - `owed_to_me` : dépense avancée (montant < 0) → la personne me doit.
+ * - `i_owe` : virement pro reçu (montant > 0) → je dois à la personne.
+ */
+export type DebtDirection = "owed_to_me" | "i_owe";
+
+export function debtDirection(txAmount: number): DebtDirection {
+  return txAmount > 0 ? "i_owe" : "owed_to_me";
+}
+
 /** Remboursement enrichi du libellé de la transaction liée éventuelle. */
 export interface PersonRepaymentRow {
   id: string;
@@ -71,6 +82,8 @@ export type PersonEvent =
       date: string;
       nature: SplitNature;
       amount: number;
+      /** Direction (dette uniquement) : la personne me doit / je lui dois. */
+      direction: DebtDirection;
       transactionId: string;
       label: string;
     }
@@ -107,6 +120,10 @@ export interface PersonLedger {
   totalGift: number;
   totalRepaid: number;
   outstandingDebt: number;
+  /** Argent que JE dois à la personne (virements pro reçus). */
+  iOwe: number;
+  /** Solde net signé : > 0 la personne me doit, < 0 je lui dois. */
+  netBalance: number;
   shares: PersonShareRow[];
   repayments: PersonRepaymentRow[];
   manualEntries: PersonManualEntryRow[];

@@ -1197,9 +1197,11 @@ export type Database = {
       person_balances: {
         Row: {
           color: string | null
+          i_owe: number | null
           is_archived: boolean | null
           is_self: boolean | null
           name: string | null
+          net_balance: number | null
           outstanding_debt: number | null
           person_id: string | null
           total_debt: number | null

@@ -1011,6 +1011,15 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 - **Actions** (`tx-actions`, rangée de `btn-icon-md` 30px, `data-on` = indigo quand défini) : enseigne (`Store`) · achat (`ShoppingBag`) · récurrence (`Repeat`) · partage (`Users`) · valider (`Check`, `data-validate`) ou invalider/rétablir (`RotateCcw`, → `pending`) · détail/éditer (`Pencil`, lien `/transactions/[id]`).
 > Implémentation : `src/components/transactions/TransactionsTable.tsx` + `TransactionsManager.tsx` (état + actions serveur optimistes). Section CSS `table-transactions-list` dans `globals.css`.
 
+### `transfer-reconcile`
+**Réconciliation des virements internes (`/transactions/transfers`, 3ᵉ onglet de `nav-tabs`)** — un virement interne est une paire sortie/entrée sur deux comptes ; le total de tous les virements internes doit faire 0. Persisté via `transactions.transfer_group_id` (les deux jambes d'une paire partagent le même uuid). Composition :
+- **`transfer-balance`** : bandeau de solde. Bord + valeur `--color-danger` par défaut, `--color-success` quand `data-balanced` (net 0 **et** aucun orphelin). En-tête label + valeur mono (`transfer-balance__value`), `transfer-balance__hint` explicatif, `transfer-balance__stats` (paires · orphelins · candidats, `data-alert` en rouge si > 0).
+- **`transfer-orphan`** (section « À réconcilier ») : bord gauche `--color-warning`. `transfer-leg` (libellé `tx-label-code` + date + `badge-dot` compte + `amount-display`) + actions : **Apparier** (`btn-primary-sm` + `transfer-count` = nb de suggestions → ouvre `modal-surface` de choix de contrepartie) et **Retirer** (`btn-ghost-sm`, décatégorise → `pending`).
+- **`transfer-suggestion`** (dans la modale) : contrepartie cliquable (montant opposé, autre compte, la plus proche en date) ; `transfer-suggestion__tag` « non catégorisé » si la contrepartie n'est pas encore un virement interne.
+- **`transfer-candidate`** (section « Virements internes potentiels ») : paire probable non catégorisée (deux `transfer-leg` séparés par `transfer-candidate__arrow`) → **Marquer comme virement interne** ou **Ignorer** (masque local). Garantit qu'aucun virement n'est « squeezé ».
+- **`transfer-pair`** (section repliable « Paires réconciliées », `transfer-section__toggle`) : les deux jambes empilées (`transfer-pair__legs`) + **Dissocier** (`btn-ghost-sm`).
+> Actions serveur `src/server/actions/transfers.ts` : `pairInternalTransfer` (apparie + catégorise + valide + groupe), `unpairInternalTransfer` (casse le groupe), `removeFromInternalTransfers` (sort des virements). Données : `src/lib/transactions/transfersReconciliation.ts`. Composant : `src/components/transactions/TransferReconciliation.tsx`. Badge de l'onglet = `countTransferOrphans()` (orphelins sans groupe).
+
 ### `merchant-quick-view`
 **Aperçu (lecture seule) d'une enseigne** ouvert au clic sur son nom dans la liste (`tx-merchant`). Popover en portal (`mq-popover`, `position: fixed`, `z-popover`), stats chargées à la demande (`getMerchantQuickStats`) : en-tête (icône `Store` + nom + catégorie par défaut + En ligne/pays) → `mq-kpis` (Total dépensé · Transactions · Moy./mois, mono) → `mq-bars` (12 derniers mois, barres CSS normalisées) → `mq-cats` (top 4 catégories : pastille + nom + compteur + montant) → lien `mq-popover__link` « Voir la fiche de l'enseigne » (→ `merchant-detail-page`). Pas d'édition. Ferme au clic dehors / Échap.
 > Implémentation : `src/components/merchants/MerchantQuickView.tsx` + `src/lib/merchants/stats.ts`.
@@ -1288,6 +1297,12 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `transaction-filters` | Métier | Toolbar de filtres au-dessus liste | auto |
 | `transaction-picker-modal` | Métier | Modale de choix d'une transaction non rattachée (détail achat) | auto |
 | `transaction-row` | Métier | Row de table-transactions | auto |
+| `transfer-balance` | Métier | Bandeau de solde des virements internes (=0) | auto |
+| `transfer-candidate` | Métier | Paire de virement interne probable non catégorisée | auto |
+| `transfer-orphan` | Métier | Virement interne sans contrepartie (à réconcilier) | auto |
+| `transfer-pair` | Métier | Paire de virement interne réconciliée | auto |
+| `transfer-reconcile` | Métier | Écran de réconciliation des virements internes | auto |
+| `transfer-suggestion` | Métier | Contrepartie suggérée dans la modale d'appariement | auto |
 
 ---
 

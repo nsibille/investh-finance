@@ -4,6 +4,7 @@ import { TransactionsTabs } from "@/components/transactions/TransactionsTabs";
 import { TransactionFilters } from "@/components/transactions/TransactionFilters";
 import { PendingValidator } from "@/components/transactions/PendingValidator";
 import { getTransactionsPage, countPending } from "@/lib/transactions/queries";
+import { countTransferOrphans } from "@/lib/transactions/transfersReconciliation";
 import { getAccountOptions } from "@/lib/rules/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getPurchaseOptions } from "@/lib/purchases/queries";
@@ -28,6 +29,7 @@ export default async function PendingPage({
   const [
     data,
     pendingCount,
+    transferAlerts,
     accountOptions,
     subcategoryOptions,
     purchaseOptions,
@@ -55,6 +57,7 @@ export default async function PendingPage({
       perPage: 200,
     }),
     countPending(),
+    countTransferOrphans(),
     getAccountOptions(),
     getSubcategoryOptions(),
     getPurchaseOptions(),
@@ -74,7 +77,7 @@ export default async function PendingPage({
         subtitle="Catégorise les transactions en attente et crée des règles."
       />
       <Suspense>
-        <TransactionsTabs pendingCount={pendingCount} />
+        <TransactionsTabs pendingCount={pendingCount} transferAlerts={transferAlerts} />
         <TransactionFilters
           accountOptions={accountOptions}
           subcategoryOptions={subcategoryOptions}

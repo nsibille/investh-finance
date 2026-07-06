@@ -385,7 +385,7 @@ export function PendingValidator({
             <div className="card-pending-validator" key={row.id}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-4)", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: "var(--fw-medium)" }}>{row.label}</div>
+                  <code className="tx-label-code">{row.label}</code>
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", display: "flex", gap: "var(--space-2)", alignItems: "center", marginTop: "var(--space-1)" }}>
                     <span>{formatShortDate(row.operation_date)}</span>
                     {row.account && (

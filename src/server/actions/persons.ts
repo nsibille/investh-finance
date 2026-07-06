@@ -2,7 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { SplitNature } from "@/lib/persons/types";
+import { getSharesForTransaction } from "@/lib/persons/queries";
+import type { SplitNature, TransactionSplit } from "@/lib/persons/types";
+
+/**
+ * Charge la ventilation d'une transaction à la demande (édition depuis un écran
+ * de liste où les parts ne sont pas préchargées, ex. l'onglet « à valider »).
+ */
+export async function getTransactionSplit(
+  transactionId: string,
+): Promise<TransactionSplit> {
+  return getSharesForTransaction(transactionId);
+}
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 export type CreateResult =

@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/useToast";
 import { PurchaseForm } from "./PurchaseForm";
 import { InstallmentEditor } from "./InstallmentEditor";
 import { PurchaseGalaxy } from "./PurchaseGalaxy";
+import { PurchaseAssignments } from "./PurchaseAssignments";
 import {
   deletePurchase,
   setPurchaseArchived,
@@ -280,8 +281,15 @@ export function PurchaseDetailView({
             />
           </div>
 
-          {/* Galaxie dépliée */}
-          <PurchaseGalaxy purchase={p} parent={p.parent} subPurchases={p.children} variant="page" />
+          {/* Galaxie dépliée : les sections paiements + transactions sont
+              remplacées par le bloc interactif d'assignation. */}
+          <PurchaseGalaxy
+            purchase={p}
+            parent={p.parent}
+            subPurchases={p.children}
+            variant="page"
+            assignmentsSlot={<PurchaseAssignments purchase={p} />}
+          />
 
           {!p.is_archived && (
             <div>

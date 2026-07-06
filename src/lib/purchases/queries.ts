@@ -236,7 +236,12 @@ export async function getPurchaseDetail(
   };
 }
 
-/** Options légères (id, nom, sous-catégorie) pour l'autocomplétion à l'import. */
+/**
+ * Options légères (id, nom, sous-catégorie) pour l'autocomplétion au
+ * rattachement. Triées par mise à jour décroissante : le dernier achat utilisé
+ * (rattachement, création, édition — `updated_at` est bumpé à chaque
+ * rattachement) remonte en tête, pour enchaîner une salve de rattachements.
+ */
 export const getPurchaseOptions = cache(async function getPurchaseOptions(): Promise<
   PurchaseOption[]
 > {
@@ -246,7 +251,7 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
     .select(
       "id, name, subcategory_id, merchant_id, is_recurring, recurrence_end, merchant:merchants(name), installments:purchase_installments(id, month, amount, transaction_id)",
     )
-    .order("name", { ascending: true });
+    .order("updated_at", { ascending: false });
   return (data ?? []).map((p) => ({
     id: p.id,
     name: p.name,
@@ -260,6 +265,14 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
     unmatchedInstallments: (p.installments ?? [])
       .filter((i) => !i.transaction_id)
       .map((i) => ({ id: i.id, month: i.month, amount: Number(i.amount) }))
+      .sort((a, b) => a.month.localeCompare(b.month)),
+    // Calendrier complet (réglées + à venir) pour l'affichage au rattachement.
+    scheduledInstallments: (p.installments ?? [])
+      .map((i) => ({
+        month: i.month,
+        amount: Number(i.amount),
+        matched: !!i.transaction_id,
+      }))
       .sort((a, b) => a.month.localeCompare(b.month)),
     endless: !!(p.is_recurring && !p.recurrence_end),
   }));

@@ -6,6 +6,7 @@ import { generateInstallments } from "@/lib/purchases/installments";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import { isValidParent, type PurchaseEdge } from "@/lib/purchases/tree";
+import type { AttachableTransaction } from "@/lib/purchases/types";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -27,6 +28,27 @@ export interface RecurrencePlan {
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string };
+
+/**
+ * Champs remis à zéro sur une transaction désassignée d'un achat : sa catégorie
+ * était héritée de l'achat, elle repasse donc « non catégorisée / à valider ».
+ */
+const DETACHED_TX_RESET = {
+  purchase_id: null,
+  subcategory_id: null,
+  status: "pending",
+  validated_at: null,
+} satisfies TransactionUpdate;
+
+export interface AttachOptions {
+  /**
+   * Valider la transaction quand une catégorie est héritée de l'achat (défaut
+   * `true`). Passe `false` pour éditer une transaction « à valider » sans la
+   * faire disparaître de l'onglet : la catégorie est héritée mais le statut reste
+   * `pending` (validation manuelle ensuite).
+   */
+  validate?: boolean;
+}
 
 function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
@@ -55,6 +77,21 @@ export interface PurchaseInput {
 
 function toMonthDate(ym: string): string {
   return `${ym.slice(0, 7)}-01`;
+}
+
+/**
+ * « Touche » un achat (bump `updated_at` via le trigger) pour le faire remonter
+ * en tête du sélecteur de rattachement (`getPurchaseOptions`, trié par mise à
+ * jour) — pratique pour enchaîner une salve de rattachements sur le même achat.
+ */
+async function touchPurchase(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  purchaseId: string,
+): Promise<void> {
+  await supabase
+    .from("purchases")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", purchaseId);
 }
 
 /** Charge toutes les arêtes parent→enfant (pour valider un rattachement). */
@@ -267,7 +304,9 @@ export async function deletePurchase(id: string): Promise<ActionResult> {
 export async function attachTransactionToPurchase(
   transactionId: string,
   purchaseId: string,
+  opts: AttachOptions = {},
 ): Promise<ActionResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: purchase } = await supabase
     .from("purchases")
@@ -279,8 +318,10 @@ export async function attachTransactionToPurchase(
   const patch: TransactionUpdate = { purchase_id: purchaseId };
   if (purchase.subcategory_id) {
     patch.subcategory_id = purchase.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   }
   const { error } = await supabase
     .from("transactions")
@@ -290,6 +331,7 @@ export async function attachTransactionToPurchase(
   // Appariement automatique : remplit une échéance prévisionnelle non appariée
   // si le mois + le montant correspondent (comportement « auto »).
   await matchPurchaseInstallments(purchaseId);
+  await touchPurchase(supabase, purchaseId);
   revalidate();
   return { ok: true };
 }
@@ -298,11 +340,15 @@ export async function attachTransactionToPurchase(
  * Rattache une transaction à un achat en remplissant une échéance
  * prévisionnelle précise (« transaction non matchée » de l'achat). L'échéance
  * adopte le montant réel de la transaction ; la catégorie de l'achat est héritée.
+ * Si l'échéance était déjà appariée à une autre transaction, celle-ci est
+ * détachée de l'achat (réassignation du paiement).
  */
 export async function attachTransactionToInstallment(
   transactionId: string,
   installmentId: string,
+  opts: AttachOptions = {},
 ): Promise<ActionResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: inst } = await supabase
     .from("purchase_installments")
@@ -310,7 +356,8 @@ export async function attachTransactionToInstallment(
     .eq("id", installmentId)
     .maybeSingle();
   if (!inst) return fail("Échéance introuvable");
-  if (inst.transaction_id) return fail("Cette échéance est déjà appariée.");
+  // Déjà appariée à cette même transaction : rien à faire.
+  if (inst.transaction_id === transactionId) return { ok: true };
 
   const { data: tx } = await supabase
     .from("transactions")
@@ -326,6 +373,16 @@ export async function attachTransactionToInstallment(
     .maybeSingle();
   if (!purchase) return fail("Achat introuvable");
 
+  // Réassignation : l'échéance était déjà appariée à une autre transaction.
+  // On détache d'abord l'ancienne de l'achat (remise à « à valider ») avant de
+  // la remplacer.
+  if (inst.transaction_id) {
+    await supabase
+      .from("transactions")
+      .update(DETACHED_TX_RESET)
+      .eq("id", inst.transaction_id);
+  }
+
   // L'échéance adopte le montant réellement constaté et pointe la transaction.
   const { error: instErr } = await supabase
     .from("purchase_installments")
@@ -336,14 +393,17 @@ export async function attachTransactionToInstallment(
   const patch: TransactionUpdate = { purchase_id: inst.purchase_id };
   if (purchase.subcategory_id) {
     patch.subcategory_id = purchase.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   }
   const { error } = await supabase
     .from("transactions")
     .update(patch)
     .eq("id", transactionId);
   if (error) return fail(error.message);
+  await touchPurchase(supabase, inst.purchase_id);
   revalidate();
   return { ok: true };
 }
@@ -356,7 +416,9 @@ export async function attachTransactionToInstallment(
 export async function createInstallmentForTransaction(
   transactionId: string,
   purchaseId: string,
+  opts: AttachOptions = {},
 ): Promise<ActionResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: tx } = await supabase
     .from("transactions")
@@ -384,27 +446,134 @@ export async function createInstallmentForTransaction(
   const patch: TransactionUpdate = { purchase_id: purchaseId };
   if (purchase.subcategory_id) {
     patch.subcategory_id = purchase.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   }
   const { error } = await supabase
     .from("transactions")
     .update(patch)
     .eq("id", transactionId);
   if (error) return fail(error.message);
+  await touchPurchase(supabase, purchaseId);
   revalidate();
   return { ok: true };
 }
 
 export async function detachTransaction(transactionId: string): Promise<ActionResult> {
   const supabase = await createClient();
+  // Détache aussi l'échéance éventuellement appariée à cette transaction : sans
+  // ça, l'échéance resterait « payée » en pointant une transaction détachée.
+  const { error: instErr } = await supabase
+    .from("purchase_installments")
+    .update({ transaction_id: null })
+    .eq("transaction_id", transactionId);
+  if (instErr) return fail(instErr.message);
+  // Désassignation : la transaction reperd la catégorie héritée de l'achat et
+  // repasse « à valider ».
   const { error } = await supabase
     .from("transactions")
-    .update({ purchase_id: null })
+    .update(DETACHED_TX_RESET)
     .eq("id", transactionId);
   if (error) return fail(error.message);
   revalidate();
   return { ok: true };
+}
+
+/**
+ * Désassigne une échéance (« paiement programmé ») : vide son appariement et
+ * détache de l'achat la transaction qui la réglait (remise à « non catégorisée /
+ * à valider »). L'échéance repasse « à venir ». Sans transaction appariée, ne
+ * fait qu'un no-op sûr.
+ */
+export async function unassignInstallment(
+  installmentId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: inst } = await supabase
+    .from("purchase_installments")
+    .select("transaction_id")
+    .eq("id", installmentId)
+    .maybeSingle();
+  if (!inst) return fail("Échéance introuvable");
+  const { error } = await supabase
+    .from("purchase_installments")
+    .update({ transaction_id: null })
+    .eq("id", installmentId);
+  if (error) return fail(error.message);
+  if (inst.transaction_id) {
+    const { error: txErr } = await supabase
+      .from("transactions")
+      .update(DETACHED_TX_RESET)
+      .eq("id", inst.transaction_id);
+    if (txErr) return fail(txErr.message);
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Liste les transactions rattachables à un achat, candidates à l'assignation
+ * depuis le détail d'un achat (rattacher / assigner une échéance / réassigner).
+ * Filtre optionnel sur le libellé ; bornée aux 25 plus récentes.
+ *
+ * Règle fondamentale : une transaction n'appartient qu'à 0 ou 1 achat en direct.
+ * On exclut donc non seulement celles ayant déjà un `purchase_id`, mais aussi
+ * celles réservées par une échéance (`purchase_installments.transaction_id`) —
+ * garde-fou contre d'éventuelles données historiques désynchronisées.
+ */
+export async function getAttachableTransactions(
+  search?: string,
+): Promise<AttachableTransaction[]> {
+  const supabase = await createClient();
+
+  const { data: linkedRows } = await supabase
+    .from("purchase_installments")
+    .select("transaction_id")
+    .not("transaction_id", "is", null);
+  const reservedIds = [
+    ...new Set(
+      (linkedRows ?? [])
+        .map((r) => r.transaction_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+
+  let query = supabase
+    .from("transactions")
+    .select("id, operation_date, label, amount, currency, status, account_id")
+    .is("purchase_id", null)
+    .order("operation_date", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(25);
+  const term = search?.trim();
+  if (term) query = query.ilike("label", `%${term}%`);
+  if (reservedIds.length > 0) query = query.not("id", "in", `(${reservedIds.join(",")})`);
+  const { data } = await query;
+  if (!data || data.length === 0) return [];
+
+  const accountIds = [
+    ...new Set(data.map((t) => t.account_id).filter((x): x is string => !!x)),
+  ];
+  const { data: accounts } = accountIds.length
+    ? await supabase.from("accounts").select("id, name, color").in("id", accountIds)
+    : { data: [] as { id: string; name: string; color: string | null }[] };
+  const accMap = new Map((accounts ?? []).map((a) => [a.id, a]));
+
+  return data.map((t) => {
+    const acc = t.account_id ? accMap.get(t.account_id) : null;
+    return {
+      id: t.id,
+      operation_date: t.operation_date,
+      label: t.label,
+      amount: Number(t.amount),
+      currency: t.currency,
+      status: t.status,
+      accountName: acc?.name ?? null,
+      accountColor: acc?.color ?? null,
+    };
+  });
 }
 
 export async function addInstallment(

@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, ChevronLeft, Sparkles } from "lucide-react";
+import { Plus, ChevronLeft, Sparkles, Check } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Amount } from "@/components/ui/Amount";
 import { useToast } from "@/hooks/useToast";
 import { createPurchase } from "@/server/actions/purchases";
 import { generateInstallments } from "@/lib/purchases/installments";
-import { formatMonthLabel } from "@/lib/format/date";
+import { formatMonthLabel, formatShortMonth } from "@/lib/format/date";
 import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -39,6 +39,52 @@ function hoverable(node: React.CSSProperties = {}): {
     onMouseEnter: (e) => (e.currentTarget.style.background = "var(--color-bg-subtle)"),
     onMouseLeave: (e) => (e.currentTarget.style.background = "transparent"),
   };
+}
+
+/**
+ * Calendrier compact des paiements programmés d'un achat : une pastille mono par
+ * échéance, ✓ `--color-success` si réglée (reliée à une transaction), atténuée
+ * « à venir » sinon. Plafonné à `cap` pastilles (+N).
+ */
+function InstallmentChips({
+  installments,
+  cap = 10,
+}: {
+  installments: { month: string; amount: number; matched: boolean }[];
+  cap?: number;
+}) {
+  if (installments.length === 0) return null;
+  const shown = installments.slice(0, cap);
+  const extra = installments.length - shown.length;
+  return (
+    <span style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {shown.map((inst, i) => (
+        <span
+          key={`${inst.month}-${i}`}
+          title={inst.matched ? "Réglée" : "À venir"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 2,
+            fontSize: "var(--text-xs)",
+            fontFamily: "var(--font-mono)",
+            padding: "1px 6px",
+            borderRadius: "var(--radius-sm)",
+            background: "var(--color-bg-subtle)",
+            color: inst.matched ? "var(--color-success)" : "var(--color-text-muted)",
+          }}
+        >
+          {formatShortMonth(inst.month)}
+          {inst.matched && <Check size={11} aria-hidden />}
+        </span>
+      ))}
+      {extra > 0 && (
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", alignSelf: "center" }}>
+          +{extra}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /** Transaction d'origine quand on crée un achat depuis une ligne d'import. */
@@ -125,12 +171,12 @@ export function PurchaseAttachModal({
       return;
     }
     toast.success("Achat créé");
-    const installmentMonths = installmentPlan
+    const generated = installmentPlan
       ? generateInstallments({
           startMonth: installmentPlan.startMonth,
           count: installmentPlan.count,
           amount: installmentPlan.amount,
-        }).map((i) => i.month)
+        })
       : [];
     attach(
       {
@@ -139,8 +185,13 @@ export function PurchaseAttachModal({
         subcategoryId: null,
         merchantId: null,
         merchantName: null,
-        installmentMonths,
+        installmentMonths: generated.map((i) => i.month),
         unmatchedInstallments: [],
+        scheduledInstallments: generated.map((i) => ({
+          month: i.month,
+          amount: i.amount,
+          matched: false,
+        })),
         endless: false,
       },
       { mode: "auto" },
@@ -167,6 +218,15 @@ export function PurchaseAttachModal({
             <ChevronLeft size={14} aria-hidden />
             {selected.name}
           </button>
+
+          {selected.scheduledInstallments.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
+                Paiements programmés
+              </span>
+              <InstallmentChips installments={selected.scheduledInstallments} cap={24} />
+            </div>
+          )}
 
           <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
             {selected.unmatchedInstallments.length > 0 && (
@@ -231,13 +291,21 @@ export function PurchaseAttachModal({
           />
           <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
             {filtered.map((p) => (
-              <button key={p.id} type="button" {...hoverable()} onClick={() => pick(p)}>
-                <span style={{ flex: 1 }}>{p.name}</span>
-                {p.unmatchedInstallments.length > 0 && (
-                  <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                    {p.unmatchedInstallments.length} à venir
-                  </span>
-                )}
+              <button
+                key={p.id}
+                type="button"
+                {...hoverable({ flexDirection: "column", alignItems: "stretch", gap: 4 })}
+                onClick={() => pick(p)}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <span style={{ flex: 1 }}>{p.name}</span>
+                  {p.unmatchedInstallments.length > 0 && (
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                      {p.unmatchedInstallments.length} à venir
+                    </span>
+                  )}
+                </span>
+                <InstallmentChips installments={p.scheduledInstallments} />
               </button>
             ))}
             {query.trim() && !exactExists && (

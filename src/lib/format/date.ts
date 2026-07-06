@@ -19,3 +19,8 @@ export function formatShortDate(value: string | Date): string {
 export function formatMonthLabel(value: string | Date): string {
   return format(toDate(value), "MMMM yyyy", { locale: fr });
 }
+
+/** ex: mai 26 (compact, listes d'échéances) */
+export function formatShortMonth(value: string | Date): string {
+  return format(toDate(value), "MMM yy", { locale: fr });
+}

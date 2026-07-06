@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Wand2, Check, Ban, Store, ShoppingBag, X } from "lucide-react";
+import { Wand2, Check, Ban, Store, ShoppingBag, X, Repeat, Users } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -14,12 +14,15 @@ import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { NoteCell } from "./NoteCell";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
+import { RecurringSelect } from "@/components/recurring/RecurringSelect";
+import { PersonSharePicker } from "@/components/persons/PersonSharePicker";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { formatShortDate } from "@/lib/format/date";
 import { installmentOccurrence } from "@/lib/purchases/installments";
 import {
   validateTransaction,
+  setTransactionSubcategory,
   setTransactionStatus,
   updateTransactionNote,
 } from "@/server/actions/transactions";
@@ -34,16 +37,26 @@ import {
   createInstallmentForTransaction,
   detachTransaction,
 } from "@/server/actions/purchases";
+import {
+  associateTransactionToRecurring,
+  createAndAssociateRecurring,
+  detachTransactionFromRecurring,
+} from "@/server/actions/recurring";
+import { getTransactionSplit } from "@/server/actions/persons";
 import { deleteRule } from "@/server/actions/rules";
 import type { TransactionRow } from "@/lib/transactions/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
+import type { RecurringOption } from "@/lib/recurring/queries";
+import type { PersonOption, TransactionSplit } from "@/lib/persons/types";
 
 type RowOverride = Partial<{
   subcategory_id: string | null;
   merchant: { id: string; name: string } | null;
   purchase: TransactionRow["purchase"];
+  recurring: TransactionRow["recurring"];
+  personsSummary: TransactionRow["personsSummary"];
   note: string | null;
 }>;
 
@@ -64,11 +77,15 @@ export function PendingValidator({
   subcategoryOptions,
   purchaseOptions,
   merchantOptions,
+  recurringOptions,
+  personOptions,
 }: {
   rows: TransactionRow[];
   subcategoryOptions: SubcategoryOption[];
   purchaseOptions: PurchaseOption[];
   merchantOptions: MerchantOption[];
+  recurringOptions: RecurringOption[];
+  personOptions: PersonOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -79,6 +96,11 @@ export function PendingValidator({
   const [ruleFor, setRuleFor] = useState<TransactionRow | null>(null);
   const [merchantFor, setMerchantFor] = useState<TransactionRow | null>(null);
   const [purchaseFor, setPurchaseFor] = useState<TransactionRow | null>(null);
+  const [recurringFor, setRecurringFor] = useState<TransactionRow | null>(null);
+  // Ventilation personnes : chargée à la demande à l'ouverture (non préchargée
+  // pour la liste). `loading` porte l'id en cours de chargement.
+  const [personsFor, setPersonsFor] = useState<{ row: TransactionRow; split: TransactionSplit } | null>(null);
+  const [loadingPersons, setLoadingPersons] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
@@ -124,6 +146,22 @@ export function PendingValidator({
     }
   }
 
+  /**
+   * Enregistre la catégorie choisie SANS valider : la transaction reste dans
+   * l'onglet « à valider » (édition libre, validation manuelle ensuite).
+   */
+  async function saveCategory(id: string, subId: string | null) {
+    const res = await setTransactionSubcategory(id, subId);
+    if (!res.ok) return toast.error(res.error);
+    patch(id, { subcategory_id: subId });
+    router.refresh();
+    if (res.merchantCategorized) {
+      toast.success(
+        `L'enseigne « ${res.merchantCategorized.name} » a hérité de cette catégorie.`,
+      );
+    }
+  }
+
   async function ignore(row: TransactionRow) {
     const res = await runOptimistic({
       apply: () => hide(row.id),
@@ -136,16 +174,27 @@ export function PendingValidator({
 
   // --- Enseigne ------------------------------------------------------------
   async function attachMerchant(id: string, option: MerchantOption) {
-    const res = await attachTransactionToMerchant(id, option.id);
+    // Édition sans validation : la catégorie de l'enseigne est héritée mais la
+    // transaction reste « à valider ».
+    const res = await attachTransactionToMerchant(id, option.id, { validate: false });
     if (!res.ok) return toast.error(res.error);
-    patch(id, { merchant: { id: option.id, name: option.name } });
+    // Reflète l'enseigne + la catégorie éventuellement héritée de l'enseigne.
+    patch(id, {
+      merchant: { id: option.id, name: option.name },
+      ...(res.subcategoryId && !res.merchantCategorized
+        ? { subcategory_id: res.subcategoryId }
+        : {}),
+    });
+    if (res.subcategoryId && !res.merchantCategorized) {
+      setSelected((s) => ({ ...s, [id]: res.subcategoryId }));
+    }
     const row = rowById.get(id);
 
     if (res.merchantCategorized) {
       toast.success(`L'enseigne « ${option.name} » a hérité de la catégorie de la transaction.`);
     }
 
-    // Enseigne sans catégorie et transaction non catégorisée : rien à valider.
+    // Enseigne sans catégorie et transaction non catégorisée : rien de plus.
     if (!res.subcategoryId) {
       router.refresh();
       toast.info(
@@ -153,11 +202,6 @@ export function PendingValidator({
       );
       return;
     }
-    // Enseigne déjà catégorisée : sa catégorie valide la transaction → elle
-    // quitte « à valider ». En cas d'héritage inverse, la transaction garde son
-    // statut (elle avait déjà sa catégorie).
-    const validated = !res.merchantCategorized;
-    if (validated) hide(id);
     if (!row) {
       router.refresh();
       return;
@@ -168,11 +212,10 @@ export function PendingValidator({
     });
     router.refresh();
     if (!ruleRes.ok) return toast.error(ruleRes.error);
-    const prefix = validated ? "Validée · règle" : "Règle";
     toast.success(
       ruleRes.applied > 0
-        ? `${prefix} « ${option.name} » créée · ${ruleRes.applied} rattachée${ruleRes.applied > 1 ? "s" : ""}`
-        : `${prefix} « ${option.name} » créée`,
+        ? `Règle « ${option.name} » créée · ${ruleRes.applied} rattachée${ruleRes.applied > 1 ? "s" : ""}`
+        : `Règle « ${option.name} » créée`,
       {
         duration: 10000,
         action: {
@@ -200,12 +243,14 @@ export function PendingValidator({
     option: PurchaseOption,
     choice: InstallmentChoice,
   ) {
+    // Édition sans validation : la catégorie de l'achat est héritée mais la
+    // transaction reste « à valider ».
     const res =
       choice.mode === "existing"
-        ? await attachTransactionToInstallment(id, choice.installmentId)
+        ? await attachTransactionToInstallment(id, choice.installmentId, { validate: false })
         : choice.mode === "create"
-          ? await createInstallmentForTransaction(id, option.id)
-          : await attachTransactionToPurchase(id, option.id);
+          ? await createInstallmentForTransaction(id, option.id, { validate: false })
+          : await attachTransactionToPurchase(id, option.id, { validate: false });
     if (!res.ok) return toast.error(res.error);
     const row = rowById.get(id);
     const startMonth = option.installmentMonths[0] ?? null;
@@ -227,30 +272,84 @@ export function PendingValidator({
       ...(option.merchantId
         ? { merchant: { id: option.merchantId, name: option.merchantName ?? "" } }
         : {}),
+      // Catégorie héritée de l'achat (transaction toujours « à valider »).
+      ...(option.subcategoryId ? { subcategory_id: option.subcategoryId } : {}),
     });
+    if (option.subcategoryId) {
+      setSelected((s) => ({ ...s, [id]: option.subcategoryId }));
+    }
     const suffix =
       choice.mode === "existing"
         ? " · échéance remplie"
         : choice.mode === "create"
           ? " · échéance créée"
           : "";
-    // La catégorie de l'achat est héritée → transaction validée, elle quitte
-    // la liste ; sinon elle reste à valider avec l'achat rattaché.
-    if (option.subcategoryId) {
-      hide(id);
-      router.refresh();
-      toast.success(`Validée · rattachée à « ${option.name} »${suffix}`);
-    } else {
-      router.refresh();
-      toast.success(`Rattachée à l'achat « ${option.name} »${suffix}`);
-    }
+    router.refresh();
+    toast.success(`Rattachée à l'achat « ${option.name} »${suffix}`);
   }
 
   async function detachPurchase(id: string) {
     const res = await detachTransaction(id);
     if (!res.ok) return toast.error(res.error);
-    patch(id, { purchase: null });
+    // La catégorie était héritée de l'achat : on la vide (la transaction reste
+    // « à valider » dans cette vue).
+    patch(id, { purchase: null, subcategory_id: null });
+    setSelected((m) => ({ ...m, [id]: null }));
     router.refresh();
+  }
+
+  // --- Récurrente ----------------------------------------------------------
+  // Association sans validation : la transaction reste « à valider ».
+  async function associateRecurring(id: string, recurringId: string) {
+    const res = await associateTransactionToRecurring(id, recurringId, { validate: false });
+    if (!res.ok) return toast.error(res.error);
+    const opt = recurringOptions.find((r) => r.id === recurringId);
+    const name = opt?.name ?? "";
+    const patchObj: RowOverride = { recurring: { id: recurringId, name } };
+    // Le modèle impose sa catégorie aux transactions encore non catégorisées et
+    // son enseigne à toutes — on le reflète (sans valider).
+    const row = rowById.get(id);
+    const currentSub = selected[id] ?? row?.subcategory_id ?? null;
+    if (opt?.subcategoryId && !currentSub) {
+      patchObj.subcategory_id = opt.subcategoryId;
+      setSelected((s) => ({ ...s, [id]: opt.subcategoryId }));
+    }
+    if (opt?.merchantId) {
+      patchObj.merchant = { id: opt.merchantId, name: opt.merchantName ?? "" };
+    }
+    patch(id, patchObj);
+    setRecurringFor(null);
+    router.refresh();
+    toast.success(`Associée à « ${name} »`);
+  }
+
+  async function createRecurringForTx(id: string, name: string) {
+    const row = rowById.get(id);
+    if (!row) return;
+    const res = await createAndAssociateRecurring(
+      { name, rawLabel: row.raw_label, amount: row.amount },
+      { validate: false },
+    );
+    if (!res.ok) return toast.error(res.error);
+    patch(id, { recurring: { id: res.id, name } });
+    setRecurringFor(null);
+    router.refresh();
+    toast.success(`Récurrente « ${name} » créée`);
+  }
+
+  async function detachRecurring(id: string) {
+    const res = await detachTransactionFromRecurring(id);
+    if (!res.ok) return toast.error(res.error);
+    patch(id, { recurring: null });
+    router.refresh();
+  }
+
+  // --- Personnes -----------------------------------------------------------
+  async function openPersons(row: TransactionRow) {
+    setLoadingPersons(row.id);
+    const split = await getTransactionSplit(row.id);
+    setLoadingPersons(null);
+    setPersonsFor({ row, split });
   }
 
   // --- Note ----------------------------------------------------------------
@@ -308,7 +407,7 @@ export function PendingValidator({
                     allowCreate
                     onChange={(subId) => {
                       setSelected((s) => ({ ...s, [row.id]: subId }));
-                      if (subId) validate(raw, subId);
+                      saveCategory(row.id, subId);
                     }}
                   />
                 </div>
@@ -382,6 +481,42 @@ export function PendingValidator({
                   </button>
                 )}
 
+                {row.recurring ? (
+                  <span style={{ ...chipBtn, cursor: "default", color: "var(--color-text-secondary)" }}>
+                    <Repeat size={13} aria-hidden />
+                    {row.recurring.name}
+                    <button
+                      type="button"
+                      aria-label="Détacher la récurrente"
+                      onClick={() => detachRecurring(row.id)}
+                      style={{ ...chipBtn, color: "var(--color-text-muted)" }}
+                    >
+                      <X size={12} aria-hidden />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setRecurringFor(raw)}
+                    style={{ ...chipBtn, color: "var(--color-text-muted)" }}
+                  >
+                    <Repeat size={13} aria-hidden />
+                    Récurrente…
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => openPersons(raw)}
+                  disabled={loadingPersons === row.id}
+                  style={{ ...chipBtn, color: row.personsSummary ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}
+                >
+                  <Users size={13} aria-hidden />
+                  {row.personsSummary
+                    ? `${row.personsSummary.count} personne${row.personsSummary.count > 1 ? "s" : ""}`
+                    : "Personnes…"}
+                </button>
+
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: row.note ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}>
                   <NoteCell note={row.note} onSave={(v) => saveNote(row.id, v)} />
                   {row.note ? "Note" : "Note…"}
@@ -439,6 +574,45 @@ export function PendingValidator({
           if (purchaseFor) attachPurchase(purchaseFor.id, option, choice);
         }}
       />
+
+      <Modal
+        open={recurringFor !== null}
+        onClose={() => setRecurringFor(null)}
+        title="Associer à une récurrente"
+      >
+        {recurringFor && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <RecurringSelect
+              value={null}
+              options={recurringOptions}
+              onChange={(rid) => {
+                if (rid) associateRecurring(recurringFor.id, rid);
+              }}
+              onCreate={(name) => createRecurringForTx(recurringFor.id, name)}
+            />
+            <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
+              La transaction reste « à valider » : l&apos;association n&apos;entraîne pas de
+              validation automatique.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={personsFor !== null}
+        onClose={() => setPersonsFor(null)}
+        title="Partage entre personnes"
+      >
+        {personsFor && (
+          <PersonSharePicker
+            transactionId={personsFor.row.id}
+            amount={personsFor.row.amount}
+            currency={personsFor.row.currency}
+            persons={personOptions}
+            initial={personsFor.split}
+          />
+        )}
+      </Modal>
     </>
   );
 }

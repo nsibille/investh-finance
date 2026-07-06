@@ -6,7 +6,10 @@ import { generateInstallments } from "@/lib/purchases/installments";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import { isValidParent, type PurchaseEdge } from "@/lib/purchases/tree";
-import type { AttachableTransaction } from "@/lib/purchases/types";
+import type {
+  AttachableTransaction,
+  CategoryOverrideMode,
+} from "@/lib/purchases/types";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -73,6 +76,11 @@ export interface PurchaseInput {
   installmentPlan?: InstallmentPlan | null;
   /** Plan récurrent (abonnement/loyer). Exclusif de `installmentPlan`. */
   recurrencePlan?: RecurrencePlan | null;
+  /**
+   * Politique de surcharge de la catégorie des transactions rattachées lors
+   * d'une édition (`updatePurchase`). Défaut `all` (comportement historique).
+   */
+  categoryOverride?: CategoryOverrideMode;
 }
 
 function toMonthDate(ym: string): string {
@@ -92,6 +100,28 @@ async function touchPurchase(
     .from("purchases")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", purchaseId);
+}
+
+/**
+ * Propage la catégorie d'un achat à ses transactions rattachées selon la
+ * politique de surcharge choisie :
+ * - `none` : no-op (les transactions gardent leur catégorie) ;
+ * - `empty` : ne cible que les transactions sans catégorie ;
+ * - `all` : cible toutes les transactions rattachées.
+ */
+async function propagateSubcategory(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  purchaseId: string,
+  subcategoryId: string | null,
+  mode: CategoryOverrideMode,
+): Promise<void> {
+  if (mode === "none") return;
+  let query = supabase
+    .from("transactions")
+    .update({ subcategory_id: subcategoryId })
+    .eq("purchase_id", purchaseId);
+  if (mode === "empty") query = query.is("subcategory_id", null);
+  await query;
 }
 
 /** Charge toutes les arêtes parent→enfant (pour valider un rattachement). */
@@ -200,11 +230,13 @@ export async function setPurchaseSettled(
 
 /**
  * Change la catégorie d'un achat (édition inline depuis le détail) et la
- * propage aux transactions rattachées, comme `updatePurchase`.
+ * propage aux transactions rattachées selon la politique de surcharge choisie
+ * (`overrideMode`, défaut `all` — comportement historique).
  */
 export async function setPurchaseSubcategory(
   id: string,
   subcategoryId: string | null,
+  overrideMode: CategoryOverrideMode = "all",
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase
@@ -212,10 +244,7 @@ export async function setPurchaseSubcategory(
     .update({ subcategory_id: subcategoryId })
     .eq("id", id);
   if (error) return fail(error.message);
-  await supabase
-    .from("transactions")
-    .update({ subcategory_id: subcategoryId })
-    .eq("purchase_id", id);
+  await propagateSubcategory(supabase, id, subcategoryId, overrideMode);
   revalidate();
   return { ok: true };
 }
@@ -252,11 +281,14 @@ export async function updatePurchase(
   const { error } = await supabase.from("purchases").update(patch).eq("id", id);
   if (error) return fail(error.message);
 
-  // La catégorie de l'achat est héritée : on la propage aux transactions liées.
-  await supabase
-    .from("transactions")
-    .update({ subcategory_id: subcategoryId })
-    .eq("purchase_id", id);
+  // La catégorie de l'achat est héritée : on la propage aux transactions liées
+  // selon la politique de surcharge choisie (défaut `all`).
+  await propagateSubcategory(
+    supabase,
+    id,
+    subcategoryId,
+    input.categoryOverride ?? "all",
+  );
 
   revalidate();
   return { ok: true };

@@ -218,7 +218,13 @@ export async function getTransferReconciliation(): Promise<TransferReconciliatio
 
   // Candidats : virements internes probables parmi les transactions NON
   // catégorisées « Virement interne » (montants opposés, 2 comptes, fenêtre).
-  const pool = records.filter((r) => r.subcategory_id !== internalId);
+  // On exclut celles déjà validées avec une autre catégorie : l'utilisateur a
+  // tranché, elles ne doivent plus revenir comme virement interne potentiel.
+  const pool = records.filter(
+    (r) =>
+      r.subcategory_id !== internalId &&
+      !(r.status === "validated" && r.subcategory_id !== null),
+  );
   const poolById = new Map(pool.map((r) => [r.id, r]));
   const candidateInput: TransferCandidate[] = pool.map((r) => ({
     id: r.id,

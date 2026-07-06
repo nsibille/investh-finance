@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import {
   matchInternalTransfers,
@@ -45,16 +46,21 @@ export async function detectAndTagInternalTransfers(
   }));
 
   const pairs = matchInternalTransfers(txs, windowDays);
-  const ids = pairs.flat();
-  if (ids.length === 0) return 0;
+  if (pairs.length === 0) return 0;
 
   const nowIso = new Date().toISOString();
-  const CHUNK = 200;
-  for (let i = 0; i < ids.length; i += CHUNK) {
+  // Chaque paire reçoit son propre `transfer_group_id` : les deux jambes sont
+  // ainsi reliées et réconciliables (net 0), au lieu d'un simple tag commun.
+  for (const [negId, posId] of pairs) {
     await supabase
       .from("transactions")
-      .update({ subcategory_id: subId, status: "validated", validated_at: nowIso })
-      .in("id", ids.slice(i, i + CHUNK));
+      .update({
+        subcategory_id: subId,
+        status: "validated",
+        validated_at: nowIso,
+        transfer_group_id: randomUUID(),
+      })
+      .in("id", [negId, posId]);
   }
   return pairs.length;
 }

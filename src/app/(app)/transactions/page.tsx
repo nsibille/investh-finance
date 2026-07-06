@@ -7,6 +7,7 @@ import { ExportMenu } from "@/components/transactions/ExportMenu";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getTransactionsPage, countPending } from "@/lib/transactions/queries";
+import { countTransferOrphans } from "@/lib/transactions/transfersReconciliation";
 import { getAccountOptions } from "@/lib/rules/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getPurchaseOptions } from "@/lib/purchases/queries";
@@ -37,6 +38,7 @@ export default async function TransactionsPage({
   const [
     data,
     pendingCount,
+    transferAlerts,
     accountOptions,
     subcategoryOptions,
     purchaseOptions,
@@ -64,6 +66,7 @@ export default async function TransactionsPage({
       page: Number(sp.page) || 1,
     }),
     countPending(),
+    countTransferOrphans(),
     getAccountOptions(),
     getSubcategoryOptions(),
     getPurchaseOptions(),
@@ -84,7 +87,7 @@ export default async function TransactionsPage({
         }
       />
       <Suspense>
-        <TransactionsTabs pendingCount={pendingCount} />
+        <TransactionsTabs pendingCount={pendingCount} transferAlerts={transferAlerts} />
         <TransactionFilters
           accountOptions={accountOptions}
           subcategoryOptions={subcategoryOptions}

@@ -54,6 +54,11 @@ export interface TransactionRow {
     count: number;
     nature: Database["public"]["Enums"]["split_nature"];
   } | null;
+  /**
+   * Ventilation complète (nature + parts) pour pré-remplir l'éditeur de partage
+   * depuis la liste. `null` quand la transaction n'est pas ventilée.
+   */
+  split?: import("@/lib/persons/types").TransactionSplit | null;
 }
 
 export interface TransactionFilters {

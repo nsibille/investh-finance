@@ -13,6 +13,7 @@ import {
   Gift,
   HandCoins,
   X,
+  ArrowUpRight,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -188,9 +189,19 @@ function PersonCard({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
           <Dot color={person.color} />
-          <span style={{ fontWeight: "var(--fw-semibold)" }}>{person.name}</span>
+          <Link
+            href={`/personnes/${person.id}`}
+            style={{ fontWeight: "var(--fw-semibold)", color: "var(--color-text-primary)" }}
+          >
+            {person.name}
+          </Link>
         </div>
         <div style={{ display: "flex", gap: "var(--space-1)" }}>
+          <Link href={`/personnes/${person.id}`}>
+            <IconButton label="Ouvrir la fiche">
+              <ArrowUpRight size={16} />
+            </IconButton>
+          </Link>
           <IconButton label="Modifier" onClick={onEdit}>
             <Pencil size={16} />
           </IconButton>

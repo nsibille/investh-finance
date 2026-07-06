@@ -7,6 +7,7 @@ import type {
   PersonLedger,
   PersonShareRow,
   PersonRepaymentRow,
+  PersonManualEntryRow,
   SplitNature,
 } from "./types";
 
@@ -151,7 +152,7 @@ export async function getCreditCandidates(): Promise<CreditCandidate[]> {
  */
 export async function getPersonsLedger(): Promise<PersonLedger[]> {
   const supabase = await createClient();
-  const [{ data: balances }, { data: shareRows }, { data: repRows }] =
+  const [{ data: balances }, { data: shareRows }, { data: repRows }, { data: manualRows }] =
     await Promise.all([
       supabase
         .from("person_balances")
@@ -169,6 +170,10 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
         .from("person_repayments")
         .select("id, person_id, amount, repaid_on, note, transaction_id, transactions(label)")
         .order("repaid_on", { ascending: false }),
+      supabase
+        .from("person_manual_entries")
+        .select("id, person_id, nature, amount, entry_date, label, note")
+        .order("entry_date", { ascending: false }),
     ]);
 
   const sharesByPerson = new Map<string, PersonShareRow[]>();
@@ -211,6 +216,20 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
     repsByPerson.set(r.person_id, list);
   }
 
+  const manualByPerson = new Map<string, PersonManualEntryRow[]>();
+  for (const r of manualRows ?? []) {
+    const list = manualByPerson.get(r.person_id) ?? [];
+    list.push({
+      id: r.id,
+      nature: r.nature,
+      amount: Number(r.amount),
+      entryDate: r.entry_date,
+      label: r.label,
+      note: r.note,
+    });
+    manualByPerson.set(r.person_id, list);
+  }
+
   return (balances ?? []).map((b) => ({
     id: b.person_id as string,
     name: b.name ?? "—",
@@ -223,5 +242,60 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
     outstandingDebt: Number(b.outstanding_debt ?? 0),
     shares: b.is_self ? [] : (sharesByPerson.get(b.person_id as string) ?? []),
     repayments: b.is_self ? [] : (repsByPerson.get(b.person_id as string) ?? []),
+    manualEntries: b.is_self ? [] : (manualByPerson.get(b.person_id as string) ?? []),
   }));
+}
+
+/**
+ * Registre d'une seule personne (page `/personnes/[id]`) : réutilise le
+ * registre complet (app mono-utilisateur, volume modeste) puis filtre.
+ */
+export async function getPersonLedger(id: string): Promise<PersonLedger | null> {
+  const all = await getPersonsLedger();
+  return all.find((p) => p.id === id) ?? null;
+}
+
+/**
+ * Fusionne les événements d'une personne (parts de transactions, dettes/cadeaux
+ * manuels, remboursements) en une timeline unique triée du plus récent au plus
+ * ancien, pour la page de détail.
+ */
+export function buildPersonEvents(
+  ledger: PersonLedger,
+): import("./types").PersonEvent[] {
+  const events: import("./types").PersonEvent[] = [];
+  for (const s of ledger.shares) {
+    events.push({
+      kind: "share",
+      id: s.transactionId,
+      date: s.operationDate,
+      nature: s.nature,
+      amount: s.shareAmount,
+      transactionId: s.transactionId,
+      label: s.label,
+    });
+  }
+  for (const m of ledger.manualEntries) {
+    events.push({
+      kind: "manual",
+      id: m.id,
+      date: m.entryDate,
+      nature: m.nature,
+      amount: m.amount,
+      label: m.label,
+      note: m.note,
+    });
+  }
+  for (const r of ledger.repayments) {
+    events.push({
+      kind: "repayment",
+      id: r.id,
+      date: r.repaidOn,
+      amount: r.amount,
+      note: r.note,
+      transactionId: r.transactionId,
+      label: r.transactionLabel,
+    });
+  }
+  return events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }

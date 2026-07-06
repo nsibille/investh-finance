@@ -4,6 +4,7 @@ import { PurchaseDetailView } from "@/components/purchases/PurchaseDetailView";
 import { getPurchaseDetail, getPurchases } from "@/lib/purchases/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getMerchantOptions } from "@/lib/merchants/queries";
+import { getPersonOptions } from "@/lib/persons/queries";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
 import type { PurchaseParentOption } from "@/lib/purchases/types";
 
@@ -17,12 +18,14 @@ export default async function AchatDetailPage({
   const { id } = await params;
   // Étend l'horizon des abonnements sans fin avant l'affichage.
   await ensureRecurringInstallments();
-  const [detail, all, subcategoryOptions, merchantOptions] = await Promise.all([
-    getPurchaseDetail(id),
-    getPurchases(),
-    getSubcategoryOptions(),
-    getMerchantOptions(),
-  ]);
+  const [detail, all, subcategoryOptions, merchantOptions, personOptions] =
+    await Promise.all([
+      getPurchaseDetail(id),
+      getPurchases(),
+      getSubcategoryOptions(),
+      getMerchantOptions(),
+      getPersonOptions(),
+    ]);
 
   if (!detail) notFound();
 
@@ -50,6 +53,7 @@ export default async function AchatDetailPage({
           subcategoryOptions={subcategoryOptions}
           merchantOptions={merchantOptions}
           parentOptions={parentOptions}
+          personOptions={personOptions}
         />
       </div>
     </>

@@ -1086,13 +1086,17 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 - Composition : liste des personnes cochables (part éditable `input-currency` alignée à droite à côté de chaque cochée) → actions `btn-ghost-sm` « Répartir équitablement » + `input-split-nature` → encart résumé (`--color-bg-subtle`) « Ma part / Créances (ou Cadeaux) / Total réparti » → `btn-primary-sm` « Enregistrer le partage » (+ `btn-ghost-sm` « Ne pas partager » si déjà ventilée).
 - Répartition : parts égales auto entre les personnes cochées (reste au centime sur la 1re part), chaque part restant modifiable. Le total réparti est signalé en `--color-warning-dark` s'il diffère du montant de la transaction.
 - États : vide (aucune personne → invite), édition, mismatch (total ≠ montant), saving.
+- Réutilisé (auto-sauvegarde + `onSaved` ferme la modale) : détail d'une transaction, **liste des transactions** (modale « Partager avec des personnes », pré-remplie avec la ventilation existante) et **page d'un achat** (édition du partage de chaque transaction rattachée). Corrige la perte des paramètres à la ré-ouverture depuis la liste (l'ancienne modale légère repartait de zéro).
 - Dark mode : auto. Implémentation : `src/components/persons/PersonSharePicker.tsx`.
 
 ### `person-card`
 **Card personne (page Personnes)** — `card-surface` : en-tête (`badge-dot` + nom + `btn-icon-md` modifier/supprimer) → grille de 4 stats mono (`Dettes`, `Cadeaux` en `--color-finance-investissement`, `Remboursé` en `--color-success`, `Restant dû` en `--color-danger` si > 0) → `btn-ghost-sm` déplier → registre : transactions partagées (icône `Gift`/`HandCoins` + date + libellé lien + part mono) puis remboursements (date + libellé + montant `--color-success` + `btn-icon-md` supprimer) et formulaire d'ajout de remboursement (`input-currency` + `input-date` + `input-select` transaction créditée optionnelle + note). Implémentation : `src/components/persons/PersonsManager.tsx`.
 
 ### `person-attach-modal`
-**Variante de `modal-surface`** pour rattacher des personnes à une ligne d'aperçu d'import : sélection multiple (`input-checkbox` + `badge-dot`, « moi » par défaut) + `input-split-nature`. Le montant est réparti à parts égales à l'import (ajustable ensuite via `person-share-editor`). Implémentation : `src/components/import/PersonAttachModal.tsx`.
+**Variante de `modal-surface`** pour rattacher des personnes à une ligne d'aperçu d'import : sélection multiple (`input-checkbox` + `badge-dot`, « moi » par défaut) + `input-split-nature`. Le montant est réparti à parts égales à l'import (ajustable ensuite via `person-share-editor`). **Réservé à l'aperçu d'import** (les lignes n'ont pas encore d'id) ; la liste des transactions utilise directement `person-share-editor`. Implémentation : `src/components/import/PersonAttachModal.tsx`.
+
+### `person-detail-page`
+**Page de détail d'une personne (`/personnes/[id]`)** — `card-surface` en-tête (`badge-dot` + nom `text-2xl` + `btn-secondary-sm` Modifier via `PersonForm`) → grille de 4 stats mono (Dettes, Cadeaux `--color-finance-investissement`, Remboursé `--color-success`, Restant dû `--color-danger` si > 0, **entrées manuelles incluses**) → carte **Événements** : timeline unifiée triée récent → ancien fusionnant parts de transactions (`Transaction`, lien `/transactions/[id]`), dettes/cadeaux manuels (`Manuel`, éditables/supprimables inline) et remboursements (`Remb.`, `+montant` `--color-success`, éditables/supprimables) — chaque ligne : icône nature (`HandCoins`/`Gift`/`ArrowDownLeft`) + date + libellé + `badge-tag-md` type + `amount` mono + `btn-icon-md` modifier/supprimer → carte **Enregistrer un remboursement** (formulaire réutilisé). Modales d'édition : `PersonForm`, formulaire dette/cadeau manuel (`input-split-nature` + `input-currency` + `input-date` + libellé + note), formulaire remboursement, `modal-confirm-danger` (suppression d'une entrée manuelle). Implémentation : `src/components/persons/PersonDetailView.tsx`.
 
 ### `purchase-line-row`
 **Ligne compacte type transaction (lecture seule)** — sert à lister aussi bien les transactions rattachées à un achat que ses sous-achats (« les lister comme des transactions »). Composition : pastille/icône de tête optionnelle (`badge-dot` compte, `Layers` sous-achat) → libellé + sous-libellé mono (date · compte, ou nb transactions · nb sous-achats) → `amount-sm` à droite → élément de fin optionnel (`badge-status-*`, chevron `ArrowUpRight`). Cliquable (hover `--color-bg-subtle`) si `href` fourni. Implémentation : `src/components/purchases/PurchaseLineRow.tsx`.
@@ -1215,6 +1219,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `nav-tabs` | Nav | Onglets de section | auto |
 | `person-attach-modal` | Métier | Modale d'attache de personnes (import) | auto |
 | `person-card` | Métier | Card personne + registre (page Personnes) | auto |
+| `person-detail-page` | Métier | Page de détail d'une personne (timeline des événements) | auto |
 | `person-share-editor` | Métier | Éditeur de ventilation entre personnes | auto |
 | `progress-bar` | Feedback | Barre de progression | auto |
 | `purchase-assignments` | Métier | Bloc interactif assigner/réassigner/désassigner (détail achat) | auto |

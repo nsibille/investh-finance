@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryTree } from "@/lib/categories/queries";
 import { installmentOccurrence } from "@/lib/purchases/installments";
+import type { TransactionShare } from "@/lib/persons/types";
 import type {
   Transaction,
   TransactionRow,
@@ -214,7 +215,9 @@ async function attachRelations(
     txWithSplit.length
       ? supabase
           .from("transaction_persons")
-          .select("transaction_id")
+          .select(
+            "transaction_id, share_amount, persons(id, name, is_self, color)",
+          )
           .in("transaction_id", txWithSplit)
       : Promise.resolve({ data: [] }),
   ]);
@@ -245,9 +248,37 @@ async function attachRelations(
     ]),
   );
 
-  const shareCount = new Map<string, number>();
-  for (const s of (shares.data ?? []) as { transaction_id: string }[]) {
-    shareCount.set(s.transaction_id, (shareCount.get(s.transaction_id) ?? 0) + 1);
+  // Parts détaillées par transaction : sert au badge (nb) et au pré-remplissage
+  // de l'éditeur de partage depuis la liste (personnes + montants).
+  type ShareRecord = {
+    transaction_id: string;
+    share_amount: number;
+    persons: {
+      id: string;
+      name: string;
+      is_self: boolean;
+      color: string;
+    } | null;
+  };
+  const sharesByTx = new Map<string, TransactionShare[]>();
+  for (const s of (shares.data ?? []) as unknown as ShareRecord[]) {
+    const p = s.persons;
+    if (!p) continue;
+    const list = sharesByTx.get(s.transaction_id) ?? [];
+    list.push({
+      personId: p.id,
+      name: p.name,
+      isSelf: p.is_self,
+      color: p.color,
+      amount: Number(s.share_amount),
+    });
+    sharesByTx.set(s.transaction_id, list);
+  }
+  for (const list of sharesByTx.values()) {
+    // « Moi » en premier, puis alphabétique (cohérent avec getSharesForTransaction).
+    list.sort((a, b) =>
+      a.isSelf === b.isSelf ? a.name.localeCompare(b.name) : a.isSelf ? -1 : 1,
+    );
   }
 
   records.forEach((rec, i) => {
@@ -273,9 +304,10 @@ async function attachRelations(
         name: recurringName.get(rec.recurring_pattern_id)!,
       };
     }
-    const count = shareCount.get(rec.id) ?? 0;
-    if (rec.split_nature && count > 0) {
-      row.personsSummary = { count, nature: rec.split_nature };
+    const shareList = sharesByTx.get(rec.id) ?? [];
+    if (rec.split_nature && shareList.length > 0) {
+      row.personsSummary = { count: shareList.length, nature: rec.split_nature };
+      row.split = { nature: rec.split_nature, shares: shareList };
     }
   });
 }

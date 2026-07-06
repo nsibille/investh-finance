@@ -17,6 +17,16 @@ export interface PurchaseTxLine {
   accountColor: string | null;
 }
 
+/** Part d'une personne sur un achat (agrégée sur ses transactions ventilées). */
+export interface PurchasePersonShare {
+  personId: string;
+  name: string;
+  color: string;
+  isSelf: boolean;
+  nature: Database["public"]["Enums"]["split_nature"]; // "debt" | "gift"
+  amount: number; // somme des parts (positif)
+}
+
 export interface PurchaseWithDetails extends Purchase {
   categoryLabel: string | null;
   categoryColor: string | null;
@@ -52,6 +62,14 @@ export interface PurchaseWithDetails extends Purchase {
   transactions: PurchaseTxLine[];
   /** Nom de l'achat parent éventuel (résolu depuis l'arborescence). */
   parentName: string | null;
+  /** Nom de l'enseigne rattachée éventuelle. */
+  merchantName: string | null;
+  /** Parts des personnes (dette/cadeau) agrégées sur les transactions. */
+  persons: PurchasePersonShare[];
+  /** Date de la 1re transaction rattachée (plus ancienne) ; null si aucune. */
+  firstTransactionDate: string | null;
+  /** Soldé automatiquement par un échéancier complet (vs marquage manuel). */
+  autoSettled: boolean;
 }
 
 /**

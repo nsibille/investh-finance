@@ -11,6 +11,11 @@ import {
   Layers,
   FolderPlus,
   Unlink,
+  CheckCircle2,
+  RotateCcw,
+  Store,
+  Gift,
+  HandCoins,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +23,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Alert } from "@/components/ui/Alert";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
+import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { useToast } from "@/hooks/useToast";
 import { PurchaseForm } from "./PurchaseForm";
 import { InstallmentEditor } from "./InstallmentEditor";
@@ -26,6 +32,8 @@ import {
   deletePurchase,
   setPurchaseArchived,
   setPurchaseParent,
+  setPurchaseSettled,
+  setPurchaseSubcategory,
 } from "@/server/actions/purchases";
 import type {
   PurchaseDetail,
@@ -80,6 +88,9 @@ export function PurchaseDetailView({
 
   const isGroup = p.childIds.length > 0 || p.descendantCount > 0;
   const endless = p.is_recurring && !p.recurrence_end;
+  // « Soldé » manuel : pertinent pour les achats sans échéancier complet
+  // (les autres sont soldés automatiquement). Jamais pour un groupe/abonnement.
+  const canSettle = !isGroup && !endless && !p.autoSettled;
 
   async function handleDelete() {
     setConfirmDelete(false);
@@ -100,6 +111,21 @@ export function PurchaseDetailView({
     const res = await setPurchaseParent(p.id, null);
     if (!res.ok) return toast.error(res.error);
     toast.success("Achat retiré du groupe");
+    router.refresh();
+  }
+
+  async function toggleSettled() {
+    const next = !p.is_settled;
+    const res = await setPurchaseSettled(p.id, next);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(next ? "Achat soldé" : "Achat rouvert");
+    router.refresh();
+  }
+
+  async function changeCategory(subId: string | null) {
+    const res = await setPurchaseSubcategory(p.id, subId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Catégorie mise à jour");
     router.refresh();
   }
 
@@ -129,14 +155,18 @@ export function PurchaseDetailView({
                 {p.isFullyPaid && !isGroup && <span className="badge-status-validated">Soldé</span>}
                 {p.is_archived && <span className="badge-status-ignored">Archivé</span>}
               </div>
-              {p.categoryLabel && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)", fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-1)" }}>
-                  <Dot color={p.categoryColor ?? undefined} />
-                  {p.categoryLabel}
-                </div>
-              )}
             </div>
             <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+              {canSettle && (
+                <Button
+                  variant={p.is_settled ? "ghost" : "secondary"}
+                  size="sm"
+                  leftIcon={p.is_settled ? <RotateCcw size={15} /> : <CheckCircle2 size={15} />}
+                  onClick={toggleSettled}
+                >
+                  {p.is_settled ? "Rouvrir" : "Marquer comme soldé"}
+                </Button>
+              )}
               <Button variant="secondary" size="sm" leftIcon={<Pencil size={15} />} onClick={() => setModal({ mode: "edit" })}>
                 Modifier
               </Button>
@@ -159,6 +189,65 @@ export function PurchaseDetailView({
               {p.description}
             </p>
           )}
+
+          {/* Métadonnées : catégorie (éditable) · enseigne · personnes */}
+          <div
+            style={{
+              display: "flex",
+              gap: "var(--space-6)",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", minWidth: 220 }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
+                Catégorie
+              </span>
+              <CategorySelect
+                value={p.subcategory_id}
+                options={subcategoryOptions}
+                onChange={changeCategory}
+                allowCreate
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
+                Enseigne
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", height: 36, color: p.merchantName ? "var(--color-text-primary)" : "var(--color-text-muted)" }}>
+                <Store size={15} aria-hidden />
+                {p.merchantName ?? "—"}
+              </span>
+            </div>
+
+            {p.persons.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
+                  Personnes
+                </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+                  {p.persons.map((s) => (
+                    <span
+                      key={`${s.personId}-${s.nature}`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)" }}
+                    >
+                      <Dot color={s.color} />
+                      <span style={{ minWidth: 0 }}>{s.name}</span>
+                      <span
+                        title={s.nature === "debt" ? "Créance (à te rembourser)" : "Cadeau offert"}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "var(--text-xs)", color: s.nature === "debt" ? "var(--color-warning-dark)" : "var(--color-finance-investissement)" }}
+                      >
+                        {s.nature === "debt" ? <HandCoins size={13} aria-hidden /> : <Gift size={13} aria-hidden />}
+                        {s.nature === "debt" ? "Dette" : "Cadeau"}
+                      </span>
+                      <Amount value={s.amount} size="sm" tone="neutral" />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* KPIs */}
           <div

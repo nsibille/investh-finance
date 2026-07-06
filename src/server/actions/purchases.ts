@@ -34,6 +34,7 @@ function fail(message: string): { ok: false; error: string } {
 
 function revalidate() {
   revalidatePath("/achats");
+  revalidatePath("/achats/termines");
   revalidatePath("/transactions");
   revalidatePath("/transactions/pending");
 }
@@ -137,6 +138,47 @@ export async function setPurchaseArchived(
     .update({ is_archived: archived })
     .eq("id", id);
   if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Marque un achat soldé / non soldé (action manuelle). Pertinent pour les
+ * achats sans échéancier complet ; ceux à échéancier complet restent soldés
+ * automatiquement (calcul applicatif) indépendamment de ce drapeau.
+ */
+export async function setPurchaseSettled(
+  id: string,
+  settled: boolean,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("purchases")
+    .update({ is_settled: settled })
+    .eq("id", id);
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Change la catégorie d'un achat (édition inline depuis le détail) et la
+ * propage aux transactions rattachées, comme `updatePurchase`.
+ */
+export async function setPurchaseSubcategory(
+  id: string,
+  subcategoryId: string | null,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("purchases")
+    .update({ subcategory_id: subcategoryId })
+    .eq("id", id);
+  if (error) return fail(error.message);
+  await supabase
+    .from("transactions")
+    .update({ subcategory_id: subcategoryId })
+    .eq("purchase_id", id);
   revalidate();
   return { ok: true };
 }

@@ -15,6 +15,9 @@ import {
   FolderPlus,
   Unlink,
   ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -33,6 +36,7 @@ import {
   deletePurchase,
   setPurchaseArchived,
   setPurchaseParent,
+  setPurchaseSettled,
 } from "@/server/actions/purchases";
 import type {
   PurchaseWithDetails,
@@ -52,10 +56,13 @@ export function PurchasesManager({
   purchases,
   subcategoryOptions,
   merchantOptions,
+  scope = "active",
 }: {
   purchases: PurchaseWithDetails[];
   subcategoryOptions: SubcategoryOption[];
   merchantOptions: MerchantOption[];
+  /** "active" = achats en cours (défaut) ; "done" = achats terminés (soldés). */
+  scope?: "active" | "done";
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -85,7 +92,13 @@ export function PurchasesManager({
     list.push(p);
     childrenOf.set(parent, list);
   }
-  const roots = childrenOf.get(ROOT) ?? [];
+  const allRoots = childrenOf.get(ROOT) ?? [];
+  // Un achat racine « terminé » = soldé et sans sous-achat (les groupes restent
+  // toujours dans l'écran principal). Les soldés sont rangés à part.
+  const isDone = (p: PurchaseWithDetails) =>
+    p.isFullyPaid && p.descendantCount === 0;
+  const doneCount = allRoots.filter(isDone).length;
+  const roots = allRoots.filter((p) => (scope === "done" ? isDone(p) : !isDone(p)));
 
   // Résolu depuis les props (et non figé dans l'état) : après ajout/suppression
   // d'une mensualité + refresh, la modale reflète l'échéancier à jour.
@@ -118,6 +131,14 @@ export function PurchasesManager({
     router.refresh();
   }
 
+  async function toggleSettled(p: PurchaseWithDetails) {
+    const next = !p.is_settled;
+    const res = await setPurchaseSettled(p.id, next);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(next ? "Achat soldé" : "Achat rouvert");
+    router.refresh();
+  }
+
   /** Carte d'un achat : résumé + galaxie (parent, paiements, transactions,
    *  sous-achats listés comme des transactions). */
   function PurchaseNode({ purchase: p }: { purchase: PurchaseWithDetails }) {
@@ -125,6 +146,8 @@ export function PurchasesManager({
     const isGroup = children.length > 0 || p.descendantCount > 0;
     const inGroup = !!(p.parent_id && shownIds.has(p.parent_id));
     const endlessSub = p.is_recurring && !p.recurrence_end;
+    // Solder manuellement : achats directs / partiels uniquement.
+    const canSettle = !isGroup && !endlessSub && !p.autoSettled;
 
     return (
       <Card key={p.id}>
@@ -160,6 +183,14 @@ export function PurchasesManager({
                 </div>
               )}
             </div>
+            {canSettle && (
+              <IconButton
+                label={p.is_settled ? "Rouvrir (non soldé)" : "Marquer comme soldé"}
+                onClick={() => toggleSettled(p)}
+              >
+                {p.is_settled ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
+              </IconButton>
+            )}
             {inGroup && (
               <IconButton label="Retirer du groupe" onClick={() => removeFromGroup(p)}>
                 <Unlink size={16} />
@@ -271,26 +302,55 @@ export function PurchasesManager({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-5)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-5)" }}>
         <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", visibility: archivedCount > 0 ? "visible" : "hidden" }}>
           <Checkbox checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Afficher les archivés ({archivedCount})
         </label>
-        <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
-          Nouvel achat
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+          {scope === "active" ? (
+            doneCount > 0 && (
+              <Link
+                href="/achats/termines"
+                style={{ fontSize: "var(--text-sm)", color: "var(--color-text-link)", display: "inline-flex", alignItems: "center", gap: 4 }}
+              >
+                Voir les achats terminés ({doneCount})
+                <ArrowRight size={14} aria-hidden />
+              </Link>
+            )
+          ) : (
+            <Link
+              href="/achats"
+              style={{ fontSize: "var(--text-sm)", color: "var(--color-text-link)", display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              <ArrowLeft size={14} aria-hidden />
+              Achats en cours
+            </Link>
+          )}
+          {scope === "active" && (
+            <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
+              Nouvel achat
+            </Button>
+          )}
+        </div>
       </div>
 
       {roots.length === 0 ? (
         <Card>
           <EmptyState
             icon={ShoppingBag}
-            title="Aucun achat"
-            description="Crée un achat pour regrouper des transactions (ex. un meuble payé en plusieurs fois), ou un groupe pour budgéter un voyage ou un projet de travaux."
+            title={scope === "done" ? "Aucun achat terminé" : "Aucun achat"}
+            description={
+              scope === "done"
+                ? "Les achats que tu marques comme soldés apparaîtront ici."
+                : "Crée un achat pour regrouper des transactions (ex. un meuble payé en plusieurs fois), ou un groupe pour budgéter un voyage ou un projet de travaux."
+            }
             action={
-              <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
-                Nouvel achat
-              </Button>
+              scope === "active" ? (
+                <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
+                  Nouvel achat
+                </Button>
+              ) : undefined
             }
           />
         </Card>

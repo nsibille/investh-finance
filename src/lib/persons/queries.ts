@@ -10,6 +10,7 @@ import type {
   PersonManualEntryRow,
   SplitNature,
 } from "./types";
+import { debtDirection } from "./types";
 
 /** Options légères (id, nom, moi ?, couleur) pour le sélecteur de personnes. */
 export const getPersonOptions = cache(async function getPersonOptions(): Promise<
@@ -157,7 +158,7 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
       supabase
         .from("person_balances")
         .select(
-          "person_id, name, is_self, color, is_archived, total_debt, total_gift, total_repaid, outstanding_debt",
+          "person_id, name, is_self, color, is_archived, total_debt, total_gift, total_repaid, outstanding_debt, i_owe, net_balance",
         )
         .order("is_self", { ascending: false })
         .order("name", { ascending: true }),
@@ -240,6 +241,8 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
     totalGift: Number(b.total_gift ?? 0),
     totalRepaid: Number(b.total_repaid ?? 0),
     outstandingDebt: Number(b.outstanding_debt ?? 0),
+    iOwe: Number(b.i_owe ?? 0),
+    netBalance: Number(b.net_balance ?? 0),
     shares: b.is_self ? [] : (sharesByPerson.get(b.person_id as string) ?? []),
     repayments: b.is_self ? [] : (repsByPerson.get(b.person_id as string) ?? []),
     manualEntries: b.is_self ? [] : (manualByPerson.get(b.person_id as string) ?? []),
@@ -271,6 +274,7 @@ export function buildPersonEvents(
       date: s.operationDate,
       nature: s.nature,
       amount: s.shareAmount,
+      direction: debtDirection(s.amount),
       transactionId: s.transactionId,
       label: s.label,
     });

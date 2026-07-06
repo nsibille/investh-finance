@@ -41,6 +41,17 @@ type ModalState =
   | { mode: "edit"; person: PersonLedger }
   | null;
 
+/** Libellé du solde net signé (> 0 : la personne me doit ; < 0 : je lui dois). */
+function soldeLabel(net: number): string {
+  if (Math.abs(net) <= 0.01) return "Solde";
+  return net < 0 ? "Solde · tu dois" : "Solde · on te doit";
+}
+
+function soldeColor(net: number): string {
+  if (Math.abs(net) <= 0.01) return "var(--color-text-muted)";
+  return net < 0 ? "var(--color-danger)" : "var(--color-warning-dark)";
+}
+
 function Stat({
   label,
   value,
@@ -219,13 +230,16 @@ function PersonCard({
           marginTop: "var(--space-4)",
         }}
       >
-        <Stat label="Dettes" value={formatCurrency(person.totalDebt)} />
+        <Stat label="On te doit" value={formatCurrency(person.totalDebt)} />
+        {person.iOwe > 0.01 && (
+          <Stat label="Tu dois" value={formatCurrency(person.iOwe)} color="var(--color-danger)" />
+        )}
         <Stat label="Cadeaux" value={formatCurrency(person.totalGift)} color="var(--color-finance-investissement)" />
         <Stat label="Remboursé" value={formatCurrency(person.totalRepaid)} color="var(--color-success)" />
         <Stat
-          label="Restant dû"
-          value={formatCurrency(person.outstandingDebt)}
-          color={person.outstandingDebt > 0.01 ? "var(--color-danger)" : "var(--color-text-muted)"}
+          label={soldeLabel(person.netBalance)}
+          value={formatCurrency(Math.abs(person.netBalance))}
+          color={soldeColor(person.netBalance)}
         />
       </div>
 
@@ -252,13 +266,19 @@ function PersonCard({
                 Aucune part rattachée.
               </p>
             ) : (
-              person.shares.map((s) => (
+              person.shares.map((s) => {
+                // Part « dette » sur une transaction reçue (montant > 0) → argent
+                // que je dois (virement pro). Sinon la personne me doit.
+                const isIOwe = s.nature === "debt" && s.amount > 0;
+                return (
                 <div
                   key={s.transactionId}
                   style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)" }}
                 >
                   {s.nature === "gift" ? (
                     <Gift size={14} aria-hidden style={{ color: "var(--color-finance-investissement)", flexShrink: 0 }} />
+                  ) : isIOwe ? (
+                    <ArrowUpRight size={14} aria-hidden style={{ color: "var(--color-danger)", flexShrink: 0 }} />
                   ) : (
                     <HandCoins size={14} aria-hidden style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
                   )}
@@ -271,9 +291,12 @@ function PersonCard({
                   >
                     {s.label}
                   </Link>
-                  <span style={{ fontFamily: "var(--font-mono)" }}>{formatCurrency(s.shareAmount)}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", color: isIOwe ? "var(--color-danger)" : undefined }}>
+                    {isIOwe ? "−" : ""}{formatCurrency(s.shareAmount)}
+                  </span>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
 

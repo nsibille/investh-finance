@@ -239,7 +239,11 @@ export function TransactionEditorTable({
                     >
                       <Users size={12} aria-hidden />
                       {r.personsBadge.count} personne{r.personsBadge.count > 1 ? "s" : ""} ·{" "}
-                      {r.personsBadge.nature === "gift" ? "cadeau" : "dette"}
+                      {r.personsBadge.nature === "gift"
+                        ? "cadeau"
+                        : r.amount > 0
+                          ? "à rendre"
+                          : "dette"}
                     </button>
                   ) : (
                     <button

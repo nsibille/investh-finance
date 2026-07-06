@@ -122,6 +122,12 @@ export interface PurchaseOption {
   installmentMonths: string[];
   /** Échéances non appariées : au rattachement, on peut en remplir une. */
   unmatchedInstallments: UnmatchedInstallment[];
+  /**
+   * Toutes les échéances (paiements programmés), triées par mois, avec leur état
+   * d'appariement — pour afficher le calendrier dans le sélecteur de rattachement
+   * (réglée ✓ ou à venir).
+   */
+  scheduledInstallments: { month: string; amount: number; matched: boolean }[];
   /** Abonnement sans fin : total inconnu (occurrence X/∞). */
   endless: boolean;
 }

@@ -261,6 +261,14 @@ export const getPurchaseOptions = cache(async function getPurchaseOptions(): Pro
       .filter((i) => !i.transaction_id)
       .map((i) => ({ id: i.id, month: i.month, amount: Number(i.amount) }))
       .sort((a, b) => a.month.localeCompare(b.month)),
+    // Calendrier complet (réglées + à venir) pour l'affichage au rattachement.
+    scheduledInstallments: (p.installments ?? [])
+      .map((i) => ({
+        month: i.month,
+        amount: Number(i.amount),
+        matched: !!i.transaction_id,
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month)),
     endless: !!(p.is_recurring && !p.recurrence_end),
   }));
 });

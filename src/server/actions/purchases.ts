@@ -474,14 +474,32 @@ export async function unassignInstallment(
 }
 
 /**
- * Liste les transactions non rattachées à un achat, candidates à
- * l'assignation depuis le détail d'un achat (rattacher / assigner une échéance /
- * réassigner). Filtre optionnel sur le libellé ; bornée aux 25 plus récentes.
+ * Liste les transactions rattachables à un achat, candidates à l'assignation
+ * depuis le détail d'un achat (rattacher / assigner une échéance / réassigner).
+ * Filtre optionnel sur le libellé ; bornée aux 25 plus récentes.
+ *
+ * Règle fondamentale : une transaction n'appartient qu'à 0 ou 1 achat en direct.
+ * On exclut donc non seulement celles ayant déjà un `purchase_id`, mais aussi
+ * celles réservées par une échéance (`purchase_installments.transaction_id`) —
+ * garde-fou contre d'éventuelles données historiques désynchronisées.
  */
 export async function getAttachableTransactions(
   search?: string,
 ): Promise<AttachableTransaction[]> {
   const supabase = await createClient();
+
+  const { data: linkedRows } = await supabase
+    .from("purchase_installments")
+    .select("transaction_id")
+    .not("transaction_id", "is", null);
+  const reservedIds = [
+    ...new Set(
+      (linkedRows ?? [])
+        .map((r) => r.transaction_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+
   let query = supabase
     .from("transactions")
     .select("id, operation_date, label, amount, currency, status, account_id")
@@ -491,6 +509,7 @@ export async function getAttachableTransactions(
     .limit(25);
   const term = search?.trim();
   if (term) query = query.ilike("label", `%${term}%`);
+  if (reservedIds.length > 0) query = query.not("id", "in", `(${reservedIds.join(",")})`);
   const { data } = await query;
   if (!data || data.length === 0) return [];
 

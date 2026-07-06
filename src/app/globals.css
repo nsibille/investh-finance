@@ -1407,3 +1407,25 @@ body {
   border: none; background: var(--color-brand-primary); color: #fff;
 }
 .cat-combobox__create-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ============================================================
+   purchase-line-row — ligne compacte type transaction
+   (transaction rattachée ou sous-achat, dans une carte/détail d'achat)
+   ============================================================ */
+.purchase-line-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm); color: var(--color-text-primary);
+  text-decoration: none;
+}
+a.purchase-line-row:hover { background: var(--color-bg-subtle); }
+.purchase-line-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.purchase-line-row__label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--color-text-primary);
+}
+.purchase-line-row__sub {
+  font-size: var(--text-xs); color: var(--color-text-muted);
+  display: flex; align-items: center; gap: var(--space-1);
+}

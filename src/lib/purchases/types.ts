@@ -3,6 +3,29 @@ import type { Database } from "@/types/database.types";
 export type Purchase = Database["public"]["Tables"]["purchases"]["Row"];
 export type PurchaseInstallment =
   Database["public"]["Tables"]["purchase_installments"]["Row"];
+type TransactionStatus = Database["public"]["Enums"]["transaction_status"];
+
+/** Ligne de transaction rattachée à un achat (lecture seule, type liste). */
+export interface PurchaseTxLine {
+  id: string;
+  operation_date: string;
+  label: string;
+  amount: number;
+  currency: string;
+  status: TransactionStatus;
+  accountName: string | null;
+  accountColor: string | null;
+}
+
+/** Part d'une personne sur un achat (agrégée sur ses transactions ventilées). */
+export interface PurchasePersonShare {
+  personId: string;
+  name: string;
+  color: string;
+  isSelf: boolean;
+  nature: Database["public"]["Enums"]["split_nature"]; // "debt" | "gift"
+  amount: number; // somme des parts (positif)
+}
 
 export interface PurchaseWithDetails extends Purchase {
   categoryLabel: string | null;
@@ -34,6 +57,28 @@ export interface PurchaseWithDetails extends Purchase {
   totalForecastAmount: number;
   /** Reste à payer agrégé sur le sous-arbre. */
   totalRemaining: number;
+
+  /** Transactions rattachées (directes), triées récent → ancien. */
+  transactions: PurchaseTxLine[];
+  /** Nom de l'achat parent éventuel (résolu depuis l'arborescence). */
+  parentName: string | null;
+  /** Nom de l'enseigne rattachée éventuelle. */
+  merchantName: string | null;
+  /** Parts des personnes (dette/cadeau) agrégées sur les transactions. */
+  persons: PurchasePersonShare[];
+  /** Date de la 1re transaction rattachée (plus ancienne) ; null si aucune. */
+  firstTransactionDate: string | null;
+  /** Soldé automatiquement par un échéancier complet (vs marquage manuel). */
+  autoSettled: boolean;
+}
+
+/**
+ * Détail complet d'un achat pour la page `/achats/[id]` : l'achat + son parent
+ * éventuel + ses sous-achats directs (résolus en objets complets).
+ */
+export interface PurchaseDetail extends PurchaseWithDetails {
+  parent: { id: string; name: string } | null;
+  children: PurchaseWithDetails[];
 }
 
 /** Élément léger pour peupler un sélecteur d'achat parent (groupe). */

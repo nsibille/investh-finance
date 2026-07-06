@@ -1094,6 +1094,18 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 ### `person-attach-modal`
 **Variante de `modal-surface`** pour rattacher des personnes à une ligne d'aperçu d'import : sélection multiple (`input-checkbox` + `badge-dot`, « moi » par défaut) + `input-split-nature`. Le montant est réparti à parts égales à l'import (ajustable ensuite via `person-share-editor`). Implémentation : `src/components/import/PersonAttachModal.tsx`.
 
+### `purchase-line-row`
+**Ligne compacte type transaction (lecture seule)** — sert à lister aussi bien les transactions rattachées à un achat que ses sous-achats (« les lister comme des transactions »). Composition : pastille/icône de tête optionnelle (`badge-dot` compte, `Layers` sous-achat) → libellé + sous-libellé mono (date · compte, ou nb transactions · nb sous-achats) → `amount-sm` à droite → élément de fin optionnel (`badge-status-*`, chevron `ArrowUpRight`). Cliquable (hover `--color-bg-subtle`) si `href` fourni. Implémentation : `src/components/purchases/PurchaseLineRow.tsx`.
+
+### `purchase-installments`
+**Échéancier « paiements à venir et validés »** — liste des mensualités prévisionnelles d'un achat, chacune avec mois (occurrence X/Y mono, ∞ si abonnement sans fin) + `amount-sm` neutre + marqueur d'état : ✓ `--color-success` si appariée à une transaction (payée), sinon « à venir » atténué. Présentationnel (serveur + client). Implémentation : `src/components/purchases/PurchaseInstallments.tsx`. Variante éditable (ajout/suppression ligne à ligne) : `src/components/purchases/InstallmentEditor.tsx`.
+
+### `purchase-galaxy`
+**Bloc « galaxie » d'un achat** — assemble les 4 sections d'un achat, séparées par un filet (`--color-border`) et un titre en capitales : achat parent (`purchase-line-row` → groupe parent) · `purchase-installments` (paiements à venir/validés) · transactions rattachées (`purchase-line-row` cappé à 4 en carte, illimité en page, lien « voir les N ») · sous-achats listés comme des transactions (`purchase-line-row` → `/achats/[id]`). `variant="card"` plafonne les listes, `variant="page"` déballe tout. Partagé entre la carte de la liste et la page de détail. Implémentation : `src/components/purchases/PurchaseGalaxy.tsx`.
+
+### `purchase-detail-page`
+**Page de détail d'un achat (`/achats/[id]`)** — `card-surface` : en-tête (titre `text-2xl` + badges `badge-group`/`badge-status-*`) et barre d'actions (`btn-secondary-sm` Marquer comme soldé/Rouvrir + Modifier, `btn-ghost-sm` Retirer du groupe / Archiver / Supprimer) → bloc métadonnées **Catégorie** (`input-category-combobox` éditable, propage aux transactions), **Enseigne** (icône `Store` + nom), **Personnes** (`badge-dot` + nom + badge nature `HandCoins` Dette `--color-warning-dark` / `Gift` Cadeau `--color-finance-investissement` + `amount-sm`) → encart KPI (`--color-bg-subtle`) Total dépensé · Budget prévu · Reste à payer · Transactions (mono `amount-lg`) → `purchase-galaxy` en `variant="page"` → `btn-ghost-sm` Ajouter un achat au groupe. Le « soldé » est manuel (`is_settled`) pour les achats sans échéancier complet ; les achats à échéancier complet sont soldés automatiquement. Les achats soldés sont rangés sur un écran séparé `/achats/termines` (lien « Voir les achats terminés » depuis `/achats`). Réutilise `PurchaseForm` + `InstallmentEditor` (modale) et `modal-confirm-danger` (suppression). Implémentation : `src/components/purchases/PurchaseDetailView.tsx`.
+
 ---
 
 # Index des slugs
@@ -1196,6 +1208,10 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `person-card` | Métier | Card personne + registre (page Personnes) | auto |
 | `person-share-editor` | Métier | Éditeur de ventilation entre personnes | auto |
 | `progress-bar` | Feedback | Barre de progression | auto |
+| `purchase-detail-page` | Métier | Page de détail d'un achat (galaxie des dépenses) | auto |
+| `purchase-galaxy` | Métier | Bloc des 4 sections d'un achat (parent/paiements/tx/sous-achats) | auto |
+| `purchase-installments` | Métier | Échéancier paiements à venir et validés | auto |
+| `purchase-line-row` | Métier | Ligne compacte type transaction (tx rattachée ou sous-achat) | auto |
 | `rule-suggestion-form` | Métier | Form proposition règle depuis libellé | auto |
 | `search-result-item` | Métier | Item résultat recherche | auto |
 | `skeleton-block` | Feedback | Squelette bloc | auto |

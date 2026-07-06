@@ -146,6 +146,11 @@ export async function getTransactionsPage(
       query = query.order("operation_date", { ascending: false });
   }
   query = query.order("created_at", { ascending: false });
+  // Départage final : `operation_date`/`created_at` ne sont pas uniques (un
+  // import insère tout un batch avec le même `created_at`). Sans clé unique en
+  // dernier critère, Postgres renvoie les ex æquo dans un ordre arbitraire qui
+  // peut varier entre deux requêtes. `id` (UUID) rend l'ordre déterministe.
+  query = query.order("id", { ascending: false });
   query = query.range((page - 1) * perPage, page * perPage - 1);
 
   // Les maps de référence ne dépendent pas des lignes : on lance tout en parallèle.

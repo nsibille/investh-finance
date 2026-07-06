@@ -657,6 +657,7 @@ export type Database = {
           id: string
           is_archived: boolean
           is_recurring: boolean
+          is_settled: boolean
           merchant_id: string | null
           name: string
           parent_id: string | null
@@ -673,6 +674,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_recurring?: boolean
+          is_settled?: boolean
           merchant_id?: string | null
           name: string
           parent_id?: string | null
@@ -689,6 +691,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_recurring?: boolean
+          is_settled?: boolean
           merchant_id?: string | null
           name?: string
           parent_id?: string | null

@@ -2,40 +2,41 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Plus,
   Pencil,
   Trash2,
   ShoppingBag,
-  X,
   Archive,
   ArchiveRestore,
-  Check,
   Repeat,
   Layers,
   FolderPlus,
   Unlink,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Modal } from "@/components/ui/Modal";
-import { Input } from "@/components/ui/Input";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Alert } from "@/components/ui/Alert";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { useToast } from "@/hooks/useToast";
-import { formatMonthLabel } from "@/lib/format/date";
-import { installmentOccurrence } from "@/lib/purchases/installments";
 import { PurchaseForm } from "./PurchaseForm";
+import { InstallmentEditor } from "./InstallmentEditor";
+import { PurchaseGalaxy } from "./PurchaseGalaxy";
 import {
   deletePurchase,
   setPurchaseArchived,
   setPurchaseParent,
-  addInstallment,
-  deleteInstallment,
+  setPurchaseSettled,
 } from "@/server/actions/purchases";
 import type {
   PurchaseWithDetails,
@@ -51,133 +52,17 @@ type ModalState =
 
 const ROOT = "__root__";
 
-function parseAmount(s: string): number {
-  return parseFloat(s.replace(/[\s€]/g, "").replace(",", "."));
-}
-
-/** Lignes de mensualités. `onRemove` fourni → mode édition (bouton supprimer
- *  sur les mensualités non appariées) ; absent → lecture seule. */
-function InstallmentRows({
-  purchase,
-  onRemove,
-}: {
-  purchase: PurchaseWithDetails;
-  onRemove?: (id: string) => void;
-}) {
-  if (purchase.installments.length === 0) return null;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-      {purchase.installments.map((inst) => {
-        // Mensualités triées par mois : la 1re est le mois de départ.
-        const startMonth = purchase.installments[0]?.month ?? inst.month;
-        const total = purchase.installments.length;
-        const occurrence = installmentOccurrence(startMonth, inst.month);
-        // Abonnement sans fin : total inconnu → « N/∞ ».
-        const endless = purchase.is_recurring && !purchase.recurrence_end;
-        return (
-          <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: inst.transaction_id ? 1 : 0.7 }}>
-            <span style={{ flex: 1, textTransform: "capitalize" }}>
-              {formatMonthLabel(inst.month)}
-              {(total > 1 || endless) && (
-                <span style={{ marginLeft: 6, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "none", fontFamily: "var(--font-mono)" }}>
-                  {occurrence}/{endless ? "∞" : total}
-                </span>
-              )}
-            </span>
-            <Amount value={Number(inst.amount)} size="sm" tone="neutral" />
-            {inst.transaction_id ? (
-              <span title="Appariée à une transaction" style={{ color: "var(--color-success)", display: "inline-flex" }}>
-                <Check size={15} aria-hidden />
-              </span>
-            ) : onRemove ? (
-              <IconButton label="Supprimer" onClick={() => onRemove(inst.id)}>
-                <X size={14} />
-              </IconButton>
-            ) : (
-              <span title="Prévue, non appariée" style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                à venir
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Affichage lecture seule de l'échéancier (cartes de la liste des achats). */
-function InstallmentList({ purchase }: { purchase: PurchaseWithDetails }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
-        Mensualités prévisionnelles
-      </span>
-      <InstallmentRows purchase={purchase} />
-    </div>
-  );
-}
-
-/** Édition de l'échéancier (modale d'édition) : suppression ligne à ligne +
- *  ajout d'une mensualité. En-tête porté par le `FormField` « Échéancier ». */
-function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
-  const router = useRouter();
-  const toast = useToast();
-  const [month, setMonth] = useState("");
-  const [amount, setAmount] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function add() {
-    if (!month) return toast.error("Choisis un mois.");
-    const value = parseAmount(amount);
-    if (!Number.isFinite(value)) return toast.error("Montant invalide.");
-    setBusy(true);
-    const res = await addInstallment(purchase.id, `${month}-01`, value);
-    setBusy(false);
-    if (!res.ok) return toast.error(res.error);
-    setMonth("");
-    setAmount("");
-    router.refresh();
-  }
-
-  async function remove(id: string) {
-    const res = await deleteInstallment(id);
-    if (!res.ok) return toast.error(res.error);
-    router.refresh();
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-      <InstallmentRows purchase={purchase} onRemove={remove} />
-      <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="input-text-md"
-          style={{ maxWidth: 160 }}
-        />
-        <Input
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="Montant"
-          style={{ maxWidth: 120 }}
-        />
-        <Button variant="secondary" size="sm" loading={busy} onClick={add}>
-          Ajouter
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function PurchasesManager({
   purchases,
   subcategoryOptions,
   merchantOptions,
+  scope = "active",
 }: {
   purchases: PurchaseWithDetails[];
   subcategoryOptions: SubcategoryOption[];
   merchantOptions: MerchantOption[];
+  /** "active" = achats en cours (défaut) ; "done" = achats terminés (soldés). */
+  scope?: "active" | "done";
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -207,7 +92,13 @@ export function PurchasesManager({
     list.push(p);
     childrenOf.set(parent, list);
   }
-  const roots = childrenOf.get(ROOT) ?? [];
+  const allRoots = childrenOf.get(ROOT) ?? [];
+  // Un achat racine « terminé » = soldé et sans sous-achat (les groupes restent
+  // toujours dans l'écran principal). Les soldés sont rangés à part.
+  const isDone = (p: PurchaseWithDetails) =>
+    p.isFullyPaid && p.descendantCount === 0;
+  const doneCount = allRoots.filter(isDone).length;
+  const roots = allRoots.filter((p) => (scope === "done" ? isDone(p) : !isDone(p)));
 
   // Résolu depuis les props (et non figé dans l'état) : après ajout/suppression
   // d'une mensualité + refresh, la modale reflète l'échéancier à jour.
@@ -240,18 +131,23 @@ export function PurchasesManager({
     router.refresh();
   }
 
-  /** Carte d'un achat + rendu récursif de ses sous-achats. */
-  function PurchaseNode({
-    purchase: p,
-    depth,
-  }: {
-    purchase: PurchaseWithDetails;
-    depth: number;
-  }) {
+  async function toggleSettled(p: PurchaseWithDetails) {
+    const next = !p.is_settled;
+    const res = await setPurchaseSettled(p.id, next);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(next ? "Achat soldé" : "Achat rouvert");
+    router.refresh();
+  }
+
+  /** Carte d'un achat : résumé + galaxie (parent, paiements, transactions,
+   *  sous-achats listés comme des transactions). */
+  function PurchaseNode({ purchase: p }: { purchase: PurchaseWithDetails }) {
     const children = childrenOf.get(p.id) ?? [];
     const isGroup = children.length > 0 || p.descendantCount > 0;
     const inGroup = !!(p.parent_id && shownIds.has(p.parent_id));
     const endlessSub = p.is_recurring && !p.recurrence_end;
+    // Solder manuellement : achats directs / partiels uniquement.
+    const canSettle = !isGroup && !endlessSub && !p.autoSettled;
 
     return (
       <Card key={p.id}>
@@ -259,7 +155,12 @@ export function PurchasesManager({
           <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
-                <span style={{ fontWeight: "var(--fw-semibold)" }}>{p.name}</span>
+                <Link
+                  href={`/achats/${p.id}`}
+                  style={{ fontWeight: "var(--fw-semibold)", color: "var(--color-text-primary)", textDecoration: "none" }}
+                >
+                  {p.name}
+                </Link>
                 {isGroup && (
                   <span className="badge-group" style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
                     <Layers size={11} aria-hidden />
@@ -282,6 +183,14 @@ export function PurchasesManager({
                 </div>
               )}
             </div>
+            {canSettle && (
+              <IconButton
+                label={p.is_settled ? "Rouvrir (non soldé)" : "Marquer comme soldé"}
+                onClick={() => toggleSettled(p)}
+              >
+                {p.is_settled ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
+              </IconButton>
+            )}
             {inGroup && (
               <IconButton label="Retirer du groupe" onClick={() => removeFromGroup(p)}>
                 <Unlink size={16} />
@@ -356,32 +265,17 @@ export function PurchasesManager({
             )}
           </div>
 
-          {p.installments.length > 0 && (
-            <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
-              <InstallmentList purchase={p} />
-            </div>
-          )}
+          {/* Galaxie : parent · paiements à venir/validés · transactions
+              rattachées · sous-achats listés comme des transactions. */}
+          <PurchaseGalaxy
+            purchase={p}
+            parent={p.parentName ? { id: p.parent_id!, name: p.parentName } : null}
+            subPurchases={children}
+            variant="card"
+          />
 
-          {/* Sous-achats (rendu récursif). */}
-          {children.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-3)",
-                marginTop: "var(--space-1)",
-                paddingLeft: "var(--space-3)",
-                borderLeft: "2px solid var(--color-border)",
-              }}
-            >
-              {children.map((c) => (
-                <PurchaseNode key={c.id} purchase={c} depth={depth + 1} />
-              ))}
-            </div>
-          )}
-
-          {!p.is_archived && (
-            <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--space-2)" }}>
+            {!p.is_archived ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -390,8 +284,17 @@ export function PurchasesManager({
               >
                 Ajouter un achat au groupe
               </Button>
-            </div>
-          )}
+            ) : (
+              <span />
+            )}
+            <Link
+              href={`/achats/${p.id}`}
+              style={{ fontSize: "var(--text-sm)", color: "var(--color-text-link)", display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              Voir le détail
+              <ArrowRight size={14} aria-hidden />
+            </Link>
+          </div>
         </div>
       </Card>
     );
@@ -399,33 +302,62 @@ export function PurchasesManager({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-5)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-5)" }}>
         <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", visibility: archivedCount > 0 ? "visible" : "hidden" }}>
           <Checkbox checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Afficher les archivés ({archivedCount})
         </label>
-        <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
-          Nouvel achat
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+          {scope === "active" ? (
+            doneCount > 0 && (
+              <Link
+                href="/achats/termines"
+                style={{ fontSize: "var(--text-sm)", color: "var(--color-text-link)", display: "inline-flex", alignItems: "center", gap: 4 }}
+              >
+                Voir les achats terminés ({doneCount})
+                <ArrowRight size={14} aria-hidden />
+              </Link>
+            )
+          ) : (
+            <Link
+              href="/achats"
+              style={{ fontSize: "var(--text-sm)", color: "var(--color-text-link)", display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              <ArrowLeft size={14} aria-hidden />
+              Achats en cours
+            </Link>
+          )}
+          {scope === "active" && (
+            <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
+              Nouvel achat
+            </Button>
+          )}
+        </div>
       </div>
 
       {roots.length === 0 ? (
         <Card>
           <EmptyState
             icon={ShoppingBag}
-            title="Aucun achat"
-            description="Crée un achat pour regrouper des transactions (ex. un meuble payé en plusieurs fois), ou un groupe pour budgéter un voyage ou un projet de travaux."
+            title={scope === "done" ? "Aucun achat terminé" : "Aucun achat"}
+            description={
+              scope === "done"
+                ? "Les achats que tu marques comme soldés apparaîtront ici."
+                : "Crée un achat pour regrouper des transactions (ex. un meuble payé en plusieurs fois), ou un groupe pour budgéter un voyage ou un projet de travaux."
+            }
             action={
-              <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
-                Nouvel achat
-              </Button>
+              scope === "active" ? (
+                <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
+                  Nouvel achat
+                </Button>
+              ) : undefined
             }
           />
         </Card>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "var(--space-4)", alignItems: "start" }}>
           {roots.map((p) => (
-            <PurchaseNode key={p.id} purchase={p} depth={0} />
+            <PurchaseNode key={p.id} purchase={p} />
           ))}
         </div>
       )}

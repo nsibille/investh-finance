@@ -40,6 +40,16 @@ const DETACHED_TX_RESET = {
   validated_at: null,
 } satisfies TransactionUpdate;
 
+export interface AttachOptions {
+  /**
+   * Valider la transaction quand une catégorie est héritée de l'achat (défaut
+   * `true`). Passe `false` pour éditer une transaction « à valider » sans la
+   * faire disparaître de l'onglet : la catégorie est héritée mais le statut reste
+   * `pending` (validation manuelle ensuite).
+   */
+  validate?: boolean;
+}
+
 function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
 }
@@ -279,7 +289,9 @@ export async function deletePurchase(id: string): Promise<ActionResult> {
 export async function attachTransactionToPurchase(
   transactionId: string,
   purchaseId: string,
+  opts: AttachOptions = {},
 ): Promise<ActionResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: purchase } = await supabase
     .from("purchases")
@@ -291,8 +303,10 @@ export async function attachTransactionToPurchase(
   const patch: TransactionUpdate = { purchase_id: purchaseId };
   if (purchase.subcategory_id) {
     patch.subcategory_id = purchase.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   }
   const { error } = await supabase
     .from("transactions")
@@ -316,7 +330,9 @@ export async function attachTransactionToPurchase(
 export async function attachTransactionToInstallment(
   transactionId: string,
   installmentId: string,
+  opts: AttachOptions = {},
 ): Promise<ActionResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: inst } = await supabase
     .from("purchase_installments")
@@ -361,8 +377,10 @@ export async function attachTransactionToInstallment(
   const patch: TransactionUpdate = { purchase_id: inst.purchase_id };
   if (purchase.subcategory_id) {
     patch.subcategory_id = purchase.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   }
   const { error } = await supabase
     .from("transactions")
@@ -381,7 +399,9 @@ export async function attachTransactionToInstallment(
 export async function createInstallmentForTransaction(
   transactionId: string,
   purchaseId: string,
+  opts: AttachOptions = {},
 ): Promise<ActionResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: tx } = await supabase
     .from("transactions")
@@ -409,8 +429,10 @@ export async function createInstallmentForTransaction(
   const patch: TransactionUpdate = { purchase_id: purchaseId };
   if (purchase.subcategory_id) {
     patch.subcategory_id = purchase.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   }
   const { error } = await supabase
     .from("transactions")

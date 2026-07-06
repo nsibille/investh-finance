@@ -6,18 +6,29 @@ import { getTransactionsPage, countPending } from "@/lib/transactions/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { getPurchaseOptions } from "@/lib/purchases/queries";
 import { getMerchantOptions } from "@/lib/merchants/queries";
+import { getRecurringOptions } from "@/lib/recurring/queries";
+import { getPersonOptions } from "@/lib/persons/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PendingPage() {
-  const [data, pendingCount, subcategoryOptions, purchaseOptions, merchantOptions] =
-    await Promise.all([
-      getTransactionsPage({ status: "pending", perPage: 200, sort: "date_desc" }),
-      countPending(),
-      getSubcategoryOptions(),
-      getPurchaseOptions(),
-      getMerchantOptions(),
-    ]);
+  const [
+    data,
+    pendingCount,
+    subcategoryOptions,
+    purchaseOptions,
+    merchantOptions,
+    recurringOptions,
+    personOptions,
+  ] = await Promise.all([
+    getTransactionsPage({ status: "pending", perPage: 200, sort: "date_desc" }),
+    countPending(),
+    getSubcategoryOptions(),
+    getPurchaseOptions(),
+    getMerchantOptions(),
+    getRecurringOptions(),
+    getPersonOptions(),
+  ]);
 
   return (
     <>
@@ -33,6 +44,8 @@ export default async function PendingPage() {
         subcategoryOptions={subcategoryOptions}
         purchaseOptions={purchaseOptions}
         merchantOptions={merchantOptions}
+        recurringOptions={recurringOptions}
+        personOptions={personOptions}
       />
     </>
   );

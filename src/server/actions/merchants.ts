@@ -131,7 +131,9 @@ export type AttachMerchantResult =
 export async function attachTransactionToMerchant(
   transactionId: string,
   merchantId: string,
+  opts: { validate?: boolean } = {},
 ): Promise<AttachMerchantResult> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: merchant } = await supabase
     .from("merchants")
@@ -145,8 +147,10 @@ export async function attachTransactionToMerchant(
   let merchantCategorized = false;
   if (merchant.subcategory_id) {
     patch.subcategory_id = merchant.subcategory_id;
-    patch.status = "validated";
-    patch.validated_at = new Date().toISOString();
+    if (validate) {
+      patch.status = "validated";
+      patch.validated_at = new Date().toISOString();
+    }
   } else {
     const { data: tx } = await supabase
       .from("transactions")

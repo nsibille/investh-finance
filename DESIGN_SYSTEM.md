@@ -628,7 +628,7 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 **Variante mini** pour le dashboard (largeur réduite, sans pending).
 
 ### `card-pending-validator`
-**Card workflow validation** : amount + libellé + date + `input-category-picker` + `btn-primary-sm` (Valider) + `btn-ghost-sm` (Ignorer / Note).
+**Card workflow validation** : amount + libellé + date + `input-category-picker` + `btn-primary-sm` (Valider) + `btn-ghost-sm` (Ignorer / Note) + chips Enseigne · Achat · Récurrente · Personnes · Note. **Édition sans validation** : changer la catégorie / l'enseigne / l'achat / la récurrente ou ventiler entre personnes persiste sans valider — la transaction reste dans l'onglet « à valider » (statut `pending`) jusqu'au clic explicite sur **Valider** (les rattachements passent `validate: false` aux actions serveur ; catégorie via `setTransactionSubcategory`).
 
 ### `card-recurring`
 **Card transaction récurrente** : nom + montant attendu + fréquence + `badge-recurring-active`/`badge-recurring-missing` + dernière occurrence.

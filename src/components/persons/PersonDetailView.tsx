@@ -9,6 +9,7 @@ import {
   Gift,
   HandCoins,
   ArrowDownLeft,
+  ArrowUpRight,
   X,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -40,6 +41,17 @@ import type {
   SplitNature,
 } from "@/lib/persons/types";
 import type { CreditCandidate } from "@/lib/persons/queries";
+
+/** Libellé du solde net signé (> 0 : la personne me doit ; < 0 : je lui dois). */
+function soldeLabel(net: number): string {
+  if (Math.abs(net) <= 0.01) return "Solde";
+  return net < 0 ? "Solde · tu dois" : "Solde · on te doit";
+}
+
+function soldeColor(net: number): string {
+  if (Math.abs(net) <= 0.01) return "var(--color-text-muted)";
+  return net < 0 ? "var(--color-danger)" : "var(--color-warning-dark)";
+}
 
 function Stat({
   label,
@@ -365,13 +377,27 @@ export function PersonDetailView({
   function EventRow({ e }: { e: PersonEvent }) {
     const isRepayment = e.kind === "repayment";
     const isGift = !isRepayment && e.nature === "gift";
-    const Icon = isRepayment ? ArrowDownLeft : isGift ? Gift : HandCoins;
+    // Part « dette » sur une transaction reçue → argent que je dois (virement pro).
+    const isIOwe = e.kind === "share" && e.nature === "debt" && e.direction === "i_owe";
+    const Icon = isRepayment
+      ? ArrowDownLeft
+      : isGift
+        ? Gift
+        : isIOwe
+          ? ArrowUpRight
+          : HandCoins;
     const iconColor = isRepayment
       ? "var(--color-success)"
       : isGift
         ? "var(--color-finance-investissement)"
-        : "var(--color-text-muted)";
-    const amountColor = isRepayment ? "var(--color-success)" : "var(--color-text-primary)";
+        : isIOwe
+          ? "var(--color-danger)"
+          : "var(--color-text-muted)";
+    const amountColor = isRepayment
+      ? "var(--color-success)"
+      : isIOwe
+        ? "var(--color-danger)"
+        : "var(--color-text-primary)";
 
     const title =
       e.kind === "share"
@@ -440,7 +466,7 @@ export function PersonDetailView({
               : "Remb."}
         </span>
         <span style={{ fontFamily: "var(--font-mono)", flexShrink: 0, color: amountColor }}>
-          {isRepayment ? "+" : ""}
+          {isRepayment ? "+" : isIOwe ? "−" : ""}
           {formatCurrency(e.amount)}
         </span>
         <div style={{ display: "flex", gap: 2, flexShrink: 0, width: 56, justifyContent: "flex-end" }}>
@@ -509,13 +535,16 @@ export function PersonDetailView({
             marginTop: "var(--space-5)",
           }}
         >
-          <Stat label="Dettes" value={formatCurrency(person.totalDebt)} />
+          <Stat label="On te doit" value={formatCurrency(person.totalDebt)} />
+          {person.iOwe > 0.01 && (
+            <Stat label="Tu dois" value={formatCurrency(person.iOwe)} color="var(--color-danger)" />
+          )}
           <Stat label="Cadeaux" value={formatCurrency(person.totalGift)} color="var(--color-finance-investissement)" />
           <Stat label="Remboursé" value={formatCurrency(person.totalRepaid)} color="var(--color-success)" />
           <Stat
-            label="Restant dû"
-            value={formatCurrency(person.outstandingDebt)}
-            color={person.outstandingDebt > 0.01 ? "var(--color-danger)" : "var(--color-text-muted)"}
+            label={soldeLabel(person.netBalance)}
+            value={formatCurrency(Math.abs(person.netBalance))}
+            color={soldeColor(person.netBalance)}
           />
         </div>
       </Card>

@@ -126,7 +126,11 @@ export function PurchaseGalaxy({
                             <span>
                               {" "}· {t.split.shares.length} personne
                               {t.split.shares.length > 1 ? "s" : ""} ·{" "}
-                              {t.split.nature === "gift" ? "cadeau" : "dette"}
+                              {t.split.nature === "gift"
+                                ? "cadeau"
+                                : t.amount > 0
+                                  ? "à rendre"
+                                  : "dette"}
                             </span>
                           )}
                         </>

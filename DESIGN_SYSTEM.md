@@ -1002,8 +1002,36 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 ### `transaction-row`
 **Row de transaction** — défini dans `table-transactions`.
 
+### `table-transactions-list`
+**Table de la liste `/transactions`** (distincte de `table-transaction-editor`, réservée à l'aperçu d'import). Colonnes :
+- **Transaction** : titre = enseigne si connue (`tx-merchant`, cliquable → `merchant-quick-view`), sinon **libellé en style code** (`tx-label-code` : `font-mono`, fond `--color-bg-subtle`, bord + `radius-sm`). Sous-lignes `tx-main__meta` (xs, wrap) : libellé code réduit (`tx-label-code--sub`, quand l'enseigne occupe le titre) · achat (`tx-meta--purchase` + occurrence mono X/Y + croix détacher) · récurrence (`tx-meta--recurring` + croix) · personnes (`tx-meta--persons`, cliquable → éditeur de partage).
+- **Compte · date** mutualisés (`tx-acctdate` : `badge-dot` + nom de compte ellipsé au-dessus, date muette en dessous) — une seule colonne.
+- **Catégorie** (`tx-cat`) : `badge-dot` couleur + **nom complet sans retour à la ligne** ; le chemin parent (`tx-cat__path` : « Type / Catégorie / ») est ellipsé et révélé au survol (`title`), la feuille (`tx-cat__leaf`) n'est jamais tronquée. Cliquable → `CategoryInlineEditor`. Verrouillée si héritée d'un achat.
+- **Montant** (`tx-amount`) : `amount-display` + `badge-status-*` empilés à droite.
+- **Actions** (`tx-actions`, rangée de `btn-icon-md` 30px, `data-on` = indigo quand défini) : enseigne (`Store`) · achat (`ShoppingBag`) · récurrence (`Repeat`) · partage (`Users`) · valider (`Check`, `data-validate`) ou invalider/rétablir (`RotateCcw`, → `pending`) · détail/éditer (`Pencil`, lien `/transactions/[id]`).
+> Implémentation : `src/components/transactions/TransactionsTable.tsx` + `TransactionsManager.tsx` (état + actions serveur optimistes). Section CSS `table-transactions-list` dans `globals.css`.
+
+### `merchant-quick-view`
+**Aperçu (lecture seule) d'une enseigne** ouvert au clic sur son nom dans la liste (`tx-merchant`). Popover en portal (`mq-popover`, `position: fixed`, `z-popover`), stats chargées à la demande (`getMerchantQuickStats`) : en-tête (icône `Store` + nom + catégorie par défaut + En ligne/pays) → `mq-kpis` (Total dépensé · Transactions · Moy./mois, mono) → `mq-bars` (12 derniers mois, barres CSS normalisées) → `mq-cats` (top 4 catégories : pastille + nom + compteur + montant) → lien `mq-popover__link` « Voir la fiche de l'enseigne » (→ `merchant-detail-page`). Pas d'édition. Ferme au clic dehors / Échap.
+> Implémentation : `src/components/merchants/MerchantQuickView.tsx` + `src/lib/merchants/stats.ts`.
+
+### `merchant-detail-page`
+**Fiche détail d'une enseigne (`/enseignes/[id]`)** — lecture. `card-surface` en-tête (`merchant-detail__icon` + nom `text-2xl` + catégorie/pays + `btn-secondary-md` « Gérer les enseignes ») → grille `card-kpi` (Total dépensé · Transactions · Dépense moyenne/mois · Achats rattachés) → carte « 12 derniers mois » (`mq-bars mq-bars--lg`) → carte « Répartition par catégorie » (`md-cat` : libellé + montant + barre de proportion colorée) → `btn-secondary-md` « Voir les N transactions » (→ `/transactions?merchant=[id]`, réutilise le filtre enseigne). Implémentation : `src/components/merchants/MerchantDetailView.tsx`.
+
 ### `transaction-filters`
-**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`.
+**Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `multi-select-combobox` (enseignes, achats) + `filter-amount-range` (2× `input-currency-md` min/max, montant en valeur absolue) + `input-date-md` (du/au) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`. Le paramètre `showStatus={false}` masque le sélecteur de statut (page « À valider », toujours `pending`). Sous la toolbar, `filter-chips` remonte chaque filtre actif (surtout les multiselect) en chip retirable + bouton « Tout effacer ». État porté par l'URL (`merchant`/`purchase` en CSV, `amin`/`amax`, `from`/`to`, `q`, `account`, `subcategory`, `sort`). Implémentation : `src/components/transactions/TransactionFilters.tsx`.
+
+### `multi-select-combobox`
+**Filtre multi-sélection avec recherche** (enseignes, achats…). Trigger `input-select-md`-like (40px) : icône optionnelle + placeholder ou compteur « N enseignes » + croix d'effacement ; état `data-active` (bordure/fond `--color-brand-primary`) quand ≥ 1 sélection. Panneau en portal (`position: fixed`, `z-popover`, `max-height: 320px`) : champ recherche insensible casse/accents multi-tokens + liste d'options avec case `ms-combobox__check` (✓ indigo si cochée). **Les options cochées sont triées en tête de liste.** Footer « Tout désélectionner ». Navigation clavier ↑/↓/Entrée (toggle)/Échap. Multi-toggle sans fermer le panneau.
+```css
+.ms-combobox__trigger[data-active="true"] { border-color: var(--color-brand-primary); background: var(--color-brand-primary-50); }
+.ms-combobox__check[data-on="true"] { background: var(--color-brand-primary); border-color: var(--color-brand-primary); }
+.ms-combobox__panel { position: fixed; z-index: var(--z-popover); max-height: 320px; }
+```
+> Implémentation : `src/components/ui/MultiSelectCombobox.tsx` (section CSS `multi-select-combobox` dans `globals.css`).
+
+### `filter-chips`
+**Barre de filtres actifs** sous une toolbar : chaque critère actif rendu en `filter-chip` (pilule `radius-full`, fond `--color-brand-primary-50`, bordure indigo, croix) qui se retire au clic ; termine par `btn-ghost-sm` « Tout effacer ». Rend les filtres (notamment multiselect) évidents et réversibles.
 
 ### `file-dropzone`
 **Zone upload fichier (import)**
@@ -1078,25 +1106,26 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 ```
 
 ### `input-split-nature`
-**Bascule segmentée dette / cadeau** — deux boutons exclusifs (`HandCoins` = dette, `Gift` = cadeau) qualifiant la nature de la ventilation d'une transaction (parts des personnes ≠ moi). État actif : bordure + fond `--color-brand-primary` / `--color-brand-primary-50`, texte `--color-brand-primary-700`. Hauteur 32px, `--radius-md`. Réutilisé dans `person-share-editor` et `person-attach-modal`.
+**Bascule segmentée dette / cadeau** — deux boutons exclusifs (`HandCoins` = dette, `Gift` = cadeau) qualifiant la nature de la ventilation d'une transaction (parts des personnes ≠ moi). État actif : bordure + fond `--color-brand-primary` / `--color-brand-primary-50`, texte `--color-brand-primary-700`. Hauteur 32px, `--radius-md`. Réutilisé dans `person-share-editor` et `person-attach-modal`. **Direction déduite du signe** : sur une transaction créditée (montant > 0, ex. virement pro reçu), le bouton « dette » s'affiche « À rendre » — la part comptée est de l'argent que **je dois** à la personne ; sur une dépense (montant < 0), c'est une **créance** (la personne me doit).
 
 ### `person-share-editor`
 **Éditeur de ventilation d'une transaction entre personnes**
 - Usage : bloc « Partage entre personnes » du détail d'une transaction. Chaque personne est cochable (`input-checkbox` + `badge-dot` couleur), « moi » coché par défaut mais décochable.
-- Composition : liste des personnes cochables (part éditable `input-currency` alignée à droite à côté de chaque cochée) → actions `btn-ghost-sm` « Répartir équitablement » + `input-split-nature` → encart résumé (`--color-bg-subtle`) « Ma part / Créances (ou Cadeaux) / Total réparti » → `btn-primary-sm` « Enregistrer le partage » (+ `btn-ghost-sm` « Ne pas partager » si déjà ventilée).
+- Composition : liste des personnes cochables (part éditable `input-currency` alignée à droite à côté de chaque cochée) → actions `btn-ghost-sm` « Répartir équitablement » + `input-split-nature` → encart résumé (`--color-bg-subtle`) « Ma part / Créances (ou « À rendre (tu dois) » sur un crédit, ou Cadeaux) / Total réparti » → `btn-primary-sm` « Enregistrer le partage » (+ `btn-ghost-sm` « Ne pas partager » si déjà ventilée).
+- **Compte courant (bidirectionnel)** : une part « dette » sur une transaction créditée (montant > 0) compte comme de l'argent que je dois à la personne (ex. virement pro à rembourser), au lieu d'une créance. Un texte d'aide le rappelle sous les boutons de nature.
 - Répartition : parts égales auto entre les personnes cochées (reste au centime sur la 1re part), chaque part restant modifiable. Le total réparti est signalé en `--color-warning-dark` s'il diffère du montant de la transaction.
 - États : vide (aucune personne → invite), édition, mismatch (total ≠ montant), saving.
 - Réutilisé (auto-sauvegarde + `onSaved` ferme la modale) : détail d'une transaction, **liste des transactions** (modale « Partager avec des personnes », pré-remplie avec la ventilation existante) et **page d'un achat** (édition du partage de chaque transaction rattachée). Corrige la perte des paramètres à la ré-ouverture depuis la liste (l'ancienne modale légère repartait de zéro).
 - Dark mode : auto. Implémentation : `src/components/persons/PersonSharePicker.tsx`.
 
 ### `person-card`
-**Card personne (page Personnes)** — `card-surface` : en-tête (`badge-dot` + nom + `btn-icon-md` modifier/supprimer) → grille de 4 stats mono (`Dettes`, `Cadeaux` en `--color-finance-investissement`, `Remboursé` en `--color-success`, `Restant dû` en `--color-danger` si > 0) → `btn-ghost-sm` déplier → registre : transactions partagées (icône `Gift`/`HandCoins` + date + libellé lien + part mono) puis remboursements (date + libellé + montant `--color-success` + `btn-icon-md` supprimer) et formulaire d'ajout de remboursement (`input-currency` + `input-date` + `input-select` transaction créditée optionnelle + note). Implémentation : `src/components/persons/PersonsManager.tsx`.
+**Card personne (page Personnes)** — `card-surface` : en-tête (`badge-dot` + nom + `btn-icon-md` modifier/supprimer) → grille de stats mono (`On te doit`, `Tu dois` en `--color-danger` si > 0, `Cadeaux` en `--color-finance-investissement`, `Remboursé` en `--color-success`, **`Solde`** net signé — libellé directionnel « Solde · tu dois » `--color-danger` / « Solde · on te doit » `--color-warning-dark`, « Solde » atténué si soldé) → `btn-ghost-sm` déplier → registre : transactions partagées (icône `Gift`/`HandCoins`, ou `ArrowUpRight` `--color-danger` + montant préfixé `−` pour une part « à rendre » sur un crédit + date + libellé lien + part mono) puis remboursements (date + libellé + montant `--color-success` + `btn-icon-md` supprimer) et formulaire d'ajout de remboursement (`input-currency` + `input-date` + `input-select` transaction créditée optionnelle + note). Le solde est un **compte courant signé** (virements pro reçus = « je dois », dépenses avancées = « on me doit », qui se compensent). Implémentation : `src/components/persons/PersonsManager.tsx`.
 
 ### `person-attach-modal`
 **Variante de `modal-surface`** pour rattacher des personnes à une ligne d'aperçu d'import : sélection multiple (`input-checkbox` + `badge-dot`, « moi » par défaut) + `input-split-nature`. Le montant est réparti à parts égales à l'import (ajustable ensuite via `person-share-editor`). **Réservé à l'aperçu d'import** (les lignes n'ont pas encore d'id) ; la liste des transactions utilise directement `person-share-editor`. Implémentation : `src/components/import/PersonAttachModal.tsx`.
 
 ### `person-detail-page`
-**Page de détail d'une personne (`/personnes/[id]`)** — `card-surface` en-tête (`badge-dot` + nom `text-2xl` + `btn-secondary-sm` Modifier via `PersonForm`) → grille de 4 stats mono (Dettes, Cadeaux `--color-finance-investissement`, Remboursé `--color-success`, Restant dû `--color-danger` si > 0, **entrées manuelles incluses**) → carte **Événements** : timeline unifiée triée récent → ancien fusionnant parts de transactions (`Transaction`, lien `/transactions/[id]`), dettes/cadeaux manuels (`Manuel`, éditables/supprimables inline) et remboursements (`Remb.`, `+montant` `--color-success`, éditables/supprimables) — chaque ligne : icône nature (`HandCoins`/`Gift`/`ArrowDownLeft`) + date + libellé + `badge-tag-md` type + `amount` mono + `btn-icon-md` modifier/supprimer → carte **Enregistrer un remboursement** (formulaire réutilisé). Modales d'édition : `PersonForm`, formulaire dette/cadeau manuel (`input-split-nature` + `input-currency` + `input-date` + libellé + note), formulaire remboursement, `modal-confirm-danger` (suppression d'une entrée manuelle). Implémentation : `src/components/persons/PersonDetailView.tsx`.
+**Page de détail d'une personne (`/personnes/[id]`)** — `card-surface` en-tête (`badge-dot` + nom `text-2xl` + `btn-secondary-sm` Modifier via `PersonForm`) → grille de stats mono (On te doit, Tu dois `--color-danger` si > 0, Cadeaux `--color-finance-investissement`, Remboursé `--color-success`, **Solde** net signé directionnel — « Solde · tu dois » `--color-danger` / « Solde · on te doit » `--color-warning-dark`, **entrées manuelles incluses**) → carte **Événements** : timeline unifiée triée récent → ancien fusionnant parts de transactions (`Transaction`, lien `/transactions/[id]`), dettes/cadeaux manuels (`Manuel`, éditables/supprimables inline) et remboursements (`Remb.`, `+montant` `--color-success`, éditables/supprimables) — chaque ligne : icône nature (`HandCoins` créance / `ArrowUpRight` `--color-danger` « à rendre » (je dois) / `Gift` / `ArrowDownLeft` remb.) + date + libellé + `badge-tag-md` type + `amount` mono (préfixe `−` si « à rendre ») + `btn-icon-md` modifier/supprimer → carte **Enregistrer un remboursement** (formulaire réutilisé). Modales d'édition : `PersonForm`, formulaire dette/cadeau manuel (`input-split-nature` + `input-currency` + `input-date` + libellé + note), formulaire remboursement, `modal-confirm-danger` (suppression d'une entrée manuelle). Implémentation : `src/components/persons/PersonDetailView.tsx`.
 
 ### `purchase-line-row`
 **Ligne compacte type transaction (lecture seule)** — sert à lister aussi bien les transactions rattachées à un achat que ses sous-achats (« les lister comme des transactions »). Composition : pastille/icône de tête optionnelle (`badge-dot` compte, `Layers` sous-achat) → libellé + sous-libellé mono (date · compte, ou nb transactions · nb sous-achats) → `amount-sm` à droite → élément de fin optionnel (`badge-status-*`, chevron `ArrowUpRight`). Cliquable (hover `--color-bg-subtle`) si `href` fourni. Implémentation : `src/components/purchases/PurchaseLineRow.tsx`.
@@ -1113,11 +1142,14 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 ### `transaction-picker-modal`
 **Variante de `modal-surface`** pour choisir une transaction non rattachée (rattacher à l'achat, remplir/réassigner une échéance) : `input-text-md` de recherche (débouncée) + liste `purchase-line-row` (pastille compte + libellé/date/compte + `amount-sm`), état vide/chargement atténué. Alimentée par la Server Action `getAttachableTransactions` (25 plus récentes, filtre libellé). Ne propose que des transactions **non assignées** (règle fondamentale : 0 ou 1 achat en direct) — exclut `purchase_id` non nul **et** celles réservées par une échéance (`purchase_installments.transaction_id`). Remontée à chaque ouverture via `key`. Implémentation : `src/components/purchases/TransactionPickerModal.tsx`.
 
+### `category-override-picker`
+**Choix de la politique de surcharge de la catégorie des transactions rattachées** — groupe de 3 `input-radio` (libellé `text-sm` + aide `text-xs` `--color-text-muted`) présenté quand la catégorie d'un achat change alors qu'il a des transactions rattachées : **Seulement les transactions sans catégorie** (`empty`, défaut recommandé) · **Toutes les transactions rattachées** (`all`, écrase — comportement historique) · **Ne pas surcharger** (`none`, les transactions gardent leur catégorie). Utilisé dans deux contextes : la modale « Appliquer aux transactions rattachées ? » (variante de `modal-surface`) déclenchée par le changement inline de catégorie sur `purchase-detail-page`, et un `form-field` de `PurchaseForm` en édition (affiché seulement si la catégorie change et qu'il y a des tx liées). Alimente `setPurchaseSubcategory(id, subId, mode)` / `updatePurchase(..., { categoryOverride })`. Implémentation : `src/components/purchases/CategoryOverridePicker.tsx`.
+
 ### `purchase-installment-chips`
 **Calendrier compact des paiements programmés** — une pastille mono par échéance (mois court `formatShortMonth`, fond `--color-bg-subtle`, `--radius-sm`), ✓ `--color-success` si réglée (reliée à une transaction), atténuée `--color-text-muted` si « à venir ». Plafonné (défaut 10, +N). Affiché dans le sélecteur `Rattacher à un achat` (sous chaque achat en liste, et en aperçu du calendrier au choix d'une échéance). Implémentation : `InstallmentChips` dans `src/components/import/PurchaseAttachModal.tsx`.
 
 ### `purchase-detail-page`
-**Page de détail d'un achat (`/achats/[id]`)** — `card-surface` : en-tête (titre `text-2xl` + badges `badge-group`/`badge-status-*`) et barre d'actions (`btn-secondary-sm` Marquer comme soldé/Rouvrir + Modifier, `btn-ghost-sm` Retirer du groupe / Archiver / Supprimer) → bloc métadonnées **Catégorie** (`input-category-combobox` éditable, propage aux transactions), **Enseigne** (icône `Store` + nom), **Personnes** (`badge-dot` + nom + badge nature `HandCoins` Dette `--color-warning-dark` / `Gift` Cadeau `--color-finance-investissement` + `amount-sm`) → encart KPI (`--color-bg-subtle`) Total dépensé · Budget prévu · Reste à payer · Transactions (mono `amount-lg`) → `purchase-galaxy` en `variant="page"` avec `assignmentsSlot={purchase-assignments}` (assignation interactive des transactions/paiements) → `btn-ghost-sm` Ajouter un achat au groupe. Le « soldé » est manuel (`is_settled`) pour les achats sans échéancier complet ; les achats à échéancier complet sont soldés automatiquement. Les achats soldés sont rangés sur un écran séparé `/achats/termines` (lien « Voir les achats terminés » depuis `/achats`). Réutilise `PurchaseForm` + `InstallmentEditor` (modale) et `modal-confirm-danger` (suppression). Implémentation : `src/components/purchases/PurchaseDetailView.tsx`.
+**Page de détail d'un achat (`/achats/[id]`)** — `card-surface` : en-tête (titre `text-2xl` + badges `badge-group`/`badge-status-*`) et barre d'actions (`btn-secondary-sm` Marquer comme soldé/Rouvrir + Modifier, `btn-ghost-sm` Retirer du groupe / Archiver / Supprimer) → bloc métadonnées **Catégorie** (`input-category-combobox` éditable ; si l'achat a des transactions rattachées, le changement ouvre une modale `category-override-picker` pour choisir comment répercuter la nouvelle catégorie, sinon applique directement), **Enseigne** (icône `Store` + nom), **Personnes** (`badge-dot` + nom + badge nature `HandCoins` Dette `--color-warning-dark` / `Gift` Cadeau `--color-finance-investissement` + `amount-sm`) → encart KPI (`--color-bg-subtle`) Total dépensé · Budget prévu · Reste à payer · Transactions (mono `amount-lg`) → `purchase-galaxy` en `variant="page"` avec `assignmentsSlot={purchase-assignments}` (assignation interactive des transactions/paiements) → `btn-ghost-sm` Ajouter un achat au groupe. Le « soldé » est manuel (`is_settled`) pour les achats sans échéancier complet ; les achats à échéancier complet sont soldés automatiquement. Les achats soldés sont rangés sur un écran séparé `/achats/termines` (lien « Voir les achats terminés » depuis `/achats`). Réutilise `PurchaseForm` + `InstallmentEditor` (modale) et `modal-confirm-danger` (suppression). Implémentation : `src/components/purchases/PurchaseDetailView.tsx`.
 
 ---
 
@@ -1168,6 +1200,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `btn-primary-md` | Bouton | Action principale md (défaut) | auto |
 | `btn-primary-sm` | Bouton | Action principale sm | auto |
 | `btn-secondary-md` | Bouton | Action secondaire md | auto |
+| `category-override-picker` | Métier | Choix de surcharge de catégorie des tx rattachées (achat) | auto |
 | `card-account` | Métier | Card compte bancaire (liste) | auto |
 | `card-account-mini` | Métier | Card compte version dashboard | auto |
 | `card-analytics` | Métier | Card section analytique | auto |
@@ -1191,6 +1224,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `empty-state` | Feedback | État vide générique | auto |
 | `file-dropzone` | Métier | Zone upload fichier import | auto |
 | `file-dropzone-mini` | Métier | Zone upload justificatif | auto |
+| `filter-amount-range` | Form | Range de montant (2 champs devise min/max) | auto |
+| `filter-chips` | Métier | Barre de filtres actifs retirables | auto |
 | `form-error-msg` | Form | Message erreur sous un champ | auto |
 | `form-field` | Form | Wrapper label+input+erreur | auto |
 | `form-help-text` | Form | Texte d'aide sous un champ | auto |
@@ -1209,7 +1244,10 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `input-textarea-md` | Form | Zone texte multilignes | auto |
 | `input-toggle` | Form | Switch on/off | auto |
 | `layout-page-header` | Layout | Header de page avec titre + actions | auto |
+| `merchant-quick-view` | Métier | Aperçu stats enseigne (popover liste) | auto |
+| `merchant-detail-page` | Métier | Fiche détail d'une enseigne | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
+| `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |
 | `modal-export-options` | Modal | Variante options export | auto |
 | `modal-surface` | Modal | Modale standard | auto |
@@ -1235,7 +1273,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `spinner-lg` | Feedback | Spinner large | auto |
 | `spinner-md` | Feedback | Spinner medium (défaut) | auto |
 | `spinner-sm` | Feedback | Spinner small | auto |
-| `table-transaction-editor` | Table | Table éditrice mutualisée (import + liste) | auto |
+| `table-transaction-editor` | Table | Table éditrice de l'aperçu d'import | auto |
+| `table-transactions-list` | Table | Liste `/transactions` (titre enseigne + actions) | auto |
 | `table-import-preview` | Table | Déprécié — voir `table-transaction-editor` | auto |
 | `import-cat-edit` | Import | Édition inline catégorie (aperçu import) | auto |
 | `note-cell` | Table | Annotation inline (icône + popover note) | auto |

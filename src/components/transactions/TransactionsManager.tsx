@@ -2,17 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import Link from "next/link";
-import { Check, Ban, Pencil } from "lucide-react";
-import { StatusBadge } from "@/components/ui/Badge";
-import { IconButton } from "@/components/ui/IconButton";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import {
-  TransactionEditorTable,
-  type EditorRowVM,
-  type EditorHandlers,
-} from "./TransactionEditorTable";
+import type { EditorRowVM } from "./TransactionEditorTable";
+import { TransactionsTable, type ListHandlers } from "./TransactionsTable";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
 import { PersonSharePicker } from "@/components/persons/PersonSharePicker";
 import { useToast } from "@/hooks/useToast";
@@ -433,20 +426,22 @@ export function TransactionsManager({
     }
   }
 
-  async function ignore(id: string) {
+  // Générique : valider (via quickValidate), invalider ou rétablir (→ pending),
+  // ignorer. Remplace l'ancien bouton « Ignorer » dédié.
+  async function changeStatus(id: string, status: TransactionRow["status"]) {
     const row = rowById.get(id);
     if (!row) return;
     const prev = merged(row).status;
     const res = await runOptimistic({
-      apply: () => patch(id, { status: "ignored" }),
+      apply: () => patch(id, { status }),
       rollback: () => patch(id, { status: prev }),
-      run: () => setTransactionStatus(id, "ignored"),
+      run: () => setTransactionStatus(id, status),
       onError: toast.error,
     });
     if (res.ok) router.refresh();
   }
 
-  const handlers: EditorHandlers = {
+  const handlers: ListHandlers = {
     onAssignCategory: assignCategory,
     onCreateCategory: createCategory,
     onAttachPurchase: attachPurchase,
@@ -458,6 +453,8 @@ export function TransactionsManager({
     onDetachRecurring: detachRecurring,
     onSharePersons: sharePersons,
     onSaveNote: saveNote,
+    onValidate: quickValidate,
+    onSetStatus: changeStatus,
   };
 
   const editorRows: EditorRowVM[] = rows.map((row) => {
@@ -488,6 +485,7 @@ export function TransactionsManager({
       personsInitial: null,
       personsSplit: r.split ?? null,
       note: r.note,
+      status: r.status,
     };
   });
 
@@ -495,7 +493,7 @@ export function TransactionsManager({
 
   return (
     <>
-      <TransactionEditorTable
+      <TransactionsTable
         rows={editorRows}
         handlers={handlers}
         subcategoryOptions={allOptions}
@@ -503,7 +501,6 @@ export function TransactionsManager({
         merchantOptions={merchantOptions}
         recurringOptions={recurringOptions}
         personOptions={personOptions}
-        showAccount
         renderPersonModal={(vm, close) => (
           <Modal
             key={vm.key}
@@ -521,34 +518,6 @@ export function TransactionsManager({
             />
           </Modal>
         )}
-        trailingHeader={<th style={{ width: 176 }}>Statut</th>}
-        renderTrailing={(vm) => {
-          const row = rowById.get(vm.key);
-          if (!row) return null;
-          const r = merged(row);
-          return (
-            <td>
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-1)", justifyContent: "space-between" }}>
-                <StatusBadge status={r.status} />
-                <div style={{ display: "flex", gap: "var(--space-1)" }}>
-                  {r.status === "pending" && (
-                    <IconButton label="Valider" onClick={() => quickValidate(row.id)}>
-                      <Check size={16} />
-                    </IconButton>
-                  )}
-                  {r.status !== "ignored" && (
-                    <IconButton label="Ignorer" onClick={() => ignore(row.id)}>
-                      <Ban size={16} />
-                    </IconButton>
-                  )}
-                  <Link href={`/transactions/${row.id}`}>
-                    <IconButton label="Détails"><Pencil size={16} /></IconButton>
-                  </Link>
-                </div>
-              </div>
-            </td>
-          );
-        }}
       />
 
       <div

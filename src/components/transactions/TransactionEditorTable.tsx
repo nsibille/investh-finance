@@ -21,6 +21,7 @@ import type {
   SplitNature,
   TransactionSplit,
 } from "@/lib/persons/types";
+import type { TransactionStatus } from "@/lib/transactions/types";
 import type { ReactNode } from "react";
 
 /** Vue normalisée d'une ligne éditable, commune à l'import et à la liste. */
@@ -51,6 +52,8 @@ export interface EditorRowVM {
   /** Ventilation complète (nature + montants) pour l'éditeur riche en liste. */
   personsSplit?: TransactionSplit | null;
   note: string | null;
+  /** Statut de la transaction (liste ; absent à l'import). */
+  status?: TransactionStatus;
   /** Ligne grisée (doublon décoché à l'import). */
   dimmed?: boolean;
   /** Doublon déjà en base (import) : style dédié. */
@@ -239,7 +242,11 @@ export function TransactionEditorTable({
                     >
                       <Users size={12} aria-hidden />
                       {r.personsBadge.count} personne{r.personsBadge.count > 1 ? "s" : ""} ·{" "}
-                      {r.personsBadge.nature === "gift" ? "cadeau" : "dette"}
+                      {r.personsBadge.nature === "gift"
+                        ? "cadeau"
+                        : r.amount > 0
+                          ? "à rendre"
+                          : "dette"}
                     </button>
                   ) : (
                     <button

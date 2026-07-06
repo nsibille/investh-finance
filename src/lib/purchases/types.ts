@@ -3,6 +3,15 @@ import type { Database } from "@/types/database.types";
 export type Purchase = Database["public"]["Tables"]["purchases"]["Row"];
 export type PurchaseInstallment =
   Database["public"]["Tables"]["purchase_installments"]["Row"];
+
+/**
+ * Politique de surcharge de la catégorie des transactions rattachées quand la
+ * catégorie de l'achat change :
+ * - `none` : ne rien toucher (les transactions gardent leur catégorie) ;
+ * - `empty` : ne surcharger que les transactions sans catégorie ;
+ * - `all` : surcharger toutes les transactions rattachées.
+ */
+export type CategoryOverrideMode = "none" | "empty" | "all";
 type TransactionStatus = Database["public"]["Enums"]["transaction_status"];
 
 /** Ligne de transaction rattachée à un achat (type liste, partage éditable). */

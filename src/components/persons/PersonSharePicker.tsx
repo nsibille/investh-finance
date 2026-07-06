@@ -53,6 +53,10 @@ export function PersonSharePicker({
   const router = useRouter();
   const toast = useToast();
   const total = round2(Math.abs(amount));
+  // Transaction créditée (montant > 0) : une part « dette » = argent que JE
+  // dois à la personne (ex. virement pro reçu à rendre). Sinon (dépense
+  // avancée) : la personne ME doit.
+  const isCredit = amount > 0;
 
   const selfId = useMemo(
     () => persons.find((p) => p.isSelf)?.id ?? null,
@@ -231,9 +235,17 @@ export function PersonSharePicker({
               Répartir équitablement
             </Button>
             <div style={{ flex: 1 }} />
-            {natureBtn("debt", "Dette", HandCoins)}
+            {natureBtn("debt", isCredit ? "À rendre" : "Dette", HandCoins)}
             {natureBtn("gift", "Cadeau", Gift)}
           </div>
+
+          {isCredit && nature === "debt" && (
+            <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
+              Transaction reçue partagée en « à rendre » : le montant réparti aux
+              autres personnes compte comme de l&apos;argent que tu leur dois (ex.
+              virement pro à rembourser).
+            </p>
+          )}
 
           {/* Résumé */}
           <div
@@ -253,7 +265,11 @@ export function PersonSharePicker({
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "var(--color-text-muted)" }}>
-                {nature === "debt" ? "Créances (à te rembourser)" : "Cadeaux offerts"}
+                {nature === "gift"
+                  ? "Cadeaux offerts"
+                  : isCredit
+                    ? "À rendre (tu dois)"
+                    : "Créances (à te rembourser)"}
               </span>
               <span style={{ fontFamily: "var(--font-mono)" }}>{formatCurrency(othersSum, currency)}</span>
             </div>

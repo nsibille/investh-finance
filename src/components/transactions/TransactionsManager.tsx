@@ -14,6 +14,7 @@ import {
   type EditorHandlers,
 } from "./TransactionEditorTable";
 import { RuleSuggestionForm } from "./RuleSuggestionForm";
+import { PersonSharePicker } from "@/components/persons/PersonSharePicker";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import {
@@ -473,6 +474,7 @@ export function TransactionsManager({
       recurring: r.recurring ?? null,
       personsBadge: r.personsSummary ?? null,
       personsInitial: null,
+      personsSplit: r.split ?? null,
       note: r.note,
     };
   });
@@ -490,6 +492,23 @@ export function TransactionsManager({
         recurringOptions={recurringOptions}
         personOptions={personOptions}
         showAccount
+        renderPersonModal={(vm, close) => (
+          <Modal
+            key={vm.key}
+            open
+            onClose={close}
+            title="Partager avec des personnes"
+          >
+            <PersonSharePicker
+              transactionId={vm.key}
+              amount={vm.amount}
+              currency={vm.currency}
+              persons={personOptions}
+              initial={vm.personsSplit ?? { nature: null, shares: [] }}
+              onSaved={close}
+            />
+          </Modal>
+        )}
         trailingHeader={<th style={{ width: 176 }}>Statut</th>}
         renderTrailing={(vm) => {
           const row = rowById.get(vm.key);

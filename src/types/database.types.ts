@@ -517,6 +517,57 @@ export type Database = {
           },
         ]
       }
+      person_manual_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          entry_date: string
+          id: string
+          label: string | null
+          nature: Database["public"]["Enums"]["split_nature"]
+          note: string | null
+          person_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          entry_date?: string
+          id?: string
+          label?: string | null
+          nature: Database["public"]["Enums"]["split_nature"]
+          note?: string | null
+          person_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          entry_date?: string
+          id?: string
+          label?: string | null
+          nature?: Database["public"]["Enums"]["split_nature"]
+          note?: string | null
+          person_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_manual_entries_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "person_balances"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "person_manual_entries_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       person_repayments: {
         Row: {
           amount: number

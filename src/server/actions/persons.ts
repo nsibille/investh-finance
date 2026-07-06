@@ -16,6 +16,7 @@ function fail(message: string): { ok: false; error: string } {
 function revalidate() {
   revalidatePath("/personnes");
   revalidatePath("/transactions");
+  revalidatePath("/achats");
   revalidatePath("/dashboard");
   revalidatePath("/analytics");
 }
@@ -196,10 +197,97 @@ export async function addRepayment(
   return { ok: true };
 }
 
+export async function updateRepayment(
+  id: string,
+  input: RepaymentInput,
+): Promise<ActionResult> {
+  const amount = Math.round(Math.abs(input.amount) * 100) / 100;
+  if (!(amount > 0)) return fail("Le montant doit être positif.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("person_repayments")
+    .update({
+      amount,
+      repaid_on: input.repaidOn || undefined,
+      transaction_id: input.transactionId || null,
+      note: input.note?.trim() || null,
+    })
+    .eq("id", id);
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
 export async function deleteRepayment(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase
     .from("person_repayments")
+    .delete()
+    .eq("id", id);
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Dettes / cadeaux « manuels » (sans ligne bancaire)
+// ---------------------------------------------------------------------------
+
+export interface ManualEntryInput {
+  personId: string;
+  nature: SplitNature;
+  amount: number;
+  entryDate?: string | null;
+  label?: string | null;
+  note?: string | null;
+}
+
+export async function addManualEntry(
+  input: ManualEntryInput,
+): Promise<ActionResult> {
+  const amount = Math.round(Math.abs(input.amount) * 100) / 100;
+  if (!input.personId) return fail("Personne manquante");
+  if (!(amount > 0)) return fail("Le montant doit être positif.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("person_manual_entries").insert({
+    person_id: input.personId,
+    nature: input.nature,
+    amount,
+    entry_date: input.entryDate || undefined,
+    label: input.label?.trim() || null,
+    note: input.note?.trim() || null,
+  });
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
+export async function updateManualEntry(
+  id: string,
+  input: Omit<ManualEntryInput, "personId">,
+): Promise<ActionResult> {
+  const amount = Math.round(Math.abs(input.amount) * 100) / 100;
+  if (!(amount > 0)) return fail("Le montant doit être positif.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("person_manual_entries")
+    .update({
+      nature: input.nature,
+      amount,
+      entry_date: input.entryDate || undefined,
+      label: input.label?.trim() || null,
+      note: input.note?.trim() || null,
+    })
+    .eq("id", id);
+  if (error) return fail(error.message);
+  revalidate();
+  return { ok: true };
+}
+
+export async function deleteManualEntry(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("person_manual_entries")
     .delete()
     .eq("id", id);
   if (error) return fail(error.message);

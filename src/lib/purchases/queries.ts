@@ -2,7 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { computeRollups, type PurchaseAmounts } from "./tree";
-import type { SplitNature } from "@/lib/persons/types";
+import type { SplitNature, TransactionSplit } from "@/lib/persons/types";
 import type {
   PurchaseWithDetails,
   PurchaseDetail,
@@ -45,7 +45,7 @@ export const getPurchases = cache(async function getPurchases(): Promise<
     supabase
       .from("transaction_persons")
       .select(
-        "share_amount, persons(id, name, color, is_self), transactions!inner(purchase_id, split_nature)",
+        "transaction_id, share_amount, persons(id, name, color, is_self), transactions!inner(purchase_id, split_nature)",
       ),
     getSubcategoryOptions(),
   ]);
@@ -62,7 +62,10 @@ export const getPurchases = cache(async function getPurchases(): Promise<
 
   // Agrège les parts par achat → (personne + nature), en ne gardant que les
   // transactions ventilées (nature non nulle). Sert au bloc « Personnes ».
+  // En parallèle, construit la ventilation détaillée par transaction pour
+  // pré-remplir l'éditeur de partage depuis la page achat.
   const personShares = new Map<string, Map<string, PurchasePersonShare>>();
+  const splitByTx = new Map<string, TransactionSplit>();
   for (const r of shareRows ?? []) {
     const tx = r.transactions as unknown as {
       purchase_id: string | null;
@@ -74,7 +77,20 @@ export const getPurchases = cache(async function getPurchases(): Promise<
       color: string;
       is_self: boolean;
     } | null;
+    const txId = (r as { transaction_id: string }).transaction_id;
     if (!tx?.purchase_id || !tx.split_nature || !person) continue;
+
+    // Ventilation détaillée de la transaction.
+    const split = splitByTx.get(txId) ?? { nature: tx.split_nature, shares: [] };
+    split.shares.push({
+      personId: person.id,
+      name: person.name,
+      isSelf: person.is_self,
+      color: person.color,
+      amount: Number(r.share_amount),
+    });
+    splitByTx.set(txId, split);
+
     const byPerson = personShares.get(tx.purchase_id) ?? new Map();
     const key = `${person.id}:${tx.split_nature}`;
     const cur = byPerson.get(key);
@@ -91,6 +107,11 @@ export const getPurchases = cache(async function getPurchases(): Promise<
       });
     }
     personShares.set(tx.purchase_id, byPerson);
+  }
+  for (const split of splitByTx.values()) {
+    split.shares.sort((a, b) =>
+      a.isSelf === b.isSelf ? a.name.localeCompare(b.name) : a.isSelf ? -1 : 1,
+    );
   }
   const personSharesList = (purchaseId: string): PurchasePersonShare[] => {
     const m = personShares.get(purchaseId);
@@ -124,6 +145,7 @@ export const getPurchases = cache(async function getPurchases(): Promise<
       status: t.status,
       accountName: acc?.name ?? null,
       accountColor: acc?.color ?? null,
+      split: splitByTx.get(t.id) ?? { nature: null, shares: [] },
     });
     txLines.set(t.purchase_id, list);
   }

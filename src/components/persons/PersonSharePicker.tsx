@@ -40,12 +40,15 @@ export function PersonSharePicker({
   currency,
   persons,
   initial,
+  onSaved,
 }: {
   transactionId: string;
   amount: number;
   currency: string;
   persons: PersonOption[];
   initial: TransactionSplit;
+  /** Appelé après un enregistrement réussi (ferme la modale en liste/achat). */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -117,6 +120,7 @@ export function PersonSharePicker({
     if (!res.ok) return toast.error(res.error);
     toast.success(checkedIds.length ? "Partage enregistré" : "Partage retiré");
     router.refresh();
+    onSaved?.();
   }
 
   const natureBtn = (

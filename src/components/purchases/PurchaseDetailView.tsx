@@ -16,14 +16,18 @@ import {
   Store,
   Gift,
   HandCoins,
+  Users,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Modal } from "@/components/ui/Modal";
 import { Alert } from "@/components/ui/Alert";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
+import { PersonSharePicker } from "@/components/persons/PersonSharePicker";
+import { formatShortDate } from "@/lib/format/date";
 import { useToast } from "@/hooks/useToast";
 import { PurchaseForm } from "./PurchaseForm";
 import { InstallmentEditor } from "./InstallmentEditor";
@@ -38,9 +42,11 @@ import {
 import type {
   PurchaseDetail,
   PurchaseParentOption,
+  PurchaseTxLine,
 } from "@/lib/purchases/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
+import type { PersonOption } from "@/lib/persons/types";
 
 type ModalState =
   | { mode: "create"; parentId: string }
@@ -75,16 +81,20 @@ export function PurchaseDetailView({
   subcategoryOptions,
   merchantOptions,
   parentOptions,
+  personOptions,
 }: {
   detail: PurchaseDetail;
   subcategoryOptions: SubcategoryOption[];
   merchantOptions: MerchantOption[];
   parentOptions: PurchaseParentOption[];
+  personOptions: PersonOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [modal, setModal] = useState<ModalState>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Transaction dont on édite le partage entre personnes (depuis la galaxie).
+  const [shareTx, setShareTx] = useState<PurchaseTxLine | null>(null);
 
   const isGroup = p.childIds.length > 0 || p.descendantCount > 0;
   const endless = p.is_recurring && !p.recurrence_end;
@@ -280,8 +290,21 @@ export function PurchaseDetailView({
             />
           </div>
 
-          {/* Galaxie dépliée */}
-          <PurchaseGalaxy purchase={p} parent={p.parent} subPurchases={p.children} variant="page" />
+          {/* Galaxie dépliée — chaque transaction rattachée est partageable. */}
+          <PurchaseGalaxy
+            purchase={p}
+            parent={p.parent}
+            subPurchases={p.children}
+            variant="page"
+            renderTxActions={(t) => (
+              <IconButton
+                label="Éditer le partage entre personnes"
+                onClick={() => setShareTx(t)}
+              >
+                <Users size={15} />
+              </IconButton>
+            )}
+          />
 
           {!p.is_archived && (
             <div>
@@ -327,6 +350,29 @@ export function PurchaseDetailView({
           />
         )}
       </Modal>
+
+      {shareTx && (
+        <Modal
+          key={shareTx.id}
+          open
+          onClose={() => setShareTx(null)}
+          title="Partager avec des personnes"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
+              {shareTx.label} · {formatShortDate(shareTx.operation_date)}
+            </p>
+            <PersonSharePicker
+              transactionId={shareTx.id}
+              amount={shareTx.amount}
+              currency={shareTx.currency}
+              persons={personOptions}
+              initial={shareTx.split}
+              onSaved={() => setShareTx(null)}
+            />
+          </div>
+        </Modal>
+      )}
 
       <Modal
         open={confirmDelete}

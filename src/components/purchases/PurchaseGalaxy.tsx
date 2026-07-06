@@ -52,11 +52,18 @@ export function PurchaseGalaxy({
   parent,
   subPurchases,
   variant,
+  renderTxActions,
 }: {
   purchase: PurchaseWithDetails;
   parent?: { id: string; name: string } | null;
   subPurchases?: PurchaseWithDetails[];
   variant: "card" | "page";
+  /**
+   * Actions par transaction rattachée (ex. éditer le partage entre personnes),
+   * rendues à côté de la ligne — jamais dans le lien pour éviter l'imbrication
+   * d'éléments interactifs. Absent ⇒ lignes en lecture seule (variante carte).
+   */
+  renderTxActions?: (tx: PurchaseWithDetails["transactions"][number]) => ReactNode;
 }) {
   const cap = variant === "card" ? 4 : Infinity;
   const txs = p.transactions;
@@ -94,23 +101,42 @@ export function PurchaseGalaxy({
         <Section>
           <SectionTitle count={txs.length}>Transactions rattachées</SectionTitle>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {shownTxs.map((t) => (
-              <PurchaseLineRow
-                key={t.id}
-                href={`/transactions/${t.id}`}
-                leading={t.accountColor ? <Dot color={t.accountColor} /> : undefined}
-                label={t.label}
-                sublabel={
-                  <>
-                    {formatShortDate(t.operation_date)}
-                    {t.accountName && <span>· {t.accountName}</span>}
-                  </>
-                }
-                amount={t.amount}
-                currency={t.currency}
-                trailing={<StatusBadge status={t.status} />}
-              />
-            ))}
+            {shownTxs.map((t) => {
+              const row = (
+                <PurchaseLineRow
+                  key={t.id}
+                  href={`/transactions/${t.id}`}
+                  leading={t.accountColor ? <Dot color={t.accountColor} /> : undefined}
+                  label={t.label}
+                  sublabel={
+                    <>
+                      {formatShortDate(t.operation_date)}
+                      {t.accountName && <span>· {t.accountName}</span>}
+                      {t.split.shares.length > 0 && (
+                        <span>
+                          {" "}· {t.split.shares.length} personne
+                          {t.split.shares.length > 1 ? "s" : ""} ·{" "}
+                          {t.split.nature === "gift" ? "cadeau" : "dette"}
+                        </span>
+                      )}
+                    </>
+                  }
+                  amount={t.amount}
+                  currency={t.currency}
+                  trailing={<StatusBadge status={t.status} />}
+                />
+              );
+              if (!renderTxActions) return row;
+              return (
+                <div
+                  key={t.id}
+                  style={{ display: "flex", alignItems: "center", gap: "var(--space-1)" }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>{row}</div>
+                  {renderTxActions(t)}
+                </div>
+              );
+            })}
           </div>
           {txs.length > shownTxs.length && (
             <Link

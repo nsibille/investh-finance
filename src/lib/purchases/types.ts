@@ -5,7 +5,7 @@ export type PurchaseInstallment =
   Database["public"]["Tables"]["purchase_installments"]["Row"];
 type TransactionStatus = Database["public"]["Enums"]["transaction_status"];
 
-/** Ligne de transaction rattachée à un achat (lecture seule, type liste). */
+/** Ligne de transaction rattachée à un achat (type liste, partage éditable). */
 export interface PurchaseTxLine {
   id: string;
   operation_date: string;
@@ -15,6 +15,8 @@ export interface PurchaseTxLine {
   status: TransactionStatus;
   accountName: string | null;
   accountColor: string | null;
+  /** Ventilation entre personnes de la transaction (éditable depuis l'achat). */
+  split: import("@/lib/persons/types").TransactionSplit;
 }
 
 /** Part d'une personne sur un achat (agrégée sur ses transactions ventilées). */

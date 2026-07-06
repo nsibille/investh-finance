@@ -3,6 +3,8 @@ import type { Database } from "@/types/database.types";
 export type Person = Database["public"]["Tables"]["persons"]["Row"];
 export type PersonRepayment =
   Database["public"]["Tables"]["person_repayments"]["Row"];
+export type PersonManualEntry =
+  Database["public"]["Tables"]["person_manual_entries"]["Row"];
 export type SplitNature = Database["public"]["Enums"]["split_nature"];
 
 /** Option légère (id, nom, moi ?, couleur) pour le sélecteur de personnes. */
@@ -48,6 +50,49 @@ export interface PersonRepaymentRow {
   transactionLabel: string | null;
 }
 
+/** Dette / cadeau « manuel » d'une personne (sans ligne bancaire). */
+export interface PersonManualEntryRow {
+  id: string;
+  nature: SplitNature;
+  amount: number;
+  entryDate: string;
+  label: string | null;
+  note: string | null;
+}
+
+/**
+ * Événement unifié du registre d'une personne pour la page de détail :
+ * part d'une transaction ventilée, dette/cadeau manuel, ou remboursement.
+ */
+export type PersonEvent =
+  | {
+      kind: "share";
+      id: string;
+      date: string;
+      nature: SplitNature;
+      amount: number;
+      transactionId: string;
+      label: string;
+    }
+  | {
+      kind: "manual";
+      id: string;
+      date: string;
+      nature: SplitNature;
+      amount: number;
+      label: string | null;
+      note: string | null;
+    }
+  | {
+      kind: "repayment";
+      id: string;
+      date: string;
+      amount: number;
+      note: string | null;
+      transactionId: string | null;
+      label: string | null;
+    };
+
 /**
  * Personne + soldes agrégés (vue `person_balances`) + détail du registre
  * (parts dette/cadeau + remboursements) pour la page « Personnes ».
@@ -64,4 +109,5 @@ export interface PersonLedger {
   outstandingDebt: number;
   shares: PersonShareRow[];
   repayments: PersonRepaymentRow[];
+  manualEntries: PersonManualEntryRow[];
 }

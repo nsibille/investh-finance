@@ -16,7 +16,12 @@ import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 import type { RecurringOption } from "@/lib/recurring/queries";
-import type { PersonOption, SplitNature } from "@/lib/persons/types";
+import type {
+  PersonOption,
+  SplitNature,
+  TransactionSplit,
+} from "@/lib/persons/types";
+import type { ReactNode } from "react";
 
 /** Vue normalisée d'une ligne éditable, commune à l'import et à la liste. */
 export interface EditorRowVM {
@@ -43,6 +48,8 @@ export interface EditorRowVM {
   personsBadge?: { count: number; nature: SplitNature } | null;
   /** État initial du partage pour la modale (connu à l'import ; null en liste). */
   personsInitial?: { nature: SplitNature; personIds: string[] } | null;
+  /** Ventilation complète (nature + montants) pour l'éditeur riche en liste. */
+  personsSplit?: TransactionSplit | null;
   note: string | null;
   /** Ligne grisée (doublon décoché à l'import). */
   dimmed?: boolean;
@@ -91,6 +98,7 @@ export function TransactionEditorTable({
   trailingHeader,
   renderTrailing,
   filterRow,
+  renderPersonModal,
 }: {
   rows: EditorRowVM[];
   handlers: EditorHandlers;
@@ -103,6 +111,11 @@ export function TransactionEditorTable({
   trailingHeader?: React.ReactNode;
   renderTrailing?: (row: EditorRowVM) => React.ReactNode;
   filterRow?: (row: EditorRowVM) => boolean;
+  /**
+   * Éditeur de partage personnalisé (liste des transactions : éditeur riche
+   * avec montants). Absent ⇒ modale légère par défaut (aperçu d'import).
+   */
+  renderPersonModal?: (row: EditorRowVM, close: () => void) => ReactNode;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [purchaseKey, setPurchaseKey] = useState<string | null>(null);
@@ -354,16 +367,22 @@ export function TransactionEditorTable({
         }}
       />
 
-      <PersonAttachModal
-        key={personKey ?? "none"}
-        open={personKey !== null}
-        onClose={() => setPersonKey(null)}
-        persons={personOptions}
-        initial={personRow?.personsInitial ?? null}
-        onAttach={(value) => {
-          if (personKey !== null) handlers.onSharePersons(personKey, value);
-        }}
-      />
+      {renderPersonModal
+        ? personRow
+          ? renderPersonModal(personRow, () => setPersonKey(null))
+          : null
+        : (
+          <PersonAttachModal
+            key={personKey ?? "none"}
+            open={personKey !== null}
+            onClose={() => setPersonKey(null)}
+            persons={personOptions}
+            initial={personRow?.personsInitial ?? null}
+            onAttach={(value) => {
+              if (personKey !== null) handlers.onSharePersons(personKey, value);
+            }}
+          />
+        )}
     </>
   );
 }

@@ -57,8 +57,9 @@ const baseRule = (over: Partial<EngineRule>): EngineRule => ({
   account_id: null,
   amount_min: null,
   amount_max: null,
-  subcategory_id: "sub",
-  merchant_id: null,
+  merchant_id: "m",
+  merchant_subcategory_id: "sub",
+  merchant_named: false,
   auto_validate: true,
   priority: 100,
   is_active: true,
@@ -79,20 +80,30 @@ describe("applyRules", () => {
     });
   });
 
-  it("carries the rule's merchant_id in the outcome on match", () => {
+  it("attaches a NAMED enseigne on match", () => {
     const out = applyRules(
       { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },
-      [baseRule({ id: "m", pattern: "carrefour", merchant_id: "merch-1" })],
+      [baseRule({ id: "m", pattern: "carrefour", merchant_id: "merch-1", merchant_named: true })],
     );
     expect(out.merchant_id).toBe("merch-1");
+  });
+
+  it("does NOT attach a nameless enseigne (category only)", () => {
+    const out = applyRules(
+      { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },
+      [baseRule({ id: "m", pattern: "carrefour", merchant_id: "merch-1", merchant_named: false })],
+    );
+    expect(out.merchant_id).toBeNull();
+    expect(out.applied_rule_id).toBe("m");
+    expect(out.subcategory_id).toBe("sub");
   });
 
   it("applies the lowest-priority matching rule and auto-validates", () => {
     const out = applyRules(
       { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },
       [
-        baseRule({ id: "low", pattern: "carrefour", priority: 200, subcategory_id: "B" }),
-        baseRule({ id: "high", pattern: "carrefour", priority: 10, subcategory_id: "A" }),
+        baseRule({ id: "low", pattern: "carrefour", priority: 200, merchant_subcategory_id: "B" }),
+        baseRule({ id: "high", pattern: "carrefour", priority: 10, merchant_subcategory_id: "A" }),
       ],
     );
     expect(out.applied_rule_id).toBe("high");
@@ -100,17 +111,18 @@ describe("applyRules", () => {
     expect(out.status).toBe("validated");
   });
 
-  it("prioritises an enseigne rule over a simple rule even with a worse priority", () => {
+  it("prioritises a named enseigne over a nameless one even with a worse priority", () => {
     const out = applyRules(
       { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },
       [
-        baseRule({ id: "simple", pattern: "carrefour", priority: 10, subcategory_id: "A" }),
+        baseRule({ id: "simple", pattern: "carrefour", priority: 10, merchant_subcategory_id: "A", merchant_named: false }),
         baseRule({
           id: "enseigne",
           pattern: "carrefour",
           priority: 200,
-          subcategory_id: "B",
+          merchant_subcategory_id: "B",
           merchant_id: "merch-1",
+          merchant_named: true,
         }),
       ],
     );

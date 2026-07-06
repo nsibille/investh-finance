@@ -168,12 +168,13 @@ export async function deleteCategory(
       return fail("La catégorie de substitution doit être différente.");
 
     if (subIds.length > 0) {
+      // Les motifs (categorization_rules) n'ont plus de sous-catégorie propre :
+      // leur catégorie suit celle de leur enseigne, mise à jour ci-dessous.
       const tables = [
         "transactions",
         "recurring_patterns",
         "purchases",
         "merchants",
-        "categorization_rules",
       ] as const;
       for (const table of tables) {
         const { error } = await supabase
@@ -192,7 +193,6 @@ export async function deleteCategory(
   if (error) return fail(error.message);
 
   revalidatePath("/categories");
-  revalidatePath("/rules");
   revalidatePath("/recurring");
   revalidatePath("/enseignes");
   revalidatePath("/achats");

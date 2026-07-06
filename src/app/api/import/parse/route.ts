@@ -14,7 +14,8 @@ import { normalizeConnection } from "@/lib/import/connection";
 import { getInternalTransferSubcategoryId } from "@/lib/import/transfers";
 import { isDeferredDebit, getDeferredDebitSubcategoryId } from "@/lib/import/deferred";
 import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
-import { applyRules, toEngineRule, type EngineRule } from "@/lib/rules/engine";
+import { applyRules, type EngineRule } from "@/lib/rules/engine";
+import { loadEngineRules } from "@/lib/rules/loader";
 import { matchesPattern } from "@/lib/recurring/checker";
 import {
   matchPreviewRowsToPurchases,
@@ -50,12 +51,8 @@ async function fetchExistingHashes(supabase: Supa, hashes: string[]): Promise<Se
 }
 
 async function loadRules(supabase: Supa): Promise<EngineRule[]> {
-  const { data } = await supabase
-    .from("categorization_rules")
-    .select("*")
-    .eq("is_active", true)
-    .order("priority", { ascending: true });
-  return (data ?? []).map(toEngineRule);
+  const { rules } = await loadEngineRules(supabase);
+  return rules;
 }
 
 /** Proposition des règles (catégorie + enseigne) pour une transaction. */
@@ -110,8 +107,8 @@ type PreviewRowLike = {
   merchantLocked?: boolean;
 };
 
-/** Noms d'enseignes (id → nom) pour annoter l'aperçu. */
-async function loadMerchantNames(supabase: Supa): Promise<Map<string, string>> {
+/** Noms d'enseignes (id → nom) pour annoter l'aperçu. Nom nullable (enseigne sans nom). */
+async function loadMerchantNames(supabase: Supa): Promise<Map<string, string | null>> {
   const { data } = await supabase.from("merchants").select("id, name");
   return new Map((data ?? []).map((m) => [m.id, m.name]));
 }

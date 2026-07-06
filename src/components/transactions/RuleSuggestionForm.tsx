@@ -17,7 +17,6 @@ import {
 } from "@/server/actions/transactions";
 import type { RuleApplyScope } from "@/server/rules/apply";
 import type { SubcategoryOption } from "@/lib/categories/types";
-import type { RuleInput } from "@/lib/rules/schema";
 
 function ToggleField({
   label,
@@ -94,24 +93,20 @@ export function RuleSuggestionForm({
       return;
     }
     setSubmittingScope(scope);
-    const input: RuleInput = {
-      name,
-      match_type: matchType,
-      pattern,
-      case_sensitive: false,
-      amount_min: "",
-      amount_max: "",
-      account_id: scopeToAccount ? accountId : "",
-      merchant_id: merchantId ?? "",
-      subcategory_id: subcategoryId,
-      auto_validate: autoValidate,
-      priority: 100,
-      is_active: true,
-    };
-    const res = await createRuleFromTransaction(input, {
-      transactionId,
-      applyScope: scope,
-    });
+    const res = await createRuleFromTransaction(
+      {
+        name,
+        match_type: matchType,
+        pattern,
+        case_sensitive: false,
+        account_id: scopeToAccount ? accountId : "",
+        auto_validate: autoValidate,
+        priority: 100,
+        subcategoryId,
+        merchantId: merchantId ?? null,
+      },
+      { transactionId, applyScope: scope },
+    );
     setSubmittingScope(null);
     if (!res.ok) {
       setError(res.error);

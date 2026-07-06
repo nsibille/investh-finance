@@ -37,5 +37,5 @@ export async function backfillMerchantCategory(
     .update({ subcategory_id: subcategoryId })
     .eq("id", merchant.id);
   if (error) return null;
-  return { id: merchant.id, name: merchant.name };
+  return { id: merchant.id, name: merchant.name ?? "" };
 }

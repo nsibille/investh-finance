@@ -284,11 +284,10 @@ export type Database = {
           is_active: boolean
           last_hit_at: string | null
           match_type: Database["public"]["Enums"]["rule_match_type"]
-          merchant_id: string | null
+          merchant_id: string
           name: string
           pattern: string
           priority: number
-          subcategory_id: string
           updated_at: string
         }
         Insert: {
@@ -304,11 +303,10 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: Database["public"]["Enums"]["rule_match_type"]
-          merchant_id?: string | null
+          merchant_id: string
           name: string
           pattern: string
           priority?: number
-          subcategory_id: string
           updated_at?: string
         }
         Update: {
@@ -324,11 +322,10 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: Database["public"]["Enums"]["rule_match_type"]
-          merchant_id?: string | null
+          merchant_id?: string
           name?: string
           pattern?: string
           priority?: number
-          subcategory_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -358,20 +355,6 @@ export type Database = {
             columns: ["merchant_id"]
             isOneToOne: false
             referencedRelation: "merchants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "categorization_rules_subcategory_id_fkey"
-            columns: ["subcategory_id"]
-            isOneToOne: false
-            referencedRelation: "monthly_summary"
-            referencedColumns: ["subcategory_id"]
-          },
-          {
-            foreignKeyName: "categorization_rules_subcategory_id_fkey"
-            columns: ["subcategory_id"]
-            isOneToOne: false
-            referencedRelation: "subcategories"
             referencedColumns: ["id"]
           },
         ]
@@ -478,7 +461,7 @@ export type Database = {
           created_at: string
           id: string
           is_online: boolean
-          name: string
+          name: string | null
           subcategory_id: string | null
           updated_at: string
         }
@@ -487,7 +470,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_online?: boolean
-          name: string
+          name?: string | null
           subcategory_id?: string | null
           updated_at?: string
         }
@@ -496,7 +479,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_online?: boolean
-          name?: string
+          name?: string | null
           subcategory_id?: string | null
           updated_at?: string
         }

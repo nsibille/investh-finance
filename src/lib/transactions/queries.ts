@@ -353,7 +353,8 @@ export async function getTransaction(
       .select("id, name")
       .eq("id", data.merchant_id)
       .maybeSingle();
-    if (merchant) row.merchant = { id: merchant.id, name: merchant.name };
+    // Seules les enseignes nommées sont rattachées à une transaction.
+    if (merchant?.name) row.merchant = { id: merchant.id, name: merchant.name };
   }
   if (data.recurring_pattern_id) {
     const { data: rec } = await supabase

@@ -13,6 +13,7 @@ import {
   MapPin,
   ChevronRight,
   ChevronDown,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -25,16 +26,24 @@ import { Alert } from "@/components/ui/Alert";
 import { Dot } from "@/components/ui/Badge";
 import { useToast } from "@/hooks/useToast";
 import { MerchantForm } from "./MerchantForm";
+import { RuleForm } from "@/components/rules/RuleForm";
+import { RuleImport } from "@/components/rules/RuleImport";
 import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
 import { groupByCategory, preciseSubName } from "@/lib/categories/group";
 import { deleteMerchant, addMerchantRule } from "@/server/actions/merchants";
 import { deleteRule } from "@/server/actions/rules";
-import type { MerchantWithDetails } from "@/lib/merchants/types";
+import type { MerchantWithDetails, MerchantRule } from "@/lib/merchants/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
+import type { AccountOption } from "@/lib/rules/queries";
 
 type ModalState =
   | { mode: "create" }
   | { mode: "edit"; merchant: MerchantWithDetails }
+  | null;
+
+type MotifModal =
+  | { mode: "create"; merchant: MerchantWithDetails }
+  | { mode: "edit"; merchant: MerchantWithDetails; rule: MerchantRule }
   | null;
 
 const MATCH_LABEL: Record<string, string> = {
@@ -43,7 +52,20 @@ const MATCH_LABEL: Record<string, string> = {
   exact: "exact",
 };
 
-function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
+/** Nom d'affichage d'une enseigne (nom réel ou libellé « Sans enseigne »). */
+function displayName(m: { name: string | null }): string | null {
+  return m.name && m.name.trim() ? m.name : null;
+}
+
+function RuleEditor({
+  merchant,
+  onEditMotif,
+  onCreateMotif,
+}: {
+  merchant: MerchantWithDetails;
+  onEditMotif: (rule: MerchantRule) => void;
+  onCreateMotif: () => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [pattern, setPattern] = useState("");
@@ -64,8 +86,8 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
     setPattern("");
     toast.success(
       res.applied > 0
-        ? `Règle créée · ${res.applied} transaction(s) rattachée(s)`
-        : "Règle créée",
+        ? `Motif créé · ${res.applied} transaction(s) rattachée(s)`
+        : "Motif créé",
     );
     router.refresh();
   }
@@ -79,7 +101,7 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", width: "100%" }}>
       <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "var(--tracking-wide)" }}>
-        Règles rattachées
+        Motifs rattachés
       </span>
       {merchant.rules.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
@@ -94,7 +116,10 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
                   {r.hit_count}×
                 </span>
               )}
-              <IconButton label="Supprimer la règle" onClick={() => remove(r.id)}>
+              <IconButton label="Réglages du motif" onClick={() => onEditMotif(r)}>
+                <SlidersHorizontal size={14} />
+              </IconButton>
+              <IconButton label="Supprimer le motif" onClick={() => remove(r.id)}>
                 <X size={14} />
               </IconButton>
             </div>
@@ -118,7 +143,7 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
             placeholder="Motif à matcher (ex. CANAL+, NETFLIX…)"
-            style={{ flex: "1 1 240px", minWidth: 0 }}
+            style={{ flex: "1 1 220px", minWidth: 0 }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -129,10 +154,18 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
           <Button variant="secondary" size="sm" loading={busy} onClick={add}>
             Ajouter
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<SlidersHorizontal size={14} />}
+            onClick={onCreateMotif}
+          >
+            Avancé
+          </Button>
         </div>
       ) : (
         <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
-          Définis une catégorie par défaut pour pouvoir ajouter des règles.
+          Définis une catégorie par défaut pour pouvoir ajouter des motifs.
         </p>
       )}
     </div>
@@ -142,13 +175,16 @@ function RuleEditor({ merchant }: { merchant: MerchantWithDetails }) {
 export function MerchantsManager({
   merchants,
   subcategoryOptions,
+  accountOptions,
 }: {
   merchants: MerchantWithDetails[];
   subcategoryOptions: SubcategoryOption[];
+  accountOptions: AccountOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [modal, setModal] = useState<ModalState>(null);
+  const [motifModal, setMotifModal] = useState<MotifModal>(null);
   const [toDelete, setToDelete] = useState<MerchantWithDetails | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -157,9 +193,23 @@ export function MerchantsManager({
     [subcategoryOptions],
   );
 
-  const groups = useMemo(
-    () => groupByCategory(merchants, (m) => m.subcategory_id, subcategoryOptions),
-    [merchants, subcategoryOptions],
+  // Enseignes nommées (vraies marques) vs « Sans enseigne » (motifs seuls).
+  const named = useMemo(
+    () => merchants.filter((m) => displayName(m) !== null),
+    [merchants],
+  );
+  const nameless = useMemo(
+    () => merchants.filter((m) => displayName(m) === null),
+    [merchants],
+  );
+
+  const namedGroups = useMemo(
+    () => groupByCategory(named, (m) => m.subcategory_id, subcategoryOptions),
+    [named, subcategoryOptions],
+  );
+  const namelessGroups = useMemo(
+    () => groupByCategory(nameless, (m) => m.subcategory_id, subcategoryOptions),
+    [nameless, subcategoryOptions],
   );
 
   function toggleExpand(id: string) {
@@ -202,13 +252,14 @@ export function MerchantsManager({
             <th>Localisation</th>
             <th>Transactions</th>
             <th>Achats</th>
-            <th>Règles</th>
+            <th>Motifs</th>
             <th />
           </tr>
         </thead>
         <tbody>
           {items.map((m) => {
             const isOpen = expanded.has(m.id);
+            const label = displayName(m);
             return (
               <Fragment key={m.id}>
                 <tr>
@@ -220,7 +271,13 @@ export function MerchantsManager({
                       {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </IconButton>
                   </td>
-                  <td data-wrap="true" style={{ fontWeight: "var(--fw-medium)" }}>{m.name}</td>
+                  <td data-wrap="true" style={{ fontWeight: "var(--fw-medium)" }}>
+                    {label ?? (
+                      <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
+                        Sans enseigne
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {m.subcategory_id ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", maxWidth: "100%" }}>
@@ -251,9 +308,11 @@ export function MerchantsManager({
                   <td style={{ fontFamily: "var(--font-mono)" }}>{m.rules.length}</td>
                   <td>
                     <div style={{ display: "flex", gap: "var(--space-1)", justifyContent: "flex-end" }}>
-                      <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", merchant: m })}>
-                        <Pencil size={16} />
-                      </IconButton>
+                      {label !== null && (
+                        <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", merchant: m })}>
+                          <Pencil size={16} />
+                        </IconButton>
+                      )}
                       <IconButton label="Supprimer" onClick={() => setToDelete(m)}>
                         <Trash2 size={16} />
                       </IconButton>
@@ -264,7 +323,11 @@ export function MerchantsManager({
                   <tr data-expand="true">
                     <td />
                     <td colSpan={7} style={{ paddingTop: "var(--space-3)", paddingBottom: "var(--space-3)" }}>
-                      <RuleEditor merchant={m} />
+                      <RuleEditor
+                        merchant={m}
+                        onEditMotif={(rule) => setMotifModal({ mode: "edit", merchant: m, rule })}
+                        onCreateMotif={() => setMotifModal({ mode: "create", merchant: m })}
+                      />
                     </td>
                   </tr>
                 )}
@@ -278,7 +341,8 @@ export function MerchantsManager({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: "var(--space-5)" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
+        <RuleImport subcategoryOptions={subcategoryOptions} />
         <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
           Nouvelle enseigne
         </Button>
@@ -298,7 +362,25 @@ export function MerchantsManager({
           />
         </Card>
       ) : (
-        <GroupedByCategory groups={groups} renderTable={renderTable} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          {named.length > 0 && (
+            <GroupedByCategory groups={namedGroups} renderTable={renderTable} />
+          )}
+          {nameless.length > 0 && (
+            <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              <div>
+                <h2 style={{ fontSize: "var(--text-base)", fontWeight: "var(--fw-semibold)", margin: 0 }}>
+                  Sans enseigne
+                </h2>
+                <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: "var(--space-1) 0 0" }}>
+                  Motifs de catégorisation sans marque : ils rangent la transaction
+                  dans une catégorie sans y rattacher d&apos;enseigne.
+                </p>
+              </div>
+              <GroupedByCategory groups={namelessGroups} renderTable={renderTable} />
+            </section>
+          )}
+        </div>
       )}
 
       <Modal
@@ -327,6 +409,39 @@ export function MerchantsManager({
       </Modal>
 
       <Modal
+        open={motifModal !== null}
+        onClose={() => setMotifModal(null)}
+        title={motifModal?.mode === "edit" ? "Réglages du motif" : "Nouveau motif avancé"}
+      >
+        {motifModal && (
+          <RuleForm
+            mode={motifModal.mode}
+            id={motifModal.mode === "edit" ? motifModal.rule.id : undefined}
+            merchantId={motifModal.merchant.id}
+            merchantName={motifModal.merchant.name}
+            accountOptions={accountOptions}
+            initial={
+              motifModal.mode === "edit"
+                ? {
+                    name: motifModal.rule.name,
+                    match_type: motifModal.rule.match_type,
+                    pattern: motifModal.rule.pattern,
+                    case_sensitive: motifModal.rule.case_sensitive,
+                    amount_min: motifModal.rule.amount_min ?? "",
+                    amount_max: motifModal.rule.amount_max ?? "",
+                    account_id: motifModal.rule.account_id ?? "",
+                    auto_validate: motifModal.rule.auto_validate,
+                    priority: motifModal.rule.priority,
+                    is_active: motifModal.rule.is_active,
+                  }
+                : undefined
+            }
+            onDone={() => setMotifModal(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
         open={toDelete !== null}
         onClose={() => setToDelete(null)}
         title="Supprimer l'enseigne ?"
@@ -344,8 +459,7 @@ export function MerchantsManager({
       >
         <Alert variant="warning">
           Les transactions et achats rattachés seront détachés (ils gardent leur
-          catégorie). Les règles rattachées seront également détachées de
-          l&apos;enseigne mais conservées.
+          catégorie). Les motifs de cette enseigne seront supprimés.
         </Alert>
       </Modal>
     </>

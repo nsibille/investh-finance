@@ -13,7 +13,7 @@ import { createMerchant, updateMerchant } from "@/server/actions/merchants";
 import type { SubcategoryOption } from "@/lib/categories/types";
 
 export interface MerchantFormInitial {
-  name: string;
+  name: string | null;
   subcategoryId: string | null;
   country: string | null;
   isOnline: boolean;

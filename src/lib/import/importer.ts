@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { applyRules, toEngineRule } from "@/lib/rules/engine";
+import { applyRules } from "@/lib/rules/engine";
+import { loadEngineRules } from "@/lib/rules/loader";
 import { matchesPattern } from "@/lib/recurring/checker";
 import { computeDedupHash, dedupeBatch, assignOccurrences, baseKey } from "./dedup";
 import type { ParsedTransaction, ImportSummary } from "./types";
@@ -53,20 +54,12 @@ export async function importParsedTransactions(
   const importId = importRow.id;
 
   try {
-    const [{ data: ruleRows }, { data: patternRows }] = await Promise.all([
-      supabase
-        .from("categorization_rules")
-        .select("*")
-        .eq("is_active", true)
-        .order("priority", { ascending: true }),
+    const [{ rules, hitBase }, { data: patternRows }] = await Promise.all([
+      loadEngineRules(supabase),
       supabase.from("recurring_patterns").select("*").eq("is_active", true),
     ]);
 
-    const rules = (ruleRows ?? []).map(toEngineRule);
     const patterns = patternRows ?? [];
-    const hitBase = new Map(
-      (ruleRows ?? []).map((r) => [r.id, r.hit_count]),
-    );
 
     const nowIso = new Date().toISOString();
     const occurrences = assignOccurrences(parsed, (p) => baseKey(p));

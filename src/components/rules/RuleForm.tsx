@@ -1,32 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CategorySelect } from "@/components/transactions/CategorySelect";
-import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
 import { saveRule } from "@/server/actions/rules";
 import type { RuleApplyScope } from "@/server/rules/apply";
-import type { SubcategoryOption } from "@/lib/categories/types";
 import type { AccountOption } from "@/lib/rules/queries";
-import type { MerchantOption } from "@/lib/merchants/types";
 
 interface RuleFormProps {
   mode: "create" | "edit";
   id?: string;
+  /** Enseigne propriétaire du motif (verrouillée : la catégorie en est héritée). */
+  merchantId: string;
+  merchantName?: string | null;
   initial?: Partial<RuleInput>;
-  subcategoryOptions: SubcategoryOption[];
   accountOptions: AccountOption[];
-  merchantOptions: MerchantOption[];
   onDone: () => void;
 }
 
@@ -53,10 +50,10 @@ function ToggleField({
 export function RuleForm({
   mode,
   id,
+  merchantId,
+  merchantName,
   initial,
-  subcategoryOptions,
   accountOptions,
-  merchantOptions,
   onDone,
 }: RuleFormProps) {
   const router = useRouter();
@@ -68,7 +65,6 @@ export function RuleForm({
 
   const {
     register,
-    control,
     handleSubmit,
     formState: { errors },
   } = useForm<RuleInput>({
@@ -81,8 +77,8 @@ export function RuleForm({
       amount_min: initial?.amount_min ?? "",
       amount_max: initial?.amount_max ?? "",
       account_id: initial?.account_id ?? "",
-      merchant_id: initial?.merchant_id ?? "",
-      subcategory_id: initial?.subcategory_id ?? "",
+      // Enseigne propriétaire verrouillée : la catégorie du motif en est héritée.
+      merchant_id: merchantId,
       auto_validate: initial?.auto_validate ?? true,
       priority: initial?.priority ?? 100,
       is_active: initial?.is_active ?? true,
@@ -92,16 +88,16 @@ export function RuleForm({
   async function onSubmit(values: RuleInput, scope: RuleApplyScope) {
     setServerError(null);
     setSubmittingScope(scope);
-    const res = await saveRule(values, {
-      id: mode === "edit" ? id : undefined,
-      applyScope: scope,
-    });
+    const res = await saveRule(
+      { ...values, merchant_id: merchantId },
+      { id: mode === "edit" ? id : undefined, applyScope: scope },
+    );
     setSubmittingScope(null);
     if (!res.ok) return setServerError(res.error);
-    const base = mode === "create" ? "Règle créée" : "Règle mise à jour";
+    const base = mode === "create" ? "Motif créé" : "Motif mis à jour";
     toast.success(
       res.applied > 0
-        ? `${base} · appliquée à ${res.applied} transaction${res.applied > 1 ? "s" : ""}`
+        ? `${base} · appliqué à ${res.applied} transaction${res.applied > 1 ? "s" : ""}`
         : base,
     );
     router.refresh();
@@ -118,8 +114,14 @@ export function RuleForm({
     >
       {serverError && <Alert variant="danger">{serverError}</Alert>}
 
-      <FormField label="Nom de la règle" error={errors.name?.message}>
-        <Input placeholder="Carrefour → Courses" invalid={!!errors.name} {...register("name")} />
+      <Alert variant="info">
+        Motif de l&apos;enseigne{" "}
+        <strong>{merchantName?.trim() || "Sans enseigne"}</strong> — la catégorie
+        est héritée de l&apos;enseigne.
+      </Alert>
+
+      <FormField label="Nom du motif" error={errors.name?.message}>
+        <Input placeholder="CB CARREFOUR" invalid={!!errors.name} {...register("name")} />
       </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
@@ -138,23 +140,6 @@ export function RuleForm({
           </FormField>
         </div>
       </div>
-
-      <FormField label="Sous-catégorie cible" error={errors.subcategory_id?.message}>
-        <Controller
-          control={control}
-          name="subcategory_id"
-          render={({ field }) => (
-            <CategorySelect
-              value={field.value || null}
-              options={subcategoryOptions}
-              placeholder="Choisir une catégorie…"
-              invalid={!!errors.subcategory_id}
-              allowCreate
-              onChange={(id) => field.onChange(id ?? "")}
-            />
-          )}
-        />
-      </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <div style={{ flex: 1 }}>
@@ -176,20 +161,6 @@ export function RuleForm({
         </div>
       </div>
 
-      <FormField label="Enseigne (optionnel — rattache la transaction à l'enseigne au match)">
-        <Controller
-          control={control}
-          name="merchant_id"
-          render={({ field }) => (
-            <MerchantSelect
-              value={(field.value as string) || null}
-              options={merchantOptions}
-              onChange={(id) => field.onChange(id ?? "")}
-            />
-          )}
-        />
-      </FormField>
-
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <div style={{ flex: 1 }}>
           <FormField label="Montant min (optionnel)" error={errors.amount_min?.message}>
@@ -206,7 +177,7 @@ export function RuleForm({
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
         <ToggleField label="Sensible à la casse" {...register("case_sensitive")} />
         <ToggleField label="Valider automatiquement les transactions matchées" {...register("auto_validate")} />
-        <ToggleField label="Règle active" {...register("is_active")} />
+        <ToggleField label="Motif actif" {...register("is_active")} />
       </div>
 
       <div
@@ -227,7 +198,7 @@ export function RuleForm({
           disabled={busy}
           onClick={handleSubmit((v) => onSubmit(v, "none"))}
         >
-          {mode === "create" ? "Créer la règle" : "Enregistrer"}
+          {saveVerb}
         </Button>
         <Button
           type="button"

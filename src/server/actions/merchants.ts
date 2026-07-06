@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { applyRuleToTransactions } from "@/server/rules/apply";
+import { applyRuleToTransactions, toApplicableRule } from "@/server/rules/apply";
 import { getMerchantStats, type MerchantStats } from "@/lib/merchants/stats";
 import type { Database } from "@/types/database.types";
 
@@ -21,7 +21,6 @@ function revalidate() {
   revalidatePath("/enseignes");
   revalidatePath("/transactions");
   revalidatePath("/achats");
-  revalidatePath("/rules");
 }
 
 export interface MerchantInput {
@@ -103,7 +102,8 @@ export async function updateMerchant(
 
 export async function deleteMerchant(id: string): Promise<ActionResult> {
   const supabase = await createClient();
-  // transactions/achats/règles.merchant_id → NULL (ON DELETE SET NULL).
+  // transactions/achats.merchant_id → NULL (ON DELETE SET NULL) ; les motifs de
+  // l'enseigne sont supprimés en cascade (categorization_rules ON DELETE CASCADE).
   const { error } = await supabase.from("merchants").delete().eq("id", id);
   if (error) return fail(error.message);
   revalidate();
@@ -230,7 +230,8 @@ export async function createMerchantRuleFromLabel(
     .maybeSingle();
   if (!merchant) return { ok: false, error: "Enseigne introuvable" };
 
-  // Backfill : l'enseigne hérite de la catégorie si elle n'en avait pas.
+  // Backfill : l'enseigne hérite de la catégorie si elle n'en avait pas (la
+  // catégorie du motif = catégorie par défaut de l'enseigne).
   let categorySet = false;
   if (!merchant.subcategory_id) {
     await supabase
@@ -240,26 +241,17 @@ export async function createMerchantRuleFromLabel(
     categorySet = true;
   }
 
-  // Règle « contient » identique déjà présente : rattachée à cette enseigne →
-  // rien à faire ; sans enseigne (ancienne règle simple) → on la met à niveau
-  // au lieu de créer un doublon qui masquerait le rattachement.
+  // Motif « contient » identique déjà sous cette enseigne → rien à faire.
   const { data: existing } = await supabase
     .from("categorization_rules")
-    .select("id, merchant_id")
+    .select("id")
     .eq("match_type", "contains")
+    .eq("merchant_id", merchantId)
     .ilike("pattern", p)
-    .or(`merchant_id.eq.${merchantId},merchant_id.is.null`)
     .limit(1);
   if (existing && existing.length > 0) {
-    const found = existing[0];
-    if (!found.merchant_id) {
-      await supabase
-        .from("categorization_rules")
-        .update({ merchant_id: merchantId, subcategory_id: subcategoryId })
-        .eq("id", found.id);
-    }
     revalidate();
-    return { ok: true, ruleId: found.id, exists: true, pattern: p, categorySet };
+    return { ok: true, ruleId: existing[0].id, exists: true, pattern: p, categorySet };
   }
 
   const { data, error } = await supabase
@@ -269,7 +261,6 @@ export async function createMerchantRuleFromLabel(
       match_type: "contains",
       pattern: p,
       case_sensitive: false,
-      subcategory_id: subcategoryId,
       merchant_id: merchantId,
       auto_validate: true,
       priority: 100,
@@ -277,7 +268,7 @@ export async function createMerchantRuleFromLabel(
     })
     .select("id")
     .single();
-  if (error || !data) return { ok: false, error: error?.message ?? "Règle impossible" };
+  if (error || !data) return { ok: false, error: error?.message ?? "Motif impossible" };
 
   revalidate();
   return { ok: true, ruleId: data.id, exists: false, pattern: p, categorySet };
@@ -310,53 +301,42 @@ export async function addMerchantRule(
     };
 
   const matchType = input.matchType ?? "contains";
-  // Évite les doublons : une règle identique déjà rattachée à cette enseigne est
-  // réutilisée ; une règle « contient » identique sans enseigne est mise à
-  // niveau (rattachée) plutôt que dupliquée.
+  // Doublon déjà rattaché à cette enseigne → réutilisé (tout motif appartient
+  // désormais à une enseigne : plus de « règle simple » à mettre à niveau).
   const { data: dupe } = await supabase
     .from("categorization_rules")
     .select("*")
     .eq("match_type", matchType)
+    .eq("merchant_id", merchantId)
     .ilike("pattern", pattern)
-    .or(`merchant_id.eq.${merchantId},merchant_id.is.null`)
     .limit(1);
-  if (dupe && dupe.length > 0) {
-    let rule = dupe[0];
-    if (!rule.merchant_id) {
-      const { data: upgraded } = await supabase
-        .from("categorization_rules")
-        .update({ merchant_id: merchantId, subcategory_id: merchant.subcategory_id })
-        .eq("id", rule.id)
-        .select("*")
-        .single();
-      if (upgraded) rule = upgraded;
-    }
-    const applied = applyToUncategorized
-      ? await applyRuleToTransactions(supabase, rule, "uncategorized")
-      : 0;
-    revalidate();
-    return { ok: true, applied, ruleId: rule.id, pattern };
+  let rule = dupe && dupe.length > 0 ? dupe[0] : null;
+
+  if (!rule) {
+    const { data: created, error } = await supabase
+      .from("categorization_rules")
+      .insert({
+        name: `${merchant.name ?? ""} → ${pattern}`.trim().slice(0, 120),
+        match_type: matchType,
+        pattern,
+        case_sensitive: false,
+        merchant_id: merchantId,
+        auto_validate: true,
+        priority: 100,
+        is_active: true,
+      })
+      .select("*")
+      .single();
+    if (error || !created) return { ok: false, error: error?.message ?? "Motif impossible" };
+    rule = created;
   }
 
-  const { data: rule, error } = await supabase
-    .from("categorization_rules")
-    .insert({
-      name: `${merchant.name} → ${pattern}`.slice(0, 120),
-      match_type: matchType,
-      pattern,
-      case_sensitive: false,
-      subcategory_id: merchant.subcategory_id,
-      merchant_id: merchantId,
-      auto_validate: true,
-      priority: 100,
-      is_active: true,
-    })
-    .select("*")
-    .single();
-  if (error || !rule) return { ok: false, error: error?.message ?? "Règle impossible" };
-
   const applied = applyToUncategorized
-    ? await applyRuleToTransactions(supabase, rule, "uncategorized")
+    ? await applyRuleToTransactions(
+        supabase,
+        toApplicableRule(rule, merchant),
+        "uncategorized",
+      )
     : 0;
 
   revalidate();

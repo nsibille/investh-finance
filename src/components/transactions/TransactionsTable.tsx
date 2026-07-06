@@ -16,6 +16,7 @@ import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
 import { CategoryInlineEditor } from "./CategoryInlineEditor";
+import { MerchantQuickView } from "@/components/merchants/MerchantQuickView";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
@@ -121,7 +122,6 @@ export function TransactionsTable({
             const opt = r.categoryId ? optById.get(r.categoryId) : null;
             const cat = opt ? splitCategory(opt) : null;
             const status: TransactionStatus = r.status ?? "pending";
-            const title = r.merchant?.name ?? r.label;
             const showLabelSub = Boolean(r.merchant) && r.label !== r.merchant?.name;
 
             return (
@@ -129,12 +129,16 @@ export function TransactionsTable({
                 {/* — Colonne principale — */}
                 <td data-col="main">
                   <div className="tx-main">
-                    <span className="tx-main__title">{title}</span>
+                    <div className="tx-main__title">
+                      {r.merchant ? (
+                        <MerchantQuickView merchantId={r.merchant.id} name={r.merchant.name} />
+                      ) : (
+                        <code className="tx-label-code">{r.label}</code>
+                      )}
+                    </div>
                     <div className="tx-main__meta">
                       {showLabelSub && (
-                        <span className="tx-meta" data-muted>
-                          {r.label}
-                        </span>
+                        <code className="tx-label-code tx-label-code--sub">{r.label}</code>
                       )}
                       {r.purchase && (
                         <span className="tx-meta tx-meta--purchase">

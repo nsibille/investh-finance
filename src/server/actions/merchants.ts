@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { applyRuleToTransactions } from "@/server/rules/apply";
+import { getMerchantStats, type MerchantStats } from "@/lib/merchants/stats";
 import type { Database } from "@/types/database.types";
 
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
@@ -107,6 +108,16 @@ export async function deleteMerchant(id: string): Promise<ActionResult> {
   if (error) return fail(error.message);
   revalidate();
   return { ok: true };
+}
+
+/**
+ * Statistiques d'une enseigne pour le quick view de la liste (lecture seule).
+ * Le mois de référence (fenêtre 12 mois) est calculé côté serveur.
+ */
+export async function getMerchantQuickStats(id: string): Promise<MerchantStats | null> {
+  const now = new Date();
+  const refMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return getMerchantStats(id, refMonth);
 }
 
 export type AttachMerchantResult =

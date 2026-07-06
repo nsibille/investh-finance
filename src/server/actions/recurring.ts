@@ -440,10 +440,12 @@ export async function createAndAssociateRecurring(input: {
 }): Promise<{ ok: true; id: string; applied: number } | { ok: false; error: string }> {
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Nom requis" };
-  const supabase = await createClient();
-  const key = recurringKey(input.rawLabel);
   const amount =
     input.amount != null && Number.isFinite(input.amount) ? input.amount : null;
+  // Une récurrence doit toujours avoir au moins un montant.
+  if (amount == null) return { ok: false, error: "Un montant est requis" };
+  const supabase = await createClient();
+  const key = recurringKey(input.rawLabel);
   const { data, error } = await supabase
     .from("recurring_patterns")
     .insert({

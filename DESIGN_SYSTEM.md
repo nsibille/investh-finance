@@ -1002,6 +1002,15 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 ### `transaction-row`
 **Row de transaction** — défini dans `table-transactions`.
 
+### `table-transactions-list`
+**Table de la liste `/transactions`** (distincte de `table-transaction-editor`, réservée à l'aperçu d'import). Colonnes :
+- **Transaction** : titre = enseigne si connue, sinon libellé (`tx-main__title`, ellipsé). Sous-lignes `tx-main__meta` (xs, wrap) : libellé (italique, quand l'enseigne occupe le titre) · achat (`tx-meta--purchase` + occurrence mono X/Y + croix détacher) · récurrence (`tx-meta--recurring` + croix) · personnes (`tx-meta--persons`, cliquable → éditeur de partage).
+- **Compte · date** mutualisés (`tx-acctdate` : `badge-dot` + nom de compte ellipsé au-dessus, date muette en dessous) — une seule colonne.
+- **Catégorie** (`tx-cat`) : `badge-dot` couleur + **nom complet sans retour à la ligne** ; le chemin parent (`tx-cat__path` : « Type / Catégorie / ») est ellipsé et révélé au survol (`title`), la feuille (`tx-cat__leaf`) n'est jamais tronquée. Cliquable → `CategoryInlineEditor`. Verrouillée si héritée d'un achat.
+- **Montant** (`tx-amount`) : `amount-display` + `badge-status-*` empilés à droite.
+- **Actions** (`tx-actions`, rangée de `btn-icon-md` 30px, `data-on` = indigo quand défini) : enseigne (`Store`) · achat (`ShoppingBag`) · récurrence (`Repeat`) · partage (`Users`) · valider (`Check`, `data-validate`) ou invalider/rétablir (`RotateCcw`, → `pending`) · détail/éditer (`Pencil`, lien `/transactions/[id]`).
+> Implémentation : `src/components/transactions/TransactionsTable.tsx` + `TransactionsManager.tsx` (état + actions serveur optimistes). Section CSS `table-transactions-list` dans `globals.css`.
+
 ### `transaction-filters`
 **Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `multi-select-combobox` (enseignes, achats) + `filter-amount-range` (2× `input-currency-md` min/max, montant en valeur absolue) + `input-date-md` (du/au) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`. Le paramètre `showStatus={false}` masque le sélecteur de statut (page « À valider », toujours `pending`). Sous la toolbar, `filter-chips` remonte chaque filtre actif (surtout les multiselect) en chip retirable + bouton « Tout effacer ». État porté par l'URL (`merchant`/`purchase` en CSV, `amin`/`amax`, `from`/`to`, `q`, `account`, `subcategory`, `sort`). Implémentation : `src/components/transactions/TransactionFilters.tsx`.
 
@@ -1250,7 +1259,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `spinner-lg` | Feedback | Spinner large | auto |
 | `spinner-md` | Feedback | Spinner medium (défaut) | auto |
 | `spinner-sm` | Feedback | Spinner small | auto |
-| `table-transaction-editor` | Table | Table éditrice mutualisée (import + liste) | auto |
+| `table-transaction-editor` | Table | Table éditrice de l'aperçu d'import | auto |
+| `table-transactions-list` | Table | Liste `/transactions` (titre enseigne + actions) | auto |
 | `table-import-preview` | Table | Déprécié — voir `table-transaction-editor` | auto |
 | `import-cat-edit` | Import | Édition inline catégorie (aperçu import) | auto |
 | `note-cell` | Table | Annotation inline (icône + popover note) | auto |

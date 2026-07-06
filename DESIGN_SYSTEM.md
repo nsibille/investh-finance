@@ -628,7 +628,7 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 **Variante mini** pour le dashboard (largeur réduite, sans pending).
 
 ### `card-pending-validator`
-**Card workflow validation** : amount + libellé + date + `input-category-picker` + `btn-primary-sm` (Valider) + `btn-ghost-sm` (Ignorer / Note).
+**Card workflow validation** : amount + libellé + date + `input-category-picker` + `btn-primary-sm` (Valider) + `btn-ghost-sm` (Ignorer / Note) + chips Enseigne · Achat · Récurrente · Personnes · Note. **Édition sans validation** : changer la catégorie / l'enseigne / l'achat / la récurrente ou ventiler entre personnes persiste sans valider — la transaction reste dans l'onglet « à valider » (statut `pending`) jusqu'au clic explicite sur **Valider** (les rattachements passent `validate: false` aux actions serveur ; catégorie via `setTransactionSubcategory`).
 
 ### `card-recurring`
 **Card transaction récurrente** : nom + montant attendu + fréquence + `badge-recurring-active`/`badge-recurring-missing` + dernière occurrence.
@@ -1105,10 +1105,19 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 **Échéancier « paiements à venir et validés »** — liste des mensualités prévisionnelles d'un achat, chacune avec mois (occurrence X/Y mono, ∞ si abonnement sans fin) + `amount-sm` neutre + marqueur d'état : ✓ `--color-success` si appariée à une transaction (payée), sinon « à venir » atténué. Présentationnel (serveur + client). Implémentation : `src/components/purchases/PurchaseInstallments.tsx`. Variante éditable (ajout/suppression ligne à ligne) : `src/components/purchases/InstallmentEditor.tsx`.
 
 ### `purchase-galaxy`
-**Bloc « galaxie » d'un achat** — assemble les 4 sections d'un achat, séparées par un filet (`--color-border`) et un titre en capitales : achat parent (`purchase-line-row` → groupe parent) · `purchase-installments` (paiements à venir/validés) · transactions rattachées (`purchase-line-row` cappé à 4 en carte, illimité en page, lien « voir les N ») · sous-achats listés comme des transactions (`purchase-line-row` → `/achats/[id]`). `variant="card"` plafonne les listes, `variant="page"` déballe tout. Partagé entre la carte de la liste et la page de détail. Implémentation : `src/components/purchases/PurchaseGalaxy.tsx`.
+**Bloc « galaxie » d'un achat** — assemble les 4 sections d'un achat, séparées par un filet (`--color-border`) et un titre en capitales : achat parent (`purchase-line-row` → groupe parent) · `purchase-installments` (paiements à venir/validés) · transactions rattachées (`purchase-line-row` cappé à 4 en carte, illimité en page, lien « voir les N ») · sous-achats listés comme des transactions (`purchase-line-row` → `/achats/[id]`). `variant="card"` plafonne les listes, `variant="page"` déballe tout. Prop `assignmentsSlot` : si fournie, remplace les deux sections centrales (paiements + transactions) par le bloc interactif `purchase-assignments` (page de détail). Partagé entre la carte de la liste et la page de détail. Implémentation : `src/components/purchases/PurchaseGalaxy.tsx`.
+
+### `purchase-assignments`
+**Bloc interactif d'assignation (page de détail d'un achat)** — remplace les sections `purchase-installments` + transactions rattachées de `purchase-galaxy` par leurs versions actionnables, dans les mêmes cadres (filet + titre capitales). Section **Paiements** : chaque échéance affiche mois (occurrence X/Y mono) + `amount-sm` + soit, si appariée, le libellé/date/compte de la transaction avec ✓ `--color-success`, un `btn-icon-md` Réassigner (`Replace`) et un `btn-icon-md` Désassigner (`Unlink`) ; soit, si « à venir », un `btn-ghost-sm` Assigner (`Link2`). Section **Transactions rattachées** (« Autres… » s'il y a des paiements) : `purchase-line-row` (libellé cliquable → `/transactions/[id]`) + `amount-sm` + `badge-status-*` + `btn-icon-md` Désassigner, puis `btn-ghost-sm` Rattacher une transaction (`Plus`). Toutes les actions ouvrent au besoin `transaction-picker-modal` et rafraîchissent via `router.refresh()`. Désassigner (ici comme dans la liste `table-transactions` ou le détail transaction) remet la transaction « non catégorisée / à valider » (la catégorie était héritée de l'achat). Implémentation : `src/components/purchases/PurchaseAssignments.tsx`.
+
+### `transaction-picker-modal`
+**Variante de `modal-surface`** pour choisir une transaction non rattachée (rattacher à l'achat, remplir/réassigner une échéance) : `input-text-md` de recherche (débouncée) + liste `purchase-line-row` (pastille compte + libellé/date/compte + `amount-sm`), état vide/chargement atténué. Alimentée par la Server Action `getAttachableTransactions` (25 plus récentes, filtre libellé). Ne propose que des transactions **non assignées** (règle fondamentale : 0 ou 1 achat en direct) — exclut `purchase_id` non nul **et** celles réservées par une échéance (`purchase_installments.transaction_id`). Remontée à chaque ouverture via `key`. Implémentation : `src/components/purchases/TransactionPickerModal.tsx`.
+
+### `purchase-installment-chips`
+**Calendrier compact des paiements programmés** — une pastille mono par échéance (mois court `formatShortMonth`, fond `--color-bg-subtle`, `--radius-sm`), ✓ `--color-success` si réglée (reliée à une transaction), atténuée `--color-text-muted` si « à venir ». Plafonné (défaut 10, +N). Affiché dans le sélecteur `Rattacher à un achat` (sous chaque achat en liste, et en aperçu du calendrier au choix d'une échéance). Implémentation : `InstallmentChips` dans `src/components/import/PurchaseAttachModal.tsx`.
 
 ### `purchase-detail-page`
-**Page de détail d'un achat (`/achats/[id]`)** — `card-surface` : en-tête (titre `text-2xl` + badges `badge-group`/`badge-status-*`) et barre d'actions (`btn-secondary-sm` Marquer comme soldé/Rouvrir + Modifier, `btn-ghost-sm` Retirer du groupe / Archiver / Supprimer) → bloc métadonnées **Catégorie** (`input-category-combobox` éditable, propage aux transactions), **Enseigne** (icône `Store` + nom), **Personnes** (`badge-dot` + nom + badge nature `HandCoins` Dette `--color-warning-dark` / `Gift` Cadeau `--color-finance-investissement` + `amount-sm`) → encart KPI (`--color-bg-subtle`) Total dépensé · Budget prévu · Reste à payer · Transactions (mono `amount-lg`) → `purchase-galaxy` en `variant="page"` → `btn-ghost-sm` Ajouter un achat au groupe. Le « soldé » est manuel (`is_settled`) pour les achats sans échéancier complet ; les achats à échéancier complet sont soldés automatiquement. Les achats soldés sont rangés sur un écran séparé `/achats/termines` (lien « Voir les achats terminés » depuis `/achats`). Réutilise `PurchaseForm` + `InstallmentEditor` (modale) et `modal-confirm-danger` (suppression). Implémentation : `src/components/purchases/PurchaseDetailView.tsx`.
+**Page de détail d'un achat (`/achats/[id]`)** — `card-surface` : en-tête (titre `text-2xl` + badges `badge-group`/`badge-status-*`) et barre d'actions (`btn-secondary-sm` Marquer comme soldé/Rouvrir + Modifier, `btn-ghost-sm` Retirer du groupe / Archiver / Supprimer) → bloc métadonnées **Catégorie** (`input-category-combobox` éditable, propage aux transactions), **Enseigne** (icône `Store` + nom), **Personnes** (`badge-dot` + nom + badge nature `HandCoins` Dette `--color-warning-dark` / `Gift` Cadeau `--color-finance-investissement` + `amount-sm`) → encart KPI (`--color-bg-subtle`) Total dépensé · Budget prévu · Reste à payer · Transactions (mono `amount-lg`) → `purchase-galaxy` en `variant="page"` avec `assignmentsSlot={purchase-assignments}` (assignation interactive des transactions/paiements) → `btn-ghost-sm` Ajouter un achat au groupe. Le « soldé » est manuel (`is_settled`) pour les achats sans échéancier complet ; les achats à échéancier complet sont soldés automatiquement. Les achats soldés sont rangés sur un écran séparé `/achats/termines` (lien « Voir les achats terminés » depuis `/achats`). Réutilise `PurchaseForm` + `InstallmentEditor` (modale) et `modal-confirm-danger` (suppression). Implémentation : `src/components/purchases/PurchaseDetailView.tsx`.
 
 ---
 
@@ -1213,7 +1222,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `person-detail-page` | Métier | Page de détail d'une personne (timeline des événements) | auto |
 | `person-share-editor` | Métier | Éditeur de ventilation entre personnes | auto |
 | `progress-bar` | Feedback | Barre de progression | auto |
+| `purchase-assignments` | Métier | Bloc interactif assigner/réassigner/désassigner (détail achat) | auto |
 | `purchase-detail-page` | Métier | Page de détail d'un achat (galaxie des dépenses) | auto |
+| `purchase-installment-chips` | Métier | Calendrier compact des paiements programmés (✓ si réglé) | auto |
 | `purchase-galaxy` | Métier | Bloc des 4 sections d'un achat (parent/paiements/tx/sous-achats) | auto |
 | `purchase-installments` | Métier | Échéancier paiements à venir et validés | auto |
 | `purchase-line-row` | Métier | Ligne compacte type transaction (tx rattachée ou sous-achat) | auto |
@@ -1236,6 +1247,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `toast-warning` | Feedback | Toast warning | auto |
 | `tooltip-md` | Feedback | Tooltip survol md | auto |
 | `transaction-filters` | Métier | Toolbar de filtres au-dessus liste | auto |
+| `transaction-picker-modal` | Métier | Modale de choix d'une transaction non rattachée (détail achat) | auto |
 | `transaction-row` | Métier | Row de table-transactions | auto |
 
 ---

@@ -19,6 +19,21 @@ export interface PurchaseTxLine {
   split: import("@/lib/persons/types").TransactionSplit;
 }
 
+/**
+ * Transaction non rattachée, candidate à l'assignation depuis le détail d'un
+ * achat (sélecteur « rattacher / assigner / réassigner une transaction »).
+ */
+export interface AttachableTransaction {
+  id: string;
+  operation_date: string;
+  label: string;
+  amount: number;
+  currency: string;
+  status: TransactionStatus;
+  accountName: string | null;
+  accountColor: string | null;
+}
+
 /** Part d'une personne sur un achat (agrégée sur ses transactions ventilées). */
 export interface PurchasePersonShare {
   personId: string;
@@ -109,6 +124,12 @@ export interface PurchaseOption {
   installmentMonths: string[];
   /** Échéances non appariées : au rattachement, on peut en remplir une. */
   unmatchedInstallments: UnmatchedInstallment[];
+  /**
+   * Toutes les échéances (paiements programmés), triées par mois, avec leur état
+   * d'appariement — pour afficher le calendrier dans le sélecteur de rattachement
+   * (réglée ✓ ou à venir).
+   */
+  scheduledInstallments: { month: string; amount: number; matched: boolean }[];
   /** Abonnement sans fin : total inconnu (occurrence X/∞). */
   endless: boolean;
 }

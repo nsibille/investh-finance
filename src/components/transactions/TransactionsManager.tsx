@@ -103,6 +103,16 @@ export function TransactionsManager({
   const [extraOptions, setExtraOptions] = useState<SubcategoryOption[]>([]);
   const [ruleFor, setRuleFor] = useState<TransactionRow | null>(null);
 
+  // Réconcilie l'état optimiste avec le serveur : dès qu'un `router.refresh()`
+  // renvoie de nouvelles lignes, les surcharges deviennent caduques (le serveur
+  // fait foi). Sans ça, un compteur optimiste (occurrence X/Y d'un achat, statut…)
+  // resterait figé alors que les échéances de l'achat ont changé côté serveur.
+  const [syncedRows, setSyncedRows] = useState(rows);
+  if (rows !== syncedRows) {
+    setSyncedRows(rows);
+    setOverrides({});
+  }
+
   const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
   const allOptions = useMemo(() => {
@@ -234,7 +244,9 @@ export function TransactionsManager({
   async function detachPurchase(id: string) {
     const res = await detachTransaction(id);
     if (!res.ok) return toast.error(res.error);
-    patch(id, { purchase: null });
+    // La désassignation reperd la catégorie héritée de l'achat et repasse la
+    // transaction « à valider » (miroir de `detachTransaction`).
+    patch(id, { purchase: null, subcategory_id: null, status: "pending" });
     router.refresh();
   }
 

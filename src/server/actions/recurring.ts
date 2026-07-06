@@ -214,7 +214,9 @@ export async function detectRecurring(
  */
 export async function applyRecurringPattern(
   patternId: string,
+  opts: { validate?: boolean } = {},
 ): Promise<{ ok: true; applied: number; ids: string[] } | { ok: false; error: string }> {
+  const validate = opts.validate !== false;
   const supabase = await createClient();
   const { data: p } = await supabase
     .from("recurring_patterns")
@@ -252,13 +254,17 @@ export async function applyRecurringPattern(
   for (let i = 0; i < allIds.length; i += CHUNK) {
     await supabase.from("transactions").update(base).in("id", allIds.slice(i, i + CHUNK));
   }
-  // Catégorie du modèle appliquée aux transactions non catégorisées.
+  // Catégorie du modèle appliquée aux transactions non catégorisées. `validate`
+  // à false (édition depuis « à valider ») : on hérite la catégorie sans valider.
   if (p.subcategory_id) {
     const uncat = matches.filter((m) => !m.subcategory_id).map((m) => m.id);
+    const catPatch = validate
+      ? { subcategory_id: p.subcategory_id, status: "validated" as const, validated_at: nowIso }
+      : { subcategory_id: p.subcategory_id };
     for (let i = 0; i < uncat.length; i += CHUNK) {
       await supabase
         .from("transactions")
-        .update({ subcategory_id: p.subcategory_id, status: "validated", validated_at: nowIso })
+        .update(catPatch)
         .in("id", uncat.slice(i, i + CHUNK));
     }
   }
@@ -346,6 +352,7 @@ type AssociateResult =
 export async function associateTransactionToRecurring(
   transactionId: string,
   recurringId: string,
+  opts: { validate?: boolean } = {},
 ): Promise<AssociateResult> {
   const supabase = await createClient();
   const { data: tx } = await supabase
@@ -356,7 +363,7 @@ export async function associateTransactionToRecurring(
   if (!tx) return { ok: false, error: "Transaction introuvable" };
 
   const added = await addLabelAndAmount(supabase, recurringId, tx.raw_label, Number(tx.amount));
-  const res = await applyRecurringPattern(recurringId);
+  const res = await applyRecurringPattern(recurringId, opts);
   if (!res.ok) return res;
   return { ok: true, applied: res.applied, ...added, ids: res.ids };
 }
@@ -433,17 +440,22 @@ export async function undoAssociateRecurring(
  * libellé de la ligne, montant attendu = montant de la ligne. Applique ensuite
  * la récurrente aux transactions existantes. L'annulation = supprimer le modèle.
  */
-export async function createAndAssociateRecurring(input: {
-  name: string;
-  rawLabel: string;
-  amount: number | null;
-}): Promise<{ ok: true; id: string; applied: number } | { ok: false; error: string }> {
+export async function createAndAssociateRecurring(
+  input: {
+    name: string;
+    rawLabel: string;
+    amount: number | null;
+  },
+  opts: { validate?: boolean } = {},
+): Promise<{ ok: true; id: string; applied: number } | { ok: false; error: string }> {
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Nom requis" };
-  const supabase = await createClient();
-  const key = recurringKey(input.rawLabel);
   const amount =
     input.amount != null && Number.isFinite(input.amount) ? input.amount : null;
+  // Une récurrence doit toujours avoir au moins un montant.
+  if (amount == null) return { ok: false, error: "Un montant est requis" };
+  const supabase = await createClient();
+  const key = recurringKey(input.rawLabel);
   const { data, error } = await supabase
     .from("recurring_patterns")
     .insert({
@@ -458,7 +470,7 @@ export async function createAndAssociateRecurring(input: {
     .select("id")
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "Création impossible" };
-  const res = await applyRecurringPattern(data.id);
+  const res = await applyRecurringPattern(data.id, opts);
   revalidate();
   return { ok: true, id: data.id, applied: res.ok ? res.applied : 0 };
 }

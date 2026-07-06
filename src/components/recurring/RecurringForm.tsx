@@ -157,7 +157,11 @@ export function RecurringForm({
 
       <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
-          <FormField label="Montants attendus" help="Plusieurs possibles (le prix d'un abonnement peut changer).">
+          <FormField
+            label="Montants attendus"
+            help="Au moins un montant est requis — plusieurs possibles (le prix d'un abonnement peut changer)."
+            error={(errors.expected_amounts as { message?: string; root?: { message?: string } } | undefined)?.message ?? (errors.expected_amounts as { root?: { message?: string } } | undefined)?.root?.message}
+          >
             <Controller
               control={control}
               name="expected_amounts"

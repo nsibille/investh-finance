@@ -4,37 +4,70 @@ import { getSubcategoryOptions } from "@/lib/categories/queries";
 import { computeRollups, type PurchaseAmounts } from "./tree";
 import type {
   PurchaseWithDetails,
+  PurchaseDetail,
   PurchaseInstallment,
   PurchaseOption,
+  PurchaseTxLine,
 } from "./types";
 
-export async function getPurchases(): Promise<PurchaseWithDetails[]> {
+export const getPurchases = cache(async function getPurchases(): Promise<
+  PurchaseWithDetails[]
+> {
   const supabase = await createClient();
-  const [{ data: purchases }, { data: txs }, { data: installments }, subOptions] =
-    await Promise.all([
-      supabase.from("purchases").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("transactions")
-        .select("id, amount, purchase_id")
-        .not("purchase_id", "is", null),
-      supabase
-        .from("purchase_installments")
-        .select("*")
-        .order("month", { ascending: true }),
-      getSubcategoryOptions(),
-    ]);
+  const [
+    { data: purchases },
+    { data: txs },
+    { data: installments },
+    { data: accounts },
+    subOptions,
+  ] = await Promise.all([
+    supabase.from("purchases").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("transactions")
+      .select(
+        "id, amount, purchase_id, operation_date, label, currency, status, account_id",
+      )
+      .not("purchase_id", "is", null)
+      // Ordre déterministe : récent → ancien, `id` départage les ex æquo.
+      .order("operation_date", { ascending: false })
+      .order("id", { ascending: false }),
+    supabase
+      .from("purchase_installments")
+      .select("*")
+      .order("month", { ascending: true }),
+    supabase.from("accounts").select("id, name, color"),
+    getSubcategoryOptions(),
+  ]);
 
   const subInfo = new Map(
     subOptions.map((o) => [o.id, { label: o.label, color: o.categoryColor }]),
   );
+  const accountInfo = new Map(
+    (accounts ?? []).map((a) => [a.id, { name: a.name, color: a.color }]),
+  );
 
+  // Agrégats (count/sum) + lignes de transactions détaillées, par achat.
   const agg = new Map<string, { count: number; sum: number }>();
+  const txLines = new Map<string, PurchaseTxLine[]>();
   for (const t of txs ?? []) {
     if (!t.purchase_id) continue;
     const e = agg.get(t.purchase_id) ?? { count: 0, sum: 0 };
     e.count += 1;
     e.sum += Number(t.amount);
     agg.set(t.purchase_id, e);
+    const acc = t.account_id ? accountInfo.get(t.account_id) : null;
+    const list = txLines.get(t.purchase_id) ?? [];
+    list.push({
+      id: t.id,
+      operation_date: t.operation_date,
+      label: t.label,
+      amount: Number(t.amount),
+      currency: t.currency,
+      status: t.status,
+      accountName: acc?.name ?? null,
+      accountColor: acc?.color ?? null,
+    });
+    txLines.set(t.purchase_id, list);
   }
 
   const byPurchase = new Map<string, PurchaseInstallment[]>();
@@ -61,6 +94,7 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
       categoryColor: cat?.color ?? null,
       transactionCount: a.count,
       paidAmount: a.sum,
+      transactions: txLines.get(p.id) ?? [],
       installments: inst,
       forecastAmount: inst.reduce((s, i) => s + Number(i.amount), 0),
       matchedInstallments: matched,
@@ -79,6 +113,7 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
     remaining: p.remaining,
   }));
   const rollups = computeRollups(rollupInput);
+  const nameById = new Map(own.map((p) => [p.id, p.name]));
 
   return own.map((p): PurchaseWithDetails => {
     const r = rollups.get(p.id);
@@ -90,8 +125,32 @@ export async function getPurchases(): Promise<PurchaseWithDetails[]> {
       totalTransactionCount: r?.totalTransactionCount ?? p.transactionCount,
       totalForecastAmount: r?.totalForecastAmount ?? p.forecastAmount,
       totalRemaining: r?.totalRemaining ?? p.remaining,
+      parentName: p.parent_id ? (nameById.get(p.parent_id) ?? null) : null,
     };
   });
+});
+
+/**
+ * Détail complet d'un achat pour `/achats/[id]` : réutilise `getPurchases`
+ * (app mono-utilisateur, volume modeste) puis résout parent + sous-achats
+ * directs en objets complets. `null` si l'achat n'existe pas.
+ */
+export async function getPurchaseDetail(
+  id: string,
+): Promise<PurchaseDetail | null> {
+  const all = await getPurchases();
+  const self = all.find((p) => p.id === id);
+  if (!self) return null;
+  const byId = new Map(all.map((p) => [p.id, p]));
+  const parent = self.parent_id ? (byId.get(self.parent_id) ?? null) : null;
+  const children = self.childIds
+    .map((cid) => byId.get(cid))
+    .filter((c): c is PurchaseWithDetails => Boolean(c));
+  return {
+    ...self,
+    parent: parent ? { id: parent.id, name: parent.name } : null,
+    children,
+  };
 }
 
 /** Options légères (id, nom, sous-catégorie) pour l'autocomplétion à l'import. */

@@ -115,7 +115,7 @@ export function TransactionDetail({
       if (subId) {
         toast.info("Catégorie mise à jour", {
           duration: 8000,
-          action: { label: "Créer une règle", onClick: () => openRule(null) },
+          action: { label: "Créer une règle", onClick: () => openRule(tx.merchant ?? null) },
         });
       }
     }
@@ -457,7 +457,7 @@ export function TransactionDetail({
                 Remettre à valider
               </Button>
             )}
-            <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => openRule(null)}>
+            <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => openRule(tx.merchant ?? null)}>
               Créer une règle
             </Button>
           </div>

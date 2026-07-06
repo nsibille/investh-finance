@@ -100,6 +100,25 @@ describe("applyRules", () => {
     expect(out.status).toBe("validated");
   });
 
+  it("prioritises an enseigne rule over a simple rule even with a worse priority", () => {
+    const out = applyRules(
+      { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },
+      [
+        baseRule({ id: "simple", pattern: "carrefour", priority: 10, subcategory_id: "A" }),
+        baseRule({
+          id: "enseigne",
+          pattern: "carrefour",
+          priority: 200,
+          subcategory_id: "B",
+          merchant_id: "merch-1",
+        }),
+      ],
+    );
+    expect(out.applied_rule_id).toBe("enseigne");
+    expect(out.subcategory_id).toBe("B");
+    expect(out.merchant_id).toBe("merch-1");
+  });
+
   it("skips inactive rules and rules for other accounts", () => {
     const out = applyRules(
       { account_id: "a", amount: -42, raw_label: "CB CARREFOUR" },

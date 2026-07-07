@@ -141,15 +141,22 @@ export function PersonSharePicker({
 
   async function save() {
     setSaving(true);
-    const res = await setTransactionShares(transactionId, {
-      nature,
-      shares: checkedIds.map((id) => ({ personId: id, amount: parsed.get(id) ?? 0 })),
-    });
-    setSaving(false);
-    if (!res.ok) return toast.error(res.error);
-    toast.success(checkedIds.length ? "Partage enregistré" : "Partage retiré");
-    router.refresh();
-    onSaved?.();
+    try {
+      const res = await setTransactionShares(transactionId, {
+        nature,
+        shares: checkedIds.map((id) => ({ personId: id, amount: parsed.get(id) ?? 0 })),
+      });
+      if (!res.ok) return toast.error(res.error);
+      toast.success(checkedIds.length ? "Partage enregistré" : "Partage retiré");
+      router.refresh();
+      onSaved?.();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Enregistrement du partage impossible.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   // --- Mode Remboursement --------------------------------------------------
@@ -198,40 +205,51 @@ export function PersonSharePicker({
       transactionId,
       note: repayNote || null,
     };
-    // updateRepayment ne change pas la personne : si elle change, on recrée.
-    let res;
-    if (existing && existing.personId === repayPerson) {
-      res = await updateRepayment(existing.id, payload);
-    } else {
-      if (existing) {
-        const del = await deleteRepayment(existing.id);
-        if (!del.ok) {
-          setSavingRepay(false);
-          return toast.error(del.error);
+    try {
+      // updateRepayment ne change pas la personne : si elle change, on recrée.
+      let res;
+      if (existing && existing.personId === repayPerson) {
+        res = await updateRepayment(existing.id, payload);
+      } else {
+        if (existing) {
+          const del = await deleteRepayment(existing.id);
+          if (!del.ok) return toast.error(del.error);
         }
+        res = await addRepayment(payload);
       }
-      res = await addRepayment(payload);
+      if (!res.ok) return toast.error(res.error);
+      toast.success(
+        existing ? "Remboursement mis à jour" : "Remboursement enregistré",
+      );
+      router.refresh();
+      onSaved?.();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Enregistrement du remboursement impossible.",
+      );
+    } finally {
+      setSavingRepay(false);
     }
-    setSavingRepay(false);
-    if (!res.ok) return toast.error(res.error);
-    toast.success(
-      existing ? "Remboursement mis à jour" : "Remboursement enregistré",
-    );
-    router.refresh();
-    onSaved?.();
   }
 
   async function removeRepayment() {
     const existing = repayCtx?.repayment;
     if (!existing) return;
     setSavingRepay(true);
-    const res = await deleteRepayment(existing.id);
-    setSavingRepay(false);
-    if (!res.ok) return toast.error(res.error);
-    setRepayCtx({ ...repayCtx!, repayment: null });
-    toast.success("Remboursement retiré");
-    router.refresh();
-    onSaved?.();
+    try {
+      const res = await deleteRepayment(existing.id);
+      if (!res.ok) return toast.error(res.error);
+      setRepayCtx({ ...repayCtx!, repayment: null });
+      toast.success("Remboursement retiré");
+      router.refresh();
+      onSaved?.();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Suppression du remboursement impossible.",
+      );
+    } finally {
+      setSavingRepay(false);
+    }
   }
 
   const segBtn = (

@@ -92,7 +92,7 @@ export function MerchantQuickView({
   }, [open]);
 
   const maxMonth = stats
-    ? Math.max(1, ...stats.monthly.map((m) => m.depenses))
+    ? Math.max(1, ...stats.monthly.map((m) => m.amount))
     : 1;
 
   return (
@@ -150,8 +150,8 @@ export function MerchantQuickView({
               <>
                 <div className="mq-kpis">
                   <div className="mq-kpi">
-                    <span className="mq-kpi__label">Total dépensé</span>
-                    <span className="mq-kpi__value">{formatCurrency(stats.totalSpent)}</span>
+                    <span className="mq-kpi__label">{stats.isIncome ? "Total perçu" : "Total dépensé"}</span>
+                    <span className="mq-kpi__value">{formatCurrency(stats.total)}</span>
                   </div>
                   <div className="mq-kpi">
                     <span className="mq-kpi__label">Transactions</span>
@@ -170,12 +170,12 @@ export function MerchantQuickView({
                       <div
                         key={m.month}
                         className="mq-bars__col"
-                        title={`${monthShort(m.month)} : ${formatCurrency(m.depenses)}`}
+                        title={`${monthShort(m.month)} : ${formatCurrency(m.amount)}`}
                       >
                         <div className="mq-bars__track">
                           <div
                             className="mq-bars__fill"
-                            style={{ height: `${Math.round((m.depenses / maxMonth) * 100)}%` }}
+                            style={{ height: `${Math.round((m.amount / maxMonth) * 100)}%` }}
                           />
                         </div>
                         <span className="mq-bars__label">{monthShort(m.month).slice(0, 1)}</span>

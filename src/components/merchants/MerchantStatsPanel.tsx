@@ -68,62 +68,66 @@ export function MerchantStatsPanel({ stats }: { stats: MerchantStats }) {
     categoryColor,
     isOnline,
     country,
-    totalSpent,
+    isIncome,
+    total,
+    counterTotal,
     netAmount,
     transactionCount,
     purchaseCount,
     firstDate,
     lastDate,
-    maxSpend,
+    maxFlow,
     avgMonthly,
     monthly,
     categories,
   } = stats;
+
+  const flowLabel = isIncome ? "Revenus" : "Dépenses";
 
   const chartData = useMemo(
     () =>
       monthly.map((p) => ({
         label: monthShort(p.month),
         year: Number(p.month.split("-")[0]),
-        depenses: p.depenses,
+        depenses: p.amount,
       })),
     [monthly],
   );
 
-  const basket = transactionCount > 0 ? totalSpent / transactionCount : 0;
-  const refunded = Math.max(0, netAmount + totalSpent); // crédits = net + débits
-  const activeMonths = monthly.filter((m) => m.depenses > 0).length;
+  const basket = transactionCount > 0 ? total / transactionCount : 0;
+  const activeMonths = monthly.filter((m) => m.amount > 0).length;
 
   // Mois record (fenêtre 12 mois).
-  const record = monthly.reduce<{ month: string; depenses: number } | null>(
-    (best, m) => (m.depenses > (best?.depenses ?? 0) ? m : best),
+  const record = monthly.reduce<{ month: string; amount: number } | null>(
+    (best, m) => (m.amount > (best?.amount ?? 0) ? m : best),
     null,
   );
 
   // Fun facts candidats : on garde les plus parlants.
   const funFacts: { emoji: string; text: string }[] = [];
-  if (maxSpend) {
+  if (maxFlow) {
     funFacts.push({
       emoji: "💥",
-      text: `Plus grosse dépense : ${formatCurrency(maxSpend.amount)} le ${dayMonthYear(maxSpend.date)}.`,
+      text: `${isIncome ? "Plus gros revenu" : "Plus grosse dépense"} : ${formatCurrency(maxFlow.amount)} le ${dayMonthYear(maxFlow.date)}.`,
     });
   }
-  if (record && record.depenses > 0) {
+  if (record && record.amount > 0) {
     funFacts.push({
       emoji: "🗓️",
-      text: `Mois record : ${monthYearLong(record.month)} avec ${formatCurrency(record.depenses)}.`,
+      text: `Mois record : ${monthYearLong(record.month)} avec ${formatCurrency(record.amount)}.`,
     });
   }
   if (firstDate) {
     funFacts.push({
       emoji: "🤝",
-      text: `Première dépense le ${dayMonthYear(firstDate)} — déjà ${transactionCount} opération${transactionCount > 1 ? "s" : ""}.`,
+      text: `${isIncome ? "Premier revenu" : "Première dépense"} le ${dayMonthYear(firstDate)} — déjà ${transactionCount} opération${transactionCount > 1 ? "s" : ""}.`,
     });
   }
-  if (refunded > 0.01) {
+  // Flux inverse : remboursements pour une dépense (parlant), ignoré pour un revenu.
+  if (!isIncome && counterTotal > 0.01) {
     funFacts.push({
       emoji: "↩️",
-      text: `${formatCurrency(refunded)} te sont revenus (remboursements / avoirs).`,
+      text: `${formatCurrency(counterTotal)} te sont revenus (remboursements / avoirs).`,
     });
   }
 
@@ -140,7 +144,7 @@ export function MerchantStatsPanel({ stats }: { stats: MerchantStats }) {
         <div className="ms-empty">
           <Sparkles size={22} aria-hidden />
           <p>Aucune transaction rattachée pour l&apos;instant.</p>
-          <span>Les statistiques apparaîtront dès la première dépense associée à cette enseigne.</span>
+          <span>Les statistiques apparaîtront dès la première opération associée à cette enseigne.</span>
         </div>
       </div>
     );
@@ -156,10 +160,10 @@ export function MerchantStatsPanel({ stats }: { stats: MerchantStats }) {
         </div>
       </div>
 
-      {/* Héro : total dépensé */}
+      {/* Héro : total du flux principal (dépenses ou revenus) */}
       <div className="ms-hero">
-        <span className="ms-hero__label">Total dépensé</span>
-        <span className="ms-hero__value">{formatCurrency(totalSpent)}</span>
+        <span className="ms-hero__label">{isIncome ? "Total perçu" : "Total dépensé"}</span>
+        <span className="ms-hero__value">{formatCurrency(total)}</span>
         <span className="ms-hero__sub">
           {transactionCount} transaction{transactionCount > 1 ? "s" : ""}
           {activeMonths > 0 ? ` · sur ${activeMonths} mois actif${activeMonths > 1 ? "s" : ""}` : ""}
@@ -168,13 +172,13 @@ export function MerchantStatsPanel({ stats }: { stats: MerchantStats }) {
 
       {/* KPIs */}
       <div className="ms-kpis">
-        <KpiTile icon={<Receipt size={15} />} label="Panier moyen" value={formatCurrency(basket)} />
+        <KpiTile icon={<Receipt size={15} />} label={isIncome ? "Montant moyen" : "Panier moyen"} value={formatCurrency(basket)} />
         <KpiTile icon={<TrendingUp size={15} />} label="Moy. / mois" value={formatCurrency(avgMonthly)} />
         <KpiTile
           icon={<Wallet size={15} />}
           label="Solde net"
           value={formatCurrency(netAmount)}
-          hint={refunded > 0.01 ? `${formatCurrency(refunded)} remboursés` : undefined}
+          hint={!isIncome && counterTotal > 0.01 ? `${formatCurrency(counterTotal)} remboursés` : undefined}
         />
         <KpiTile
           icon={<ShoppingBag size={15} />}
@@ -199,14 +203,14 @@ export function MerchantStatsPanel({ stats }: { stats: MerchantStats }) {
       {/* Graphe 12 mois */}
       <div className="ms-section">
         <div className="ms-section__head">
-          <span className="ms-section__title"><CalendarClock size={14} aria-hidden /> Dépenses sur 12 mois</span>
+          <span className="ms-section__title"><CalendarClock size={14} aria-hidden /> {flowLabel} sur 12 mois</span>
           {avgMonthly > 0 && (
             <span className="ms-section__legend">
               <span className="ms-avgline" aria-hidden /> moy. {formatCurrency(avgMonthly)}
             </span>
           )}
         </div>
-        <MerchantSpendChart data={chartData} average={avgMonthly} />
+        <MerchantSpendChart data={chartData} average={avgMonthly} valueLabel={flowLabel} />
       </div>
 
       {/* Top catégories */}
@@ -215,7 +219,7 @@ export function MerchantStatsPanel({ stats }: { stats: MerchantStats }) {
           <span className="ms-section__title">Répartition par catégorie</span>
           <div className="ms-cats">
             {categories.slice(0, 5).map((c) => {
-              const pct = totalSpent > 0 ? Math.round((c.amount / totalSpent) * 100) : 0;
+              const pct = total > 0 ? Math.round((c.amount / total) * 100) : 0;
               return (
                 <div key={c.key} className="ms-cat">
                   <span className="badge-dot" style={{ ["--dot-color" as string]: c.color ?? undefined }} aria-hidden />

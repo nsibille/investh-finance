@@ -64,6 +64,12 @@ export interface TransactionRow {
    * personne remboursée. `null` quand la transaction n'est pas un remboursement.
    */
   repayment?: { personName: string } | null;
+  /**
+   * Virement interne apparié : rattaché à un groupe de réconciliation dont le net
+   * vaut 0 (contrepartie identifiée sur un autre compte). `undefined`/false pour
+   * un virement interne orphelin ou une transaction ordinaire.
+   */
+  transferPaired?: boolean;
 }
 
 export interface TransactionFilters {

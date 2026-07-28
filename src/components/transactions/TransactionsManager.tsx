@@ -486,6 +486,7 @@ export function TransactionsManager({
       personsSplit: r.split ?? null,
       note: r.note,
       status: r.status,
+      transferPaired: r.transferPaired ?? false,
     };
   });
 

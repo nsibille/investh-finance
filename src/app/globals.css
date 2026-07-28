@@ -1232,6 +1232,11 @@ body {
 .tx-meta--recurring { color: var(--color-brand-primary-600); }
 button.tx-meta--persons { color: var(--color-brand-primary-600); cursor: pointer; }
 button.tx-meta--persons:hover { text-decoration: underline; }
+/* Virement interne apparié : puce verte discrète (contrepartie identifiée). */
+.tx-meta--transfer {
+  color: var(--color-success);
+  font-weight: var(--fw-medium);
+}
 
 /* Flag cliquable (nom d'enseigne / de récurrente) : main + soulignement au
    survol pour signaler qu'on peut cliquer pour éditer l'entité. */

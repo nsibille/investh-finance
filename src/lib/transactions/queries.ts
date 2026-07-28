@@ -17,7 +17,7 @@ const DEFAULT_PER_PAGE = 50;
 
 /** Colonnes réellement affichées : on évite de tirer `search_vector`, `dedup_hash`, etc. */
 const LIST_COLUMNS =
-  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id, recurring_pattern_id, split_nature" as const;
+  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id, recurring_pattern_id, split_nature, transfer_group_id" as const;
 
 /** Colonnes du détail : ajoute purchase_id, merchant_id, recurring_pattern_id. */
 const DETAIL_COLUMNS =
@@ -45,6 +45,7 @@ type ListRecord = TransactionRecord & {
   merchant_id: string | null;
   recurring_pattern_id: string | null;
   split_nature: Transaction["split_nature"];
+  transfer_group_id: string | null;
 };
 
 // Dérivé de l'arbre des catégories (mis en cache) : plus aucune requête
@@ -262,6 +263,7 @@ async function attachRelations(
     merchant_id: string | null;
     recurring_pattern_id: string | null;
     split_nature: Transaction["split_nature"];
+    transfer_group_id: string | null;
   }[],
   rows: TransactionRow[],
 ): Promise<void> {
@@ -403,6 +405,8 @@ async function attachRelations(
     }
     const repaidName = repaymentByTx.get(rec.id);
     if (repaidName) row.repayment = { personName: repaidName };
+    // Virement interne apparié : rattaché à un groupe de réconciliation (net 0).
+    if (rec.transfer_group_id) row.transferPaired = true;
   });
 }
 

@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Pencil,
   X,
+  ArrowLeftRight,
 } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
@@ -145,6 +146,15 @@ export function TransactionsTable({
                       <code className="tx-label-code">{rawLabel}</code>
                     </div>
                     <div className="tx-main__meta">
+                      {r.transferPaired && (
+                        <span
+                          className="tx-meta tx-meta--transfer"
+                          title="Virement interne apparié à sa contrepartie sur un autre compte"
+                        >
+                          <ArrowLeftRight size={12} aria-hidden />
+                          <span className="tx-meta__text">Virement apparié</span>
+                        </span>
+                      )}
                       {r.merchant && (
                         <MerchantQuickView
                           merchantId={r.merchant.id}

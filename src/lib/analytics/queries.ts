@@ -3,6 +3,10 @@ import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryDisplayMap } from "@/lib/transactions/queries";
 import { getTransferSubcategoryIds } from "@/lib/categories/queries";
+import {
+  internalTransferSubIds,
+  isLinkedInternalTransfer,
+} from "@/lib/transactions/internalTransfers";
 import { getPersonalAmountAdjustments } from "@/lib/persons/queries";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
@@ -46,7 +50,7 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
     await Promise.all([
       supabase
         .from("transactions")
-        .select("id, label, amount, operation_date, subcategory_id")
+        .select("id, label, amount, operation_date, subcategory_id, transfer_group_id")
         .eq("status", "validated"),
       supabase.from("accounts").select("initial_balance, is_archived"),
       getCategoryDisplayMap(),
@@ -54,6 +58,7 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
       getPersonalAmountAdjustments(),
     ]);
 
+  const internalIds = internalTransferSubIds(categories);
   const all = (txs ?? []).map((t) => {
     const rawAmount = Number(t.amount);
     return {
@@ -68,6 +73,9 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
       // Les virements internes sont exclus des revenus/dépenses mais conservés
       // pour le patrimoine (ils s'annulent entre comptes).
       isTransfer: t.subcategory_id ? transferIds.has(t.subcategory_id) : false,
+      // Virement interne relié : neutralisé aussi pour le patrimoine (déplacement
+      // entre comptes → aucun effet réel, évite un faux palier en fin de mois).
+      isLinkedInternal: isLinkedInternalTransfer(t, internalIds),
       // Remboursement rattaché : exclu des dépenses/revenus, gardé pour le cash.
       isRepayment: repaymentTxIds.has(t.id),
     };
@@ -139,6 +147,7 @@ export async function getAnalytics(ref: Date): Promise<Analytics> {
   });
   const delta = new Array<number>(12).fill(0);
   for (const t of all) {
+    if (t.isLinkedInternal) continue; // virement interne relié : neutralisé
     let k = 0;
     while (k < 12 && monthEnds[k].str < t.date) k++;
     if (k < 12) delta[k] += t.amount; // au-delà du dernier mois → ignoré

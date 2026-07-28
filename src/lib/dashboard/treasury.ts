@@ -1,6 +1,10 @@
 import { startOfMonth, endOfMonth, subMonths, addDays, format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryDisplayMap } from "@/lib/transactions/queries";
+import {
+  internalTransferSubIds,
+  isLinkedInternalTransfer,
+} from "@/lib/transactions/internalTransfers";
 import { normalizeText } from "@/lib/search/filter";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
@@ -61,6 +65,9 @@ export async function getTreasurySeries(
   const deferredSubIds = new Set<string>();
   for (const [subId, d] of categories)
     if (normalizeText(d.categoryName) === DEFERRED_CATEGORY) deferredSubIds.add(subId);
+  // Virements internes reliés : neutralisés (déplacement entre tes comptes, sans
+  // effet sur le solde global — évite les faux creux/pics au jour le jour).
+  const internalIds = internalTransferSubIds(categories);
 
   // Reconstruction de l'historique : on part du solde consolidé d'aujourd'hui
   // (les comptes sont ancrés à leur solde réel) et on déroule EN ARRIÈRE via
@@ -73,7 +80,7 @@ export async function getTreasurySeries(
   for (;;) {
     const { data } = await supabase
       .from("transactions")
-      .select("operation_date, amount, subcategory_id")
+      .select("operation_date, amount, subcategory_id, transfer_group_id")
       .eq("status", "validated")
       .gte("operation_date", startIso)
       .lte("operation_date", todayIso)
@@ -83,9 +90,11 @@ export async function getTreasurySeries(
       operation_date: string;
       amount: number;
       subcategory_id: string | null;
+      transfer_group_id: string | null;
     }[];
     for (const t of rows) {
       if (t.subcategory_id && deferredSubIds.has(t.subcategory_id)) continue; // débit différé
+      if (isLinkedInternalTransfer(t, internalIds)) continue; // virement interne relié
       flowByDay.set(
         t.operation_date,
         (flowByDay.get(t.operation_date) ?? 0) + Number(t.amount),

@@ -2,6 +2,10 @@ import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryDisplayMap } from "@/lib/transactions/queries";
+import {
+  internalTransferSubIds,
+  isLinkedInternalTransfer,
+} from "@/lib/transactions/internalTransfers";
 import type { DashTx } from "@/lib/dashboard/analysis";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
@@ -69,7 +73,7 @@ export async function getCategoryStats(
       supabase
         .from("transactions")
         .select(
-          "id, amount, subcategory_id, operation_date, label, raw_label, merchant_id, purchase_id, recurring_pattern_id",
+          "id, amount, subcategory_id, transfer_group_id, operation_date, label, raw_label, merchant_id, purchase_id, recurring_pattern_id",
         )
         .eq("status", "validated")
         .gte("accounting_date", from)
@@ -85,10 +89,14 @@ export async function getCategoryStats(
   const purchaseName = new Map((purchasesData ?? []).map((p) => [p.id, p.name]));
   const recurringName = new Map((recurringData ?? []).map((r) => [r.id, r.name]));
 
+  // Virements internes reliés : neutralisés (simple déplacement entre comptes).
+  const internalIds = internalTransferSubIds(categories);
+
   const subAcc = new Map<string, TxAcc>();
   for (const t of data ?? []) {
     const subId = t.subcategory_id;
     if (!subId) continue;
+    if (isLinkedInternalTransfer(t, internalIds)) continue;
     const disp = categories.get(subId);
     if (!disp) continue;
     const acc = subAcc.get(subId) ?? { total: 0, count: 0, txs: [] };

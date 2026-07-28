@@ -17,6 +17,7 @@ import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
 import { applyRules, type EngineRule } from "@/lib/rules/engine";
 import { loadEngineRules } from "@/lib/rules/loader";
 import { matchesPattern } from "@/lib/recurring/checker";
+import { merchantCompatible, recurringAcceptableMerchants } from "@/lib/import/merchantGate";
 import {
   matchPreviewRowsToPurchases,
   type PreviewRow,
@@ -122,20 +123,27 @@ async function loadRecurringPatterns(supabase: Supa): Promise<RecurringPattern[]
   return data ?? [];
 }
 
-/** Modèle récurrent correspondant à une transaction (libellé + montant). */
+/**
+ * Modèle récurrent correspondant à une transaction (libellé + montant), à
+ * condition que son enseigne ne contredise pas l'enseigne déjà résolue de la
+ * transaction (`txMerchantId`, issue des règles — elle fait autorité).
+ */
 function matchRecurring(
   patterns: RecurringPattern[],
   accountId: string,
   tx: { raw_label: string; amount: number; operation_date: string },
+  txMerchantId: string | null,
 ): RecurringPattern | null {
   return (
-    patterns.find((pat) =>
-      matchesPattern(pat, {
-        account_id: accountId,
-        raw_label: tx.raw_label,
-        amount: tx.amount,
-        operation_date: tx.operation_date,
-      }),
+    patterns.find(
+      (pat) =>
+        matchesPattern(pat, {
+          account_id: accountId,
+          raw_label: tx.raw_label,
+          amount: tx.amount,
+          operation_date: tx.operation_date,
+        }) &&
+        merchantCompatible(txMerchantId, recurringAcceptableMerchants(pat.merchant_id)),
     ) ?? null
   );
 }
@@ -154,14 +162,17 @@ async function annotatePurchaseMatches<T extends PreviewRowLike>(
       operation_date: r.operation_date,
       amount: r.amount,
       raw_label: r.raw_label,
+      // Enseigne déjà résolue (règles/récurrence) : gate d'appariement de l'achat.
+      merchantId: r.merchantId ?? null,
       dup: r.duplicateReason === "existing",
     }))
     .filter((r) => !r.dup)
-    .map(({ index, operation_date, amount, raw_label }) => ({
+    .map(({ index, operation_date, amount, raw_label, merchantId }) => ({
       index,
       operation_date,
       amount,
       raw_label,
+      merchantId,
     }));
   const matches = await matchPreviewRowsToPurchases(supabase, candidates);
   if (matches.size === 0) return rows;
@@ -177,8 +188,9 @@ async function annotatePurchaseMatches<T extends PreviewRowLike>(
       purchaseEndless: m.endless,
       // Catégorie héritée de l'achat (surchargeable dans l'aperçu).
       initialSubcategoryId: m.subcategoryId ?? r.initialSubcategoryId,
-      // L'enseigne de l'achat prime et n'est pas éditable pour cette ligne.
-      ...(m.merchantId
+      // L'enseigne de la transaction fait autorité : l'enseigne de l'achat ne
+      // sert qu'à REMPLIR une ligne sans enseigne (jamais à écraser).
+      ...(m.merchantId && !r.merchantId
         ? {
             merchantId: m.merchantId,
             merchantName: m.merchantName,
@@ -257,7 +269,7 @@ export async function POST(request: Request) {
     const withSuggestion = rows.map((r, i) => {
       const accId = targets[i].accountId ?? "";
       const { subcategory_id, merchant_id } = suggestFromRules(rules, accId, r);
-      const pattern = matchRecurring(patterns, accId, r);
+      const pattern = matchRecurring(patterns, accId, r, merchant_id);
       const initialSubcategoryId =
         transferIdx.has(i) && transferSubId
           ? transferSubId
@@ -342,7 +354,7 @@ export async function POST(request: Request) {
   const { rows } = buildPreviewRows(accountId, transactions, existingSet);
   const withSuggestion = rows.map((r) => {
     const { subcategory_id, merchant_id } = suggestFromRules(rules, accountId, r);
-    const pattern = matchRecurring(patterns, accountId, r);
+    const pattern = matchRecurring(patterns, accountId, r, merchant_id);
     const effMerchant = merchant_id ?? pattern?.merchant_id ?? null;
     // Relevé PDF = un seul compte : pas de virement interne détectable ici.
     return {

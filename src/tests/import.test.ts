@@ -7,6 +7,7 @@ import {
   baseKey,
   resolveDedupHashes,
 } from "@/lib/import/dedup";
+import { merchantCompatible } from "@/lib/import/merchantGate";
 import {
   mapGoCardlessTransaction,
   mapGoCardlessTransactions,
@@ -139,6 +140,28 @@ describe("resolveDedupHashes (déflaggage de doublon)", () => {
       existing,
     );
     expect(new Set(out).size).toBe(2);
+  });
+});
+
+describe("merchantCompatible (gating enseigne)", () => {
+  it("transaction sans enseigne : toujours compatible", () => {
+    expect(merchantCompatible(null, new Set())).toBe(true);
+    expect(merchantCompatible(null, new Set(["m1"]))).toBe(true);
+    expect(merchantCompatible(undefined, new Set(["m1"]))).toBe(true);
+  });
+
+  it("entité sans enseigne (set vide) : agnostique, compatible", () => {
+    expect(merchantCompatible("m1", new Set())).toBe(true);
+  });
+
+  it("même enseigne : compatible", () => {
+    expect(merchantCompatible("m1", new Set(["m1"]))).toBe(true);
+    expect(merchantCompatible("m1", new Set(["m0", "m1"]))).toBe(true);
+  });
+
+  it("enseigne différente (contradiction) : incompatible", () => {
+    expect(merchantCompatible("m1", new Set(["m2"]))).toBe(false);
+    expect(merchantCompatible("m1", new Set(["m2", "m3"]))).toBe(false);
   });
 });
 

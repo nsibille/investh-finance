@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/useToast";
 import { createPurchase } from "@/server/actions/purchases";
 import { generateInstallments } from "@/lib/purchases/installments";
 import { formatMonthLabel, formatShortMonth } from "@/lib/format/date";
+import { formatCurrency } from "@/lib/format/currency";
 import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -43,8 +44,8 @@ function hoverable(node: React.CSSProperties = {}): {
 
 /**
  * Calendrier compact des paiements programmés d'un achat : une pastille mono par
- * échéance, ✓ `--color-success` si réglée (reliée à une transaction), atténuée
- * « à venir » sinon. Plafonné à `cap` pastilles (+N).
+ * échéance (mois + montant matché/attendu), ✓ `--color-success` si réglée (reliée
+ * à une transaction), atténuée « à venir » sinon. Plafonné à `cap` pastilles (+N).
  */
 function InstallmentChips({
   installments,
@@ -61,11 +62,11 @@ function InstallmentChips({
       {shown.map((inst, i) => (
         <span
           key={`${inst.month}-${i}`}
-          title={inst.matched ? "Réglée" : "À venir"}
+          title={`${inst.matched ? "Réglée" : "À venir"} · ${formatCurrency(Math.abs(inst.amount))}`}
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 2,
+            gap: 3,
             fontSize: "var(--text-xs)",
             fontFamily: "var(--font-mono)",
             padding: "1px 6px",
@@ -75,6 +76,8 @@ function InstallmentChips({
           }}
         >
           {formatShortMonth(inst.month)}
+          <span style={{ opacity: 0.5 }}>·</span>
+          {formatCurrency(Math.abs(inst.amount))}
           {inst.matched && <Check size={11} aria-hidden />}
         </span>
       ))}

@@ -77,6 +77,24 @@ export const getTransferSubcategoryIds = cache(
   },
 );
 
+/**
+ * Ids des sous-catégories rattachées à un type de revenu (`is_income`).
+ * Servent à rattacher les revenus de fin de mois au mois suivant (date de
+ * valeur métier — cf. `lib/dashboard/accounting`).
+ */
+export const getIncomeSubcategoryIds = cache(
+  async function getIncomeSubcategoryIds(): Promise<Set<string>> {
+    const tree = await getCategoryTree();
+    const ids = new Set<string>();
+    for (const type of tree) {
+      if (!type.is_income) continue;
+      for (const cat of type.categories)
+        for (const sub of cat.subcategories) ids.add(sub.id);
+    }
+    return ids;
+  },
+);
+
 /** Flat options "Type / Catégorie / Sous-catégorie" for pickers. */
 export const getSubcategoryOptions = cache(async function getSubcategoryOptions(): Promise<
   SubcategoryOption[]

@@ -28,6 +28,14 @@ export interface DashTx {
   amount: number; // signé (ajusté des parts personnes)
   categoryName: string;
   categoryColor: string | null;
+  /** Sous-catégorie précise (null si placeholder « — »). */
+  subName: string | null;
+  /** Enseigne rattachée. */
+  merchant: string | null;
+  /** Achat rattaché. */
+  purchase: string | null;
+  /** Récurrente rattachée. */
+  recurring: string | null;
 }
 
 /** Point mensuel du graphe global (montants positifs par flux). */
@@ -94,6 +102,10 @@ interface Rec {
   categoryId: string;
   categoryName: string;
   categoryColor: string | null;
+  subName: string | null;
+  merchant: string | null;
+  purchase: string | null;
+  recurring: string | null;
   label: string;
   date: string;
 }
@@ -125,6 +137,10 @@ function topTen(recs: Rec[]): DashTx[] {
       amount: r.amount,
       categoryName: r.categoryName,
       categoryColor: r.categoryColor,
+      subName: r.subName,
+      merchant: r.merchant,
+      purchase: r.purchase,
+      recurring: r.recurring,
     }));
 }
 
@@ -146,10 +162,19 @@ export async function getDashboardData(
   const monthEnd = endOfMonth(ref);
   const firstStart = startOfMonth(subMonths(ref, months - 1));
 
-  const [{ data }, categories, { debtByTx, repaymentTxIds }] = await Promise.all([
+  const [
+    { data },
+    categories,
+    { debtByTx, repaymentTxIds },
+    { data: merchantsData },
+    { data: purchasesData },
+    { data: recurringData },
+  ] = await Promise.all([
     supabase
       .from("transactions")
-      .select("id, operation_date, amount, subcategory_id, label, raw_label")
+      .select(
+        "id, operation_date, amount, subcategory_id, label, raw_label, merchant_id, purchase_id, recurring_pattern_id",
+      )
       .eq("status", "validated")
       // Borne basse élargie : les revenus de fin de mois précédent basculent sur
       // le mois suivant (cf. accountingMonth) et doivent être captés.
@@ -157,7 +182,14 @@ export async function getDashboardData(
       .lte("operation_date", iso(monthEnd)),
     getCategoryDisplayMap(),
     getPersonalAmountAdjustments(),
+    supabase.from("merchants").select("id, name"),
+    supabase.from("purchases").select("id, name"),
+    supabase.from("recurring_patterns").select("id, name"),
   ]);
+
+  const merchantName = new Map((merchantsData ?? []).map((m) => [m.id, m.name]));
+  const purchaseName = new Map((purchasesData ?? []).map((p) => [p.id, p.name]));
+  const recurringName = new Map((recurringData ?? []).map((r) => [r.id, r.name]));
 
   const monthKeys: string[] = [];
   for (let i = 0; i < months; i++)
@@ -177,6 +209,7 @@ export async function getDashboardData(
     const idx = monthIndex.get(key);
     if (idx == null) continue;
     const amount = Number(t.amount) + (debtByTx.get(t.id) ?? 0);
+    const rawSub = sub!.subcategoryName;
     recs.push({
       id: t.id,
       monthIdx: idx,
@@ -186,6 +219,12 @@ export async function getDashboardData(
       categoryId: sub!.categoryId,
       categoryName: sub!.categoryName,
       categoryColor: sub!.color,
+      subName: rawSub && rawSub !== "—" ? rawSub : null,
+      merchant: t.merchant_id ? (merchantName.get(t.merchant_id) ?? null) : null,
+      purchase: t.purchase_id ? (purchaseName.get(t.purchase_id) ?? null) : null,
+      recurring: t.recurring_pattern_id
+        ? (recurringName.get(t.recurring_pattern_id) ?? null)
+        : null,
       label: (t.label && t.label.trim()) || t.raw_label,
       date: t.operation_date,
     });

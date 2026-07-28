@@ -9,8 +9,12 @@ import {
   TrendingDown,
   ArrowRight,
   Lightbulb,
+  Store,
+  ShoppingBag,
+  Repeat,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { Dot } from "@/components/ui/Badge";
 import { formatCurrency } from "@/lib/format/currency";
 import { SEGMENT_LABEL } from "@/lib/dashboard/segments";
 import type { DashSegment, DashCategory, DashTx } from "@/lib/dashboard/analysis";
@@ -53,15 +57,43 @@ function DrillRows({ txs, href }: { txs: DashTx[]; href: string }) {
   return (
     <div className="seg-drill">
       {txs.map((t) => (
-        <div className="seg-drill__row" key={t.id}>
-          <span className="seg-drill__date">{dmy(t.date)}</span>
-          <span className="seg-drill__label">{t.label}</span>
-          <span
-            className="seg-drill__amount"
-            style={{ color: t.amount >= 0 ? "var(--color-success)" : undefined }}
-          >
-            {formatCurrency(t.amount)}
-          </span>
+        <div className="seg-drill__item" key={t.id}>
+          <div className="seg-drill__row">
+            <span className="seg-drill__date">{dmy(t.date)}</span>
+            <span className="seg-drill__label">{t.label}</span>
+            <span
+              className="seg-drill__amount"
+              style={{ color: t.amount >= 0 ? "var(--color-success)" : undefined }}
+            >
+              {formatCurrency(t.amount)}
+            </span>
+          </div>
+          <div className="seg-drill__meta">
+            {t.subName && (
+              <span className="seg-chip">
+                <Dot color={t.categoryColor ?? undefined} />
+                {t.subName}
+              </span>
+            )}
+            {t.merchant && (
+              <span className="seg-chip">
+                <Store size={11} aria-hidden />
+                {t.merchant}
+              </span>
+            )}
+            {t.purchase && (
+              <span className="seg-chip seg-chip--purchase">
+                <ShoppingBag size={11} aria-hidden />
+                {t.purchase}
+              </span>
+            )}
+            {t.recurring && (
+              <span className="seg-chip">
+                <Repeat size={11} aria-hidden />
+                {t.recurring}
+              </span>
+            )}
+          </div>
         </div>
       ))}
       <Link href={href} className="btn-ghost-sm" style={{ alignSelf: "flex-start", textDecoration: "none" }}>

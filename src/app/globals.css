@@ -909,11 +909,22 @@ body {
 .seg-delta[data-tone="bad"] { color: var(--color-danger); }
 .seg-delta[data-tone="flat"] { color: var(--color-text-muted); }
 /* Encart drill-down (top transactions). */
-.seg-drill { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) 0 var(--space-1) var(--space-6); }
+.seg-drill { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) 0 var(--space-1) var(--space-6); }
+.seg-drill__item { display: flex; flex-direction: column; gap: 2px; }
 .seg-drill__row { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-xs); }
 .seg-drill__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); }
-.seg-drill__date { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.seg-drill__date { color: var(--color-text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .seg-drill__amount { font-family: var(--font-mono); flex-shrink: 0; }
+/* Puces contextuelles d'une transaction (sous-catégorie, enseigne, achat, récurrente). */
+.seg-drill__meta { display: flex; flex-wrap: wrap; gap: 4px 6px; padding-left: 52px; }
+.seg-chip {
+  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
+  font-size: 11px; color: var(--color-text-muted);
+  background: var(--color-bg-subtle); padding: 1px 7px; border-radius: var(--radius-full);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.seg-chip > svg { flex-shrink: 0; }
+.seg-chip--purchase { color: var(--color-brand-primary-600); }
 
 .card-account,
 .card-account-mini {

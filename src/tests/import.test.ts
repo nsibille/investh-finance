@@ -8,6 +8,7 @@ import {
   resolveDedupHashes,
 } from "@/lib/import/dedup";
 import { merchantCompatible } from "@/lib/import/merchantGate";
+import { parseAmountInput } from "@/lib/format/amount";
 import {
   mapGoCardlessTransaction,
   mapGoCardlessTransactions,
@@ -140,6 +141,25 @@ describe("resolveDedupHashes (déflaggage de doublon)", () => {
       existing,
     );
     expect(new Set(out).size).toBe(2);
+  });
+});
+
+describe("parseAmountInput (montant format fr)", () => {
+  it("accepte la virgule décimale et le signe", () => {
+    expect(parseAmountInput("-5,50")).toBe(-5.5);
+    expect(parseAmountInput("5,50")).toBe(5.5);
+    expect(parseAmountInput("1 234,56")).toBe(1234.56);
+    expect(parseAmountInput("1 234,56 €")).toBe(1234.56);
+  });
+  it("accepte le point décimal et les nombres", () => {
+    expect(parseAmountInput("-5.5")).toBe(-5.5);
+    expect(parseAmountInput(42)).toBe(42);
+  });
+  it("renvoie NaN pour une saisie non numérique/incomplète", () => {
+    expect(Number.isNaN(parseAmountInput(""))).toBe(true);
+    expect(Number.isNaN(parseAmountInput("-"))).toBe(true);
+    expect(Number.isNaN(parseAmountInput("abc"))).toBe(true);
+    expect(Number.isNaN(parseAmountInput(null))).toBe(true);
   });
 });
 

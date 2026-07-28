@@ -84,9 +84,12 @@ export function TransactionFilters({
   }
 
   function commitAmount(key: "amin" | "amax", raw: string) {
-    const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+    // Filtre par magnitude (les dépenses sont stockées négatives) : on tolère le
+    // signe pour pouvoir taper le montant tel qu'il s'affiche (« -49,80 ») — la
+    // valeur absolue est appliquée.
+    const cleaned = raw.replace(/[\s€]/g, "").replace(",", ".");
     const n = Number(cleaned);
-    const value = cleaned && Number.isFinite(n) && n >= 0 ? String(n) : "";
+    const value = cleaned && Number.isFinite(n) ? String(Math.abs(n)) : "";
     if ((params.get(key) ?? "") !== value) setParam(key, value);
   }
 

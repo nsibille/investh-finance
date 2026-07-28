@@ -86,6 +86,13 @@ function PurchaseEditLoader({
     };
   }, [id]);
 
+  // Recharge le contenu (échéancier + stats) sans fermer la modale, après
+  // ajout/suppression d'une échéance.
+  async function reload() {
+    const res = await getPurchaseEditData(id);
+    if (res) setData(res);
+  }
+
   if (!data) {
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-6)" }}>
@@ -105,7 +112,9 @@ function PurchaseEditLoader({
           merchantOptions={merchantOptions}
           parentOptions={data.parentOptions}
           attachedTransactionCount={data.attachedTransactionCount}
-          installmentsEditor={<InstallmentEditor purchase={data.purchase} />}
+          installmentsEditor={
+            <InstallmentEditor purchase={data.purchase} onChanged={reload} />
+          }
           onDone={onDone}
         />
       </div>

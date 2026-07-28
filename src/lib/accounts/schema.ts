@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseAmountInput } from "@/lib/format/amount";
 
 export const accountSchema = z.object({
   name: z
@@ -21,9 +22,11 @@ export const accountSchema = z.object({
     .max(120, "120 caractères maximum")
     .optional()
     .or(z.literal("")),
-  initial_balance: z.coerce
-    .number({ message: "Montant invalide" })
-    .finite("Montant invalide"),
+  // Montant fr accepté (« -5,50 », « 1 234,56 € ») ; vide ⇒ 0.
+  initial_balance: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : parseAmountInput(v)),
+    z.number({ message: "Montant invalide" }).finite("Montant invalide"),
+  ),
   initial_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide"),

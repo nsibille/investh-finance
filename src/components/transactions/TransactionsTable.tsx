@@ -222,21 +222,7 @@ export function TransactionsTable({
 
                 {/* — Catégorie — */}
                 <td data-col="category">
-                  {r.categoryLocked ? (
-                    <span className="tx-cat" data-locked title={cat?.full}>
-                      {cat ? (
-                        <>
-                          <span className="badge-dot" style={{ ["--dot-color" as string]: opt?.categoryColor ?? undefined }} aria-hidden />
-                          {cat.path && <span className="tx-cat__path">{cat.path} /</span>}
-                          <span className="tx-cat__leaf">{cat.leaf}</span>
-                        </>
-                      ) : (
-                        <span className="tx-cat__leaf" style={{ color: "var(--color-text-muted)" }}>
-                          Catégorie de l&apos;achat
-                        </span>
-                      )}
-                    </span>
-                  ) : editing === r.key ? (
+                  {editing === r.key ? (
                     <CategoryInlineEditor
                       options={subcategoryOptions}
                       value={r.categoryId}

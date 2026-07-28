@@ -595,7 +595,6 @@ export function StatementImport({
         amount: r.amount,
         currency: r.currency,
         categoryId: r.categoryId,
-        categoryLocked: Boolean(r.purchaseId),
         purchase: r.purchaseId
           ? {
               id: r.purchaseId,

@@ -36,8 +36,6 @@ export interface EditorRowVM {
   amount: number;
   currency: string;
   categoryId: string | null;
-  /** Catégorie héritée d'un achat : sélecteur en lecture seule. */
-  categoryLocked?: boolean;
   purchase?: {
     id: string;
     name: string;
@@ -303,11 +301,7 @@ export function TransactionEditorTable({
               </td>
 
               <td data-col="category">
-                {r.categoryLocked ? (
-                  <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                    {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Catégorie de l'achat"}
-                  </span>
-                ) : editing === r.key ? (
+                {editing === r.key ? (
                   <CategoryInlineEditor
                     options={subcategoryOptions}
                     value={r.categoryId}

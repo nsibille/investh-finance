@@ -121,6 +121,22 @@ export async function setTransactionStatus(
   });
 }
 
+/**
+ * Supprime définitivement une transaction. Les dépendances sont gérées par la
+ * base (FK) : pièces jointes, partages et tags sont supprimés en cascade ; les
+ * échéances d'achat, remboursements et règles créées depuis la transaction sont
+ * simplement détachés (SET NULL).
+ */
+export async function deleteTransaction(id: string): Promise<ActionResult> {
+  return guard("deleteTransaction", async () => {
+    const supabase = await createClient();
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    if (error) return fail(error.message);
+    revalidate();
+    return { ok: true };
+  });
+}
+
 export async function updateTransactionNote(
   id: string,
   note: string,

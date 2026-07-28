@@ -518,6 +518,8 @@ Utilitaire d'interaction pour un nom d'entité cliquable (enseigne, récurrente)
 ### `modal-entity-detail` + panneau stats `ms-*`
 Variante élargie (`max-width: 940px`) de `modal-surface` pour le détail d'une **entité** (enseigne, achat) : grille 2 colonnes générique (`entity-detail-layout`) avec le formulaire d'édition à gauche et le panneau statistiques à droite (empilées sous 820px). Le panneau `ms-*` (famille partagée) regroupe : en-tête (`ms-head`), héro (`ms-hero`, + barre `ms-progress` pour un achat), grille de KPIs (`ms-kpi`), fun facts (`ms-funfact`), un graphe temporel, listes compactes (`ms-list` : échéances à venir, transactions rattachées, personnes) et répartition (`ms-cat`). Graphes : `chart-merchant-spend` (enseigne) / `chart-purchase-timeline` (achat, payé vs à venir). Fonds/bordures via tokens (compatibles dark).
 
+**Variante `recurring-detail-layout`** (modale d'édition d'une récurrente, `RecurringEditModal`) : même modale élargie mais colonnes **inversées** — panneau stats `ms-*` à **gauche** (`recurring-detail-layout__stats`, bordure droite), formulaire à droite. Le panneau réutilise la famille `ms-*` : héro « Cumul payé », KPIs (versement moyen, coût/an, prochaine échéance, fréquence), fun facts (dérive de prix, ancienneté), graphe `chart-merchant-spend` des derniers versements. Implémentation : `src/components/recurring/RecurringStatsPanel.tsx`. Le formulaire remplace le motif texte par une **liste de motifs** éditable (une ligne = un `input-text-md` mono + croix, bouton « Ajouter un motif »).
+
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
 ```css
@@ -1276,6 +1278,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
 | `modal-entity-detail` | Modal | Variante élargie détail entité — enseigne/achat (form + stats) | auto |
 | `entity-detail-layout` | Layout | Grille 2 colonnes form/stats de la modale de détail | auto |
+| `recurring-detail-layout` | Layout | Variante inversée (stats à gauche) — modale récurrente | auto |
 | `merchant-stats-panel` | Métier | Panneau stats (KPIs, fun facts, graphe, listes) — famille `ms-*`, partagé enseigne/achat | auto |
 | `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |

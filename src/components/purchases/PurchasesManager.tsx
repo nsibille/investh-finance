@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -23,6 +23,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Modal } from "@/components/ui/Modal";
+import { SearchInput } from "@/components/ui/Input";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Alert } from "@/components/ui/Alert";
@@ -38,6 +39,7 @@ import {
   setPurchaseParent,
   setPurchaseSettled,
 } from "@/server/actions/purchases";
+import { matchesQuery } from "@/lib/search/filter";
 import type {
   PurchaseWithDetails,
   PurchaseParentOption,
@@ -69,8 +71,49 @@ export function PurchasesManager({
   const [modal, setModal] = useState<ModalState>(null);
   const [toDelete, setToDelete] = useState<PurchaseWithDetails | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState("");
 
   const archivedCount = purchases.filter((p) => p.is_archived).length;
+
+  // Recherche : nom, description, catégorie et enseigne de l'achat. On conserve
+  // la connectivité de l'arbre — un achat matché tire ses parents et ses
+  // sous-achats pour que le groupe reste lisible. `null` ⇒ pas de recherche.
+  const queryVisible = useMemo(() => {
+    if (!query.trim()) return null;
+    const byId = new Map(purchases.map((p) => [p.id, p]));
+    const childrenMap = new Map<string, string[]>();
+    for (const p of purchases) {
+      if (!p.parent_id) continue;
+      const list = childrenMap.get(p.parent_id) ?? [];
+      list.push(p.id);
+      childrenMap.set(p.parent_id, list);
+    }
+    const keep = new Set<string>();
+    const addDescendants = (id: string) => {
+      for (const childId of childrenMap.get(id) ?? []) {
+        if (keep.has(childId)) continue;
+        keep.add(childId);
+        addDescendants(childId);
+      }
+    };
+    for (const p of purchases) {
+      const hit = matchesQuery(query, [
+        p.name,
+        p.description,
+        p.categoryLabel,
+        p.merchantName,
+      ]);
+      if (!hit) continue;
+      keep.add(p.id);
+      let parentId = p.parent_id;
+      while (parentId) {
+        keep.add(parentId);
+        parentId = byId.get(parentId)?.parent_id ?? null;
+      }
+      addDescendants(p.id);
+    }
+    return keep;
+  }, [purchases, query]);
 
   // Options « groupe parent » pour le formulaire (tous les achats).
   const parentOptions: PurchaseParentOption[] = purchases.map((p) => ({
@@ -82,7 +125,11 @@ export function PurchasesManager({
 
   // Arborescence à afficher. Un achat dont le parent est masqué remonte à la
   // racine (il ne disparaît pas).
-  const shown = purchases.filter((p) => showArchived || !p.is_archived);
+  const shown = purchases.filter(
+    (p) =>
+      (showArchived || !p.is_archived) &&
+      (queryVisible === null || queryVisible.has(p.id)),
+  );
   const shownIds = new Set(shown.map((p) => p.id));
   const childrenOf = new Map<string, PurchaseWithDetails[]>();
   for (const p of shown) {
@@ -302,6 +349,15 @@ export function PurchasesManager({
 
   return (
     <>
+      <div style={{ marginBottom: "var(--space-4)", maxWidth: 360 }}>
+        <SearchInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Rechercher un achat, une enseigne…"
+          style={{ width: "100%" }}
+        />
+      </div>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-5)" }}>
         <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", visibility: archivedCount > 0 ? "visible" : "hidden" }}>
           <Checkbox checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
@@ -335,7 +391,15 @@ export function PurchasesManager({
         </div>
       </div>
 
-      {roots.length === 0 ? (
+      {roots.length === 0 && queryVisible !== null ? (
+        <Card>
+          <EmptyState
+            icon={ShoppingBag}
+            title="Aucun résultat"
+            description={`Aucun achat ne correspond à « ${query} ».`}
+          />
+        </Card>
+      ) : roots.length === 0 ? (
         <Card>
           <EmptyState
             icon={ShoppingBag}

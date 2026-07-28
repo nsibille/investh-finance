@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronDown,
   SlidersHorizontal,
+  GripVertical,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -31,7 +32,7 @@ import { RuleImport } from "@/components/rules/RuleImport";
 import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
 import { groupByCategory, preciseSubName } from "@/lib/categories/group";
 import { deleteMerchant, addMerchantRule } from "@/server/actions/merchants";
-import { deleteRule } from "@/server/actions/rules";
+import { deleteRule, moveRuleToMerchant } from "@/server/actions/rules";
 import { matchesQuery } from "@/lib/search/filter";
 import type { MerchantWithDetails, MerchantRule } from "@/lib/merchants/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -79,10 +80,16 @@ function RuleEditor({
   merchant,
   onEditMotif,
   onCreateMotif,
+  draggingRuleId,
+  onRuleDragStart,
+  onRuleDragEnd,
 }: {
   merchant: MerchantWithDetails;
   onEditMotif: (rule: MerchantRule) => void;
   onCreateMotif: () => void;
+  draggingRuleId: string | null;
+  onRuleDragStart: (rule: MerchantRule) => void;
+  onRuleDragEnd: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -124,7 +131,30 @@ function RuleEditor({
       {merchant.rules.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
           {merchant.rules.map((r) => (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", opacity: r.is_active ? 1 : 0.5 }}>
+            <div
+              key={r.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", r.id);
+                onRuleDragStart(r);
+              }}
+              onDragEnd={onRuleDragEnd}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-2)",
+                fontSize: "var(--text-sm)",
+                opacity: draggingRuleId === r.id ? 0.4 : r.is_active ? 1 : 0.5,
+              }}
+            >
+              <span
+                aria-hidden
+                title="Glisser vers une autre enseigne"
+                style={{ display: "inline-flex", color: "var(--color-text-muted)", cursor: "grab", flexShrink: 0 }}
+              >
+                <GripVertical size={13} />
+              </span>
               <Wand2 size={13} aria-hidden style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
               <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", wordBreak: "break-all" }}>
                 {MATCH_LABEL[r.match_type]} « {r.pattern} »
@@ -206,6 +236,13 @@ export function MerchantsManager({
   const [toDelete, setToDelete] = useState<MerchantWithDetails | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  // Drag & drop : déplacement d'un motif d'une enseigne vers une autre.
+  // `overMerchant` = enseigne cible survolée (indicateur visuel).
+  const [dragRule, setDragRule] = useState<{
+    ruleId: string;
+    sourceMerchantId: string;
+  } | null>(null);
+  const [overMerchant, setOverMerchant] = useState<string | null>(null);
 
   const preciseNames = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, preciseSubName(o)])),
@@ -257,6 +294,21 @@ export function MerchantsManager({
     });
   }
 
+  async function handleMoveRule(targetMerchantId: string) {
+    const drag = dragRule;
+    setDragRule(null);
+    setOverMerchant(null);
+    if (!drag || drag.sourceMerchantId === targetMerchantId) return;
+    const res = await moveRuleToMerchant(drag.ruleId, targetMerchantId);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(
+      res.moved > 0
+        ? `Motif déplacé · ${res.moved} transaction(s) mise(s) à jour`
+        : "Motif déplacé",
+    );
+    router.refresh();
+  }
+
   async function handleDelete() {
     if (!toDelete) return;
     const target = toDelete;
@@ -297,9 +349,37 @@ export function MerchantsManager({
             const isOpen = expanded.has(m.id);
             const label = displayName(m);
             const summary = label ? null : rulesSummary(m.rules);
+            const isDropTarget =
+              dragRule !== null && dragRule.sourceMerchantId !== m.id;
             return (
               <Fragment key={m.id}>
-                <tr>
+                <tr
+                  onDragOver={(e) => {
+                    if (isDropTarget) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setOverMerchant(m.id);
+                    }
+                  }}
+                  onDragLeave={() =>
+                    setOverMerchant((o) => (o === m.id ? null : o))
+                  }
+                  onDrop={(e) => {
+                    if (isDropTarget) {
+                      e.preventDefault();
+                      handleMoveRule(m.id);
+                    }
+                  }}
+                  style={
+                    overMerchant === m.id
+                      ? {
+                          background: "var(--color-brand-primary-50)",
+                          outline: "2px dashed var(--color-brand-primary)",
+                          outlineOffset: -2,
+                        }
+                      : undefined
+                  }
+                >
                   <td>
                     <IconButton
                       label={isOpen ? "Replier" : "Déplier"}
@@ -369,6 +449,14 @@ export function MerchantsManager({
                         merchant={m}
                         onEditMotif={(rule) => setMotifModal({ mode: "edit", merchant: m, rule })}
                         onCreateMotif={() => setMotifModal({ mode: "create", merchant: m })}
+                        draggingRuleId={dragRule?.ruleId ?? null}
+                        onRuleDragStart={(rule) =>
+                          setDragRule({ ruleId: rule.id, sourceMerchantId: m.id })
+                        }
+                        onRuleDragEnd={() => {
+                          setDragRule(null);
+                          setOverMerchant(null);
+                        }}
                       />
                     </td>
                   </tr>

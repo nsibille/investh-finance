@@ -19,11 +19,12 @@ import { getPurchaseOptions } from "@/lib/purchases/queries";
 import { getMerchantOptions } from "@/lib/merchants/queries";
 import { getRecurringOptions } from "@/lib/recurring/queries";
 import { getPersonOptions } from "@/lib/persons/queries";
-import type { TransactionStatus } from "@/lib/transactions/types";
+import type { TransactionStatus, TransactionFlow } from "@/lib/transactions/types";
 
 export const dynamic = "force-dynamic";
 
 const STATUSES = ["pending", "validated", "ignored"] as const;
+const FLOWS = ["income", "expense", "investment"] as const;
 
 export default async function TransactionsPage({
   searchParams,
@@ -33,6 +34,9 @@ export default async function TransactionsPage({
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status as TransactionStatus)
     ? (sp.status as TransactionStatus)
+    : undefined;
+  const flow = FLOWS.includes(sp.flow as TransactionFlow)
+    ? (sp.flow as TransactionFlow)
     : undefined;
   const parseList = (v?: string) => (v ? v.split(",").filter(Boolean) : undefined);
   // Filtre par magnitude : on accepte un montant signé (tel qu'affiché) et on
@@ -45,6 +49,7 @@ export default async function TransactionsPage({
   const filters = {
     accountId: sp.account,
     status,
+    flow,
     subcategoryId: sp.subcategory,
     merchantIds: parseList(sp.merchant),
     purchaseIds: parseList(sp.purchase),

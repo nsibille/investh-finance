@@ -59,6 +59,9 @@ export const getCategoryTree = cache(async function getCategoryTree(): Promise<
 /** Slug du type réservé aux virements internes (exclu des KPIs revenus/dépenses). */
 export const TRANSFER_TYPE_SLUG = "virements";
 
+/** Slug du type « Investissements » : distingué des dépenses dans les KPIs. */
+export const INVESTMENT_TYPE_SLUG = "investissements";
+
 /**
  * Ids des sous-catégories de virement interne, dérivés de l'arbre (en cache).
  * Servent à exclure les virements des agrégats revenus/dépenses (ils ne sont

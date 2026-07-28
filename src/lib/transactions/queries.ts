@@ -1,6 +1,10 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getCategoryTree } from "@/lib/categories/queries";
+import {
+  getCategoryTree,
+  INVESTMENT_TYPE_SLUG,
+  TRANSFER_TYPE_SLUG,
+} from "@/lib/categories/queries";
 import { installmentOccurrence } from "@/lib/purchases/installments";
 import type { TransactionShare } from "@/lib/persons/types";
 import type {
@@ -9,6 +13,7 @@ import type {
   TransactionFilters,
   TransactionsPage,
   TransactionsSummary,
+  TransactionFlow,
   CategoryDisplay,
   AccountDisplay,
 } from "./types";
@@ -63,6 +68,7 @@ export const getCategoryDisplayMap = cache(async function getCategoryDisplayMap(
           subcategoryName: sub.name,
           categoryName: cat.name,
           typeName: type.name,
+          typeSlug: type.slug,
           color: cat.color ?? type.color ?? null,
           isIncome: type.is_income,
         });
@@ -113,15 +119,38 @@ function enrich(
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
+/** UUID nul : cible impossible pour forcer un `in` vide à ne rien matcher. */
+const NO_MATCH_UUID = "00000000-0000-0000-0000-000000000000";
+
+/** Sens du flux d'une catégorie (revenu / dépense / investissement), ou null
+ * pour les catégories neutres (virements internes) et les non catégorisées. */
+function flowOf(display: CategoryDisplay | null | undefined): TransactionFlow | null {
+  if (!display) return null;
+  if (display.isIncome) return "income";
+  if (display.typeSlug === INVESTMENT_TYPE_SLUG) return "investment";
+  if (display.typeSlug === TRANSFER_TYPE_SLUG) return null;
+  return "expense";
+}
+
+/** Sous-catégories appartenant à un flux donné (pour filtrer le listing). */
+async function flowSubcategoryIds(flow: TransactionFlow): Promise<string[]> {
+  const map = await getCategoryDisplayMap();
+  const ids: string[] = [];
+  for (const [id, display] of map) if (flowOf(display) === flow) ids.push(id);
+  return ids;
+}
+
 /**
  * Construit la requête `transactions` avec tous les prédicats de filtrage (mais
  * sans tri ni pagination). Partagé par le listing paginé et l'agrégat d'en-tête
  * pour garantir que les KPIs portent exactement sur le même jeu que la liste.
+ * `flowIds` restreint aux sous-catégories d'un flux (revenu/dépense/investi).
  */
 function filteredTransactionsQuery(
   supabase: SupabaseServerClient,
   columns: string,
   filters: TransactionFilters,
+  flowIds?: string[] | null,
 ) {
   let query = supabase
     .from("transactions")
@@ -135,6 +164,10 @@ function filteredTransactionsQuery(
     query = query.in("merchant_id", filters.merchantIds);
   if (filters.purchaseIds?.length)
     query = query.in("purchase_id", filters.purchaseIds);
+  // Flux (revenu/dépense/investissement) : restreint aux sous-catégories du flux
+  // (UUID nul si aucune, pour ne rien renvoyer plutôt que tout).
+  if (flowIds)
+    query = query.in("subcategory_id", flowIds.length ? flowIds : [NO_MATCH_UUID]);
   // Montant filtré en valeur absolue : les dépenses sont stockées négatives, on
   // veut « entre 10 et 50 € » qu'il s'agisse d'un débit ou d'un crédit.
   const { amountMin: aMin, amountMax: aMax } = filters;
@@ -160,44 +193,61 @@ function filteredTransactionsQuery(
 }
 
 /**
- * Agrège le jeu filtré complet (toutes pages) pour l'en-tête du listing : total
- * dépenses/revenus, solde net et nombre d'opérations. Les montants excluent les
- * opérations « ignorées » (non suivies). Parcouru par tranches pour rester juste
- * quel que soit le nombre de lignes.
+ * Agrège le jeu filtré complet (toutes pages) pour l'en-tête du listing :
+ * revenus, dépensé, investi (classés par TYPE de catégorie, pas par signe),
+ * solde net budgétaire et nombre d'opérations. Ignore volontairement le filtre
+ * `flow` (les KPIs restent une vue d'ensemble stable, cible du clic). Les
+ * opérations ignorées ne comptent dans aucun total. Parcouru par tranches pour
+ * rester juste quel que soit le nombre de lignes.
  */
 export async function getTransactionsSummary(
   filters: TransactionFilters,
 ): Promise<TransactionsSummary> {
   const supabase = await createClient();
+  const categories = await getCategoryDisplayMap();
   const CHUNK = 1000;
   let offset = 0;
   let count = 0;
-  let totalExpense = 0;
   let totalIncome = 0;
+  let totalExpense = 0;
+  let totalInvested = 0;
 
   for (;;) {
-    // Tri stable (id) indispensable pour paginer sans doublon ni saut.
+    // Tri stable (id) indispensable pour paginer sans doublon ni saut. Le flux
+    // n'est pas appliqué ici : la vue d'ensemble couvre les trois catégories.
     const { data, count: c } = await filteredTransactionsQuery(
       supabase,
-      "amount, status",
+      "amount, status, subcategory_id",
       filters,
     )
       .order("id", { ascending: true })
       .range(offset, offset + CHUNK - 1);
 
     if (c != null) count = c;
-    const rows = (data ?? []) as unknown as { amount: number; status: string }[];
+    const rows = (data ?? []) as unknown as {
+      amount: number;
+      status: string;
+      subcategory_id: string | null;
+    }[];
     for (const r of rows) {
       if (r.status === "ignored") continue;
       const amount = Number(r.amount);
-      if (amount < 0) totalExpense += -amount;
-      else totalIncome += amount;
+      const flow = flowOf(r.subcategory_id ? categories.get(r.subcategory_id) : null);
+      if (flow === "income") totalIncome += amount;
+      else if (flow === "expense") totalExpense += -amount;
+      else if (flow === "investment") totalInvested += -amount;
     }
     if (rows.length < CHUNK) break;
     offset += CHUNK;
   }
 
-  return { count, totalExpense, totalIncome, net: totalIncome - totalExpense };
+  return {
+    count,
+    totalIncome,
+    totalExpense,
+    totalInvested,
+    net: totalIncome - totalExpense - totalInvested,
+  };
 }
 
 export async function getTransactionsPage(
@@ -207,7 +257,8 @@ export async function getTransactionsPage(
   const page = Math.max(1, filters.page ?? 1);
   const perPage = filters.perPage ?? DEFAULT_PER_PAGE;
 
-  let query = filteredTransactionsQuery(supabase, LIST_COLUMNS, filters);
+  const flowIds = filters.flow ? await flowSubcategoryIds(filters.flow) : null;
+  let query = filteredTransactionsQuery(supabase, LIST_COLUMNS, filters, flowIds);
 
   switch (filters.sort) {
     case "date_asc":

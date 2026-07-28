@@ -849,6 +849,26 @@ body {
 .card-kpi-solde { border-top: 3px solid var(--color-brand-primary); }
 .card-kpi-epargne { border-top: 3px solid var(--color-finance-investissement); }
 
+/* KPI cliquable (bandeau listing) : filtre sur un flux au clic. */
+.kpi-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+.kpi-link .card-kpi {
+  height: 100%;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.kpi-link:hover .card-kpi { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.kpi-link:focus-visible { outline: none; }
+.kpi-link:focus-visible .card-kpi { box-shadow: var(--shadow-focus); }
+.kpi-link[data-active] .card-kpi {
+  box-shadow: inset 0 0 0 1.5px var(--color-brand-primary);
+  background: var(--color-brand-primary-50);
+}
+
 .card-account,
 .card-account-mini {
   background: var(--color-bg-surface);

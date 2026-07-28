@@ -10,6 +10,8 @@ export interface CategoryDisplay {
   subcategoryName: string;
   categoryName: string;
   typeName: string;
+  /** Slug du type (ex. « investissements », « virements ») pour classer le flux. */
+  typeSlug: string;
   color: string | null;
   isIncome: boolean;
 }
@@ -86,6 +88,8 @@ export interface TransactionFilters {
   search?: string;
   from?: string;
   to?: string;
+  /** Restreint aux catégories d'un flux : revenu / dépense / investissement. */
+  flow?: TransactionFlow;
   sort?: "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
   page?: number;
   perPage?: number;
@@ -98,18 +102,25 @@ export interface TransactionsPage {
   perPage: number;
 }
 
+/** Sens d'un flux, pour distinguer revenus / dépenses / investissements. */
+export type TransactionFlow = "income" | "expense" | "investment";
+
 /**
  * Agrégats du jeu filtré complet (toutes pages), pour l'en-tête du listing.
- * Les montants excluent les opérations « ignorées » (non suivies) ; `count`
- * reflète en revanche l'ensemble affiché (aligné sur la pagination).
+ * Les montants sont classés par TYPE de catégorie (pas par signe) afin que
+ * chaque KPI corresponde exactement au filtre déclenché au clic. Les opérations
+ * ignorées, les virements internes et les non catégorisées ne comptent dans
+ * aucun des trois flux. `count` reflète l'ensemble affiché (aligné pagination).
  */
 export interface TransactionsSummary {
   /** Nombre total d'opérations du set filtré (ignorées incluses). */
   count: number;
-  /** Somme des débits, en valeur absolue (hors ignorées). */
-  totalExpense: number;
-  /** Somme des crédits (hors ignorées). */
+  /** Revenus : catégories de type « revenu » (hors ignorées). */
   totalIncome: number;
-  /** Solde net = crédits − débits (hors ignorées). */
+  /** Dépensé : catégories de dépense hors investissements et virements. */
+  totalExpense: number;
+  /** Investi : catégories du type « Investissements ». */
+  totalInvested: number;
+  /** Solde net budgétaire = revenus − dépensé − investi. */
   net: number;
 }

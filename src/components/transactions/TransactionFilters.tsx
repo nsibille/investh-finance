@@ -19,6 +19,12 @@ const STATUS_LABELS: Record<string, string> = {
   ignored: "Ignorées",
 };
 
+const FLOW_LABELS: Record<string, string> = {
+  income: "Revenus",
+  expense: "Dépensé",
+  investment: "Investi",
+};
+
 const parseList = (v: string | null): string[] =>
   v ? v.split(",").filter(Boolean) : [];
 
@@ -142,6 +148,13 @@ export function TransactionFilters({
       key: "status",
       label: STATUS_LABELS[status] ?? status,
       onRemove: () => setParam("status", ""),
+    });
+  const flow = params.get("flow");
+  if (flow && FLOW_LABELS[flow])
+    chips.push({
+      key: "flow",
+      label: FLOW_LABELS[flow],
+      onRemove: () => setParam("flow", ""),
     });
   const subcategory = params.get("subcategory");
   if (subcategory)

@@ -636,6 +636,9 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 .card-kpi__delta[data-direction="down"] { color: var(--color-danger); }
 ```
 
+#### `kpi-link` (KPI cliquable)
+Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Hover : `shadow-md` + léger `translateY(-1px)` ; actif (`[data-active]`) : anneau intérieur `--color-brand-primary` + fond `--color-brand-primary-50`. Utilisé par le **bandeau KPI du listing transactions** (`TransactionsSummaryBar`) : cartes Revenus / Dépensé / Investi (classées par type de catégorie, hors virements internes) cliquables → filtre `flow` (bascule, autres filtres conservés) ; Solde net budgétaire (`revenus − dépensé − investi`) et compteur d'opérations non cliquables. La vue d'ensemble reste stable quel que soit le flux sélectionné (drill-down sur la liste seule).
+
 ### `card-account`
 **Card compte bancaire** : `avatar-account-md` + nom + type + solde courant + `badge-count` (pending).
 

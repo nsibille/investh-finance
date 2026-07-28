@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Store, Repeat, Unlink } from "lucide-react";
+import { Check, Ban, RotateCcw, Wand2, ShoppingBag, Store, Repeat, Unlink, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Amount } from "@/components/ui/Amount";
 import { StatusBadge, Dot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
@@ -25,6 +26,7 @@ import {
   setTransactionStatus,
   validateTransaction,
   updateTransactionNote,
+  deleteTransaction,
 } from "@/server/actions/transactions";
 import { detachTransaction } from "@/server/actions/purchases";
 import {
@@ -91,10 +93,23 @@ export function TransactionDetail({
   const [ruleOpen, setRuleOpen] = useState(false);
   // Enseigne à rattacher par la règle créée (null = règle de catégorie simple).
   const [ruleMerchant, setRuleMerchant] = useState<{ id: string; name: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function openRule(merchant: { id: string; name: string } | null) {
     setRuleMerchant(merchant);
     setRuleOpen(true);
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const res = await deleteTransaction(tx.id);
+    if (!res.ok) {
+      setDeleting(false);
+      return toast.error(res.error);
+    }
+    toast.success("Transaction supprimée");
+    router.push("/transactions");
   }
 
   async function changeCategory(subId: string | null) {
@@ -460,9 +475,40 @@ export function TransactionDetail({
             <Button variant="ghost" leftIcon={<Wand2 size={16} />} onClick={() => openRule(tx.merchant ?? null)}>
               Créer une règle
             </Button>
+            <Button
+              variant="danger"
+              leftIcon={<Trash2 size={16} />}
+              onClick={() => setConfirmDelete(true)}
+              style={{ marginLeft: "auto" }}
+            >
+              Supprimer
+            </Button>
           </div>
         </div>
       </Card>
+
+      <Modal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Supprimer la transaction ?"
+        variantClass="modal-confirm-danger"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+              Annuler
+            </Button>
+            <Button variant="danger" onClick={handleDelete} loading={deleting}>
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <Alert variant="warning">
+          Cette transaction sera supprimée définitivement. Ses pièces jointes,
+          partages et tags le seront aussi ; les échéances d&apos;achat et
+          remboursements associés seront détachés. Action irréversible.
+        </Alert>
+      </Modal>
 
       <Modal open={ruleOpen} onClose={() => setRuleOpen(false)} title="Créer une règle depuis ce libellé">
         <RuleSuggestionForm

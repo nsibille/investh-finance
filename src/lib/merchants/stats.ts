@@ -29,6 +29,8 @@ export interface MerchantStats {
   purchaseCount: number;
   firstDate: string | null;
   lastDate: string | null;
+  /** Plus grosse dépense unique (débit) et sa date. */
+  maxSpend: { amount: number; date: string } | null;
   /** Dépense mensuelle moyenne sur la période d'activité. */
   avgMonthly: number;
   /** Série chronologique des 12 derniers mois (mois vides inclus). */
@@ -96,6 +98,7 @@ export async function getMerchantStats(
   let netAmount = 0;
   let firstDate: string | null = null;
   let lastDate: string | null = null;
+  let maxSpend: { amount: number; date: string } | null = null;
   const byMonth = new Map<string, number>();
   const byCat = new Map<string, MerchantCategorySlice>();
 
@@ -107,6 +110,9 @@ export async function getMerchantStats(
 
     if (!firstDate || t.operation_date < firstDate) firstDate = t.operation_date;
     if (!lastDate || t.operation_date > lastDate) lastDate = t.operation_date;
+    if (spend > 0 && (!maxSpend || spend > maxSpend.amount)) {
+      maxSpend = { amount: spend, date: t.operation_date };
+    }
 
     if (spend > 0) {
       const month = t.operation_date.slice(0, 7);
@@ -155,6 +161,7 @@ export async function getMerchantStats(
     purchaseCount: purchaseCount ?? 0,
     firstDate,
     lastDate,
+    maxSpend,
     avgMonthly: totalSpent / span,
     monthly,
     categories: [...byCat.values()].sort((a, b) => b.amount - a.amount),

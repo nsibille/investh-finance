@@ -1107,6 +1107,11 @@ body {
 .tx-meta--recurring { color: var(--color-brand-primary-600); }
 button.tx-meta--persons { color: var(--color-brand-primary-600); cursor: pointer; }
 button.tx-meta--persons:hover { text-decoration: underline; }
+
+/* Flag cliquable (nom d'enseigne / de récurrente) : main + soulignement au
+   survol pour signaler qu'on peut cliquer pour éditer l'entité. */
+.flag-editable { cursor: pointer; }
+.flag-editable:hover { text-decoration: underline; text-underline-offset: 2px; }
 .tx-meta__x {
   display: inline-flex; align-items: center; background: none; border: none;
   padding: 0; color: var(--color-text-muted); cursor: pointer; flex-shrink: 0;

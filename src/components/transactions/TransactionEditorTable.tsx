@@ -191,9 +191,10 @@ export function TransactionEditorTable({
                       <Repeat size={12} aria-hidden />
                       <button
                         type="button"
+                        className="flag-editable"
                         title="Modifier la récurrente"
                         onClick={() => setEditRecurringId(r.recurring!.id)}
-                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer" }}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
                       >
                         Récurrent · {r.recurring.name}
                       </button>
@@ -217,13 +218,14 @@ export function TransactionEditorTable({
                           Changer d'enseigne = détacher (croix) puis en ré-ajouter. */}
                       <button
                         type="button"
+                        className="flag-editable"
                         title={
                           r.merchant.locked
                             ? "Enseigne imposée par l'achat — modifier ses paramètres"
                             : "Modifier l'enseigne"
                         }
                         onClick={() => setEditMerchantId(r.merchant!.id)}
-                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)" }}
                       >
                         {r.merchant.name}
                       </button>

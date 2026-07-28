@@ -508,6 +508,13 @@ Idem avec `--color-warning-light` / `--color-warning-dark` (import preview, doub
 ### `badge-status-forced`
 Idem avec `--color-brand-primary-50` / `--color-brand-primary-700` (import preview, doublon déjà en base déflagué manuellement : sera importé via une occurrence libre). Libellé « Ré-inclus ».
 
+### `flag-editable`
+Utilitaire d'interaction pour un nom d'entité cliquable (enseigne, récurrente) affiché sous une transaction. Signale l'action d'édition : curseur main + soulignement au survol.
+```css
+.flag-editable { cursor: pointer; }
+.flag-editable:hover { text-decoration: underline; text-underline-offset: 2px; }
+```
+
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
 ```css
@@ -1240,6 +1247,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `file-dropzone-mini` | Métier | Zone upload justificatif | auto |
 | `filter-amount-range` | Form | Range de montant (2 champs devise min/max) | auto |
 | `filter-chips` | Métier | Barre de filtres actifs retirables | auto |
+| `flag-editable` | Interaction | Nom d'enseigne/récurrente cliquable (curseur main + soulignement au survol) | auto |
 | `form-error-msg` | Form | Message erreur sous un champ | auto |
 | `form-field` | Form | Wrapper label+input+erreur | auto |
 | `form-help-text` | Form | Texte d'aide sous un champ | auto |

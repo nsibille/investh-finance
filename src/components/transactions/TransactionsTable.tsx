@@ -171,10 +171,10 @@ export function TransactionsTable({
                           <Repeat size={12} aria-hidden />
                           <button
                             type="button"
-                            className="tx-meta__text"
+                            className="tx-meta__text flag-editable"
                             title="Modifier la récurrente"
                             onClick={() => setEditRecurringId(r.recurring!.id)}
-                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer" }}
+                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
                           >
                             {r.recurring.name}
                           </button>

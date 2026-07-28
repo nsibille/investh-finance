@@ -213,8 +213,10 @@ function filteredTransactionsQuery(
   } else if (aMax != null) {
     query = query.gte("amount", -aMax).lte("amount", aMax);
   }
-  if (filters.from) query = query.gte("operation_date", filters.from);
-  if (filters.to) query = query.lte("operation_date", filters.to);
+  // Filtrage par date de rattachement comptable (revenus de fin de mois → mois
+  // suivant), pour rester raccord au dashboard.
+  if (filters.from) query = query.gte("accounting_date", filters.from);
+  if (filters.to) query = query.lte("accounting_date", filters.to);
   if (filters.search) {
     query = query.textSearch("search_vector", filters.search, {
       type: "websearch",
@@ -302,9 +304,10 @@ export async function getTransactionsPage(
     restrictSubIds,
   });
 
+  // Tri par date : on suit la date de rattachement comptable (raccord dashboard).
   switch (filters.sort) {
     case "date_asc":
-      query = query.order("operation_date", { ascending: true });
+      query = query.order("accounting_date", { ascending: true });
       break;
     case "amount_desc":
       query = query.order("amount", { ascending: false });
@@ -313,7 +316,7 @@ export async function getTransactionsPage(
       query = query.order("amount", { ascending: true });
       break;
     default:
-      query = query.order("operation_date", { ascending: false });
+      query = query.order("accounting_date", { ascending: false });
   }
   query = query.order("created_at", { ascending: false });
   // Départage final : `operation_date`/`created_at` ne sont pas uniques (un

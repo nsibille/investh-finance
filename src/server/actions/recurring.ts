@@ -23,7 +23,7 @@ type RecurringRow =
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-function fail(m: string): ActionResult {
+function fail(m: string): { ok: false; error: string } {
   return { ok: false, error: m };
 }
 
@@ -65,10 +65,45 @@ export async function createRecurringPattern(
   return { ok: true };
 }
 
+/**
+ * Propage l'enseigne et la catégorie du modèle aux transactions déjà rattachées
+ * à cette récurrente, sans écraser les choix manuels : l'enseigne n'est posée
+ * que là où elle est vide, la catégorie que là où elle est vide (la récurrence
+ * porte l'enseigne, qui porte la catégorie). Retourne le nombre de transactions
+ * touchées (union des deux mises à jour).
+ */
+async function propagateRecurringToLinked(
+  supabase: Supa,
+  patternId: string,
+  merchantId: string | null | undefined,
+  subcategoryId: string | null | undefined,
+): Promise<number> {
+  const touched = new Set<string>();
+  if (merchantId) {
+    const { data } = await supabase
+      .from("transactions")
+      .update({ merchant_id: merchantId })
+      .eq("recurring_pattern_id", patternId)
+      .is("merchant_id", null)
+      .select("id");
+    for (const t of data ?? []) touched.add(t.id);
+  }
+  if (subcategoryId) {
+    const { data } = await supabase
+      .from("transactions")
+      .update({ subcategory_id: subcategoryId })
+      .eq("recurring_pattern_id", patternId)
+      .is("subcategory_id", null)
+      .select("id");
+    for (const t of data ?? []) touched.add(t.id);
+  }
+  return touched.size;
+}
+
 export async function updateRecurringPattern(
   id: string,
   input: RecurringInput,
-): Promise<ActionResult> {
+): Promise<{ ok: true; propagated: number } | { ok: false; error: string }> {
   const res = toRow(input);
   if (!res.ok) return fail(res.error);
   const supabase = await createClient();
@@ -77,8 +112,70 @@ export async function updateRecurringPattern(
     .update(res.row)
     .eq("id", id);
   if (error) return fail(error.message);
+  // Répercute l'enseigne/catégorie du modèle sur ses transactions rattachées
+  // (remplissage des champs vides uniquement).
+  const propagated = await propagateRecurringToLinked(
+    supabase,
+    id,
+    res.row.merchant_id,
+    res.row.subcategory_id,
+  );
   revalidate();
-  return { ok: true };
+  if (propagated > 0) revalidatePath("/transactions");
+  return { ok: true, propagated };
+}
+
+/** Données d'un modèle récurrent pour pré-remplir le formulaire d'édition (modale). */
+export async function getRecurringEditData(id: string): Promise<
+  | {
+      initial: {
+        name: string;
+        account_id: string;
+        merchant_id: string;
+        subcategory_id: string;
+        expected_amount: number | string;
+        expected_amounts: number[];
+        amount_tolerance: number;
+        frequency_days: number;
+        label_pattern: string;
+        alert_if_missing: boolean;
+      };
+      accountOptions: { id: string; name: string }[];
+    }
+  | null
+> {
+  const supabase = await createClient();
+  const { data: p } = await supabase
+    .from("recurring_patterns")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (!p) return null;
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, name")
+    .eq("is_archived", false)
+    .order("name", { ascending: true });
+  return {
+    accountOptions: accounts ?? [],
+    initial: {
+      name: p.name,
+      account_id: p.account_id ?? "",
+      merchant_id: p.merchant_id ?? "",
+      subcategory_id: p.subcategory_id ?? "",
+      expected_amount: p.expected_amount ?? "",
+      expected_amounts:
+        p.expected_amounts && p.expected_amounts.length > 0
+          ? p.expected_amounts.map(Number)
+          : p.expected_amount != null
+            ? [Number(p.expected_amount)]
+            : [],
+      amount_tolerance: Number(p.amount_tolerance),
+      frequency_days: p.frequency_days,
+      label_pattern: p.label_pattern ?? "",
+      alert_if_missing: p.alert_if_missing,
+    },
+  };
 }
 
 export async function setRecurringActive(

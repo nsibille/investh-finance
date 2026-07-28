@@ -91,7 +91,15 @@ export function RecurringForm({
         ? await createRecurringPattern(values)
         : await updateRecurringPattern(id!, values);
     if (!res.ok) return setServerError(res.error);
-    toast.success(mode === "create" ? "Récurrente créée" : "Récurrente mise à jour");
+    const propagated =
+      "propagated" in res && typeof res.propagated === "number" ? res.propagated : 0;
+    toast.success(
+      mode === "create"
+        ? "Récurrente créée"
+        : propagated > 0
+          ? `Récurrente mise à jour · ${propagated} transaction${propagated > 1 ? "s" : ""} actualisée${propagated > 1 ? "s" : ""}`
+          : "Récurrente mise à jour",
+    );
     router.refresh();
     onDone();
   }

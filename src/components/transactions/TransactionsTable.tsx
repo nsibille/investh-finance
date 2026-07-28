@@ -20,6 +20,8 @@ import { MerchantQuickView } from "@/components/merchants/MerchantQuickView";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
+import { MerchantEditModal } from "@/components/merchants/MerchantEditModal";
+import { RecurringEditModal } from "@/components/recurring/RecurringEditModal";
 import { formatShortDate } from "@/lib/format/date";
 import type { EditorRowVM, EditorHandlers } from "./TransactionEditorTable";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -88,6 +90,9 @@ export function TransactionsTable({
   const [merchantKey, setMerchantKey] = useState<string | null>(null);
   const [recurringKey, setRecurringKey] = useState<string | null>(null);
   const [personKey, setPersonKey] = useState<string | null>(null);
+  // Édition directe de l'entité enseigne/récurrente (clic sur le flag).
+  const [editMerchantId, setEditMerchantId] = useState<string | null>(null);
+  const [editRecurringId, setEditRecurringId] = useState<string | null>(null);
 
   const optById = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, o])),
@@ -131,7 +136,11 @@ export function TransactionsTable({
                   <div className="tx-main">
                     <div className="tx-main__title">
                       {r.merchant ? (
-                        <MerchantQuickView merchantId={r.merchant.id} name={r.merchant.name} />
+                        <MerchantQuickView
+                          merchantId={r.merchant.id}
+                          name={r.merchant.name}
+                          onEdit={() => setEditMerchantId(r.merchant!.id)}
+                        />
                       ) : (
                         <code className="tx-label-code">{r.label}</code>
                       )}
@@ -160,7 +169,15 @@ export function TransactionsTable({
                       {r.recurring && (
                         <span className="tx-meta tx-meta--recurring">
                           <Repeat size={12} aria-hidden />
-                          <span className="tx-meta__text">{r.recurring.name}</span>
+                          <button
+                            type="button"
+                            className="tx-meta__text"
+                            title="Modifier la récurrente"
+                            onClick={() => setEditRecurringId(r.recurring!.id)}
+                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer" }}
+                          >
+                            {r.recurring.name}
+                          </button>
                           {handlers.onDetachRecurring && (
                             <button
                               type="button"
@@ -360,6 +377,19 @@ export function TransactionsTable({
       />
 
       {personRow ? renderPersonModal(personRow, () => setPersonKey(null)) : null}
+
+      <MerchantEditModal
+        merchantId={editMerchantId}
+        onClose={() => setEditMerchantId(null)}
+        subcategoryOptions={subcategoryOptions}
+      />
+
+      <RecurringEditModal
+        recurringId={editRecurringId}
+        onClose={() => setEditRecurringId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
     </>
   );
 }

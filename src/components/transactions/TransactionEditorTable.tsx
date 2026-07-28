@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ShoppingBag, Store, Repeat, Users, X } from "lucide-react";
+import { ShoppingBag, Store, Repeat, Users, X, RefreshCw } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
@@ -11,6 +11,8 @@ import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
 import { PersonAttachModal } from "@/components/import/PersonAttachModal";
+import { MerchantEditModal } from "@/components/merchants/MerchantEditModal";
+import { RecurringEditModal } from "@/components/recurring/RecurringEditModal";
 import { formatShortDate } from "@/lib/format/date";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
@@ -125,6 +127,9 @@ export function TransactionEditorTable({
   const [merchantKey, setMerchantKey] = useState<string | null>(null);
   const [recurringKey, setRecurringKey] = useState<string | null>(null);
   const [personKey, setPersonKey] = useState<string | null>(null);
+  // Édition directe de l'entité enseigne/récurrente (clic sur le flag).
+  const [editMerchantId, setEditMerchantId] = useState<string | null>(null);
+  const [editRecurringId, setEditRecurringId] = useState<string | null>(null);
 
   const optLabel = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, o.label])),
@@ -184,7 +189,14 @@ export function TransactionEditorTable({
                   {r.recurring && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
                       <Repeat size={12} aria-hidden />
-                      Récurrent · {r.recurring.name}
+                      <button
+                        type="button"
+                        title="Modifier la récurrente"
+                        onClick={() => setEditRecurringId(r.recurring!.id)}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer" }}
+                      >
+                        Récurrent · {r.recurring.name}
+                      </button>
                       {handlers.onDetachRecurring && (
                         <button
                           type="button"
@@ -207,10 +219,20 @@ export function TransactionEditorTable({
                         <>
                           <button
                             type="button"
-                            onClick={() => setMerchantKey(r.key)}
+                            title="Modifier l'enseigne"
+                            onClick={() => setEditMerchantId(r.merchant!.id)}
                             style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
                           >
                             {r.merchant.name}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Changer d'enseigne"
+                            title="Changer d'enseigne"
+                            onClick={() => setMerchantKey(r.key)}
+                            style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
+                          >
+                            <RefreshCw size={11} aria-hidden />
                           </button>
                           <button
                             type="button"
@@ -390,6 +412,19 @@ export function TransactionEditorTable({
             }}
           />
         )}
+
+      <MerchantEditModal
+        merchantId={editMerchantId}
+        onClose={() => setEditMerchantId(null)}
+        subcategoryOptions={subcategoryOptions}
+      />
+
+      <RecurringEditModal
+        recurringId={editRecurringId}
+        onClose={() => setEditRecurringId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
     </>
   );
 }

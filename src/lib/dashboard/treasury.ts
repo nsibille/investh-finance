@@ -29,11 +29,11 @@ export interface TreasuryResult {
  * jour sur la fenêtre choisie. Ancrée sur le solde consolidé à ce jour, puis
  * déroulée en arrière via les flux journaliers.
  *
- * Prend TOUTES les transactions validées qui composent les soldes (donc y
- * compris virements externes ; les virements internes se compensent au global).
- * Seules sont exclues les transactions antérieures à l'ancre de leur compte
- * (non comptées dans le solde). Les cartes à débit différé devront être exclues
- * ici dès qu'un moyen de les identifier existera.
+ * Reconstruit l'historique à partir des transactions : ancré sur le solde
+ * consolidé d'aujourd'hui, déroulé en arrière via TOUTES les transactions
+ * validées (virements externes inclus ; les internes se compensent au global).
+ * Seuls les débits différés (règlement mensuel de carte) sont exclus pour ne
+ * pas doubler les achats déjà comptés individuellement.
  */
 export async function getTreasurySeries(
   ref: Date,
@@ -51,13 +51,10 @@ export async function getTreasurySeries(
   const startIso = iso(windowStart);
   const drawEndIso = iso(windowEnd) < todayIso ? iso(windowEnd) : todayIso;
 
-  const [{ data: balances }, { data: accts }, { data: rebases }, categories] =
-    await Promise.all([
-      supabase.from("account_balances").select("current_balance"),
-      supabase.from("accounts").select("id, initial_date").eq("is_archived", false),
-      supabase.from("account_rebases").select("account_id, rebase_date"),
-      getCategoryDisplayMap(),
-    ]);
+  const [{ data: balances }, categories] = await Promise.all([
+    supabase.from("account_balances").select("current_balance"),
+    getCategoryDisplayMap(),
+  ]);
   const total = (balances ?? []).reduce((s, b) => s + Number(b.current_balance), 0);
 
   // Sous-catégories « Débit différé » à exclure des flux (double comptage).
@@ -65,37 +62,29 @@ export async function getTreasurySeries(
   for (const [subId, d] of categories)
     if (normalizeText(d.categoryName) === DEFERRED_CATEGORY) deferredSubIds.add(subId);
 
-  // Date d'ancre effective par compte (solde initial ou dernier rebasement).
-  const anchorDate = new Map<string, string>();
-  for (const a of accts ?? []) anchorDate.set(a.id, a.initial_date);
-  for (const r of rebases ?? []) {
-    const cur = anchorDate.get(r.account_id);
-    if (cur && r.rebase_date > cur) anchorDate.set(r.account_id, r.rebase_date);
-  }
-
-  // Flux journaliers validés comptés dans le solde (postérieurs à l'ancre du
-  // compte), de la fenêtre à aujourd'hui. Parcouru par tranches.
+  // Reconstruction de l'historique : on part du solde consolidé d'aujourd'hui
+  // (les comptes sont ancrés à leur solde réel) et on déroule EN ARRIÈRE via
+  // TOUTES les transactions validées (hors débit différé) — chaque jour du passé
+  // vaut le solde d'aujourd'hui moins les opérations survenues depuis. Flux
+  // journaliers de la fenêtre jusqu'à aujourd'hui, parcourus par tranches.
   const flowByDay = new Map<string, number>();
   const CHUNK = 1000;
   let offset = 0;
   for (;;) {
     const { data } = await supabase
       .from("transactions")
-      .select("account_id, operation_date, amount, subcategory_id")
+      .select("operation_date, amount, subcategory_id")
       .eq("status", "validated")
       .gte("operation_date", startIso)
       .lte("operation_date", todayIso)
       .order("id", { ascending: true })
       .range(offset, offset + CHUNK - 1);
     const rows = (data ?? []) as {
-      account_id: string;
       operation_date: string;
       amount: number;
       subcategory_id: string | null;
     }[];
     for (const t of rows) {
-      const ad = anchorDate.get(t.account_id);
-      if (ad && t.operation_date <= ad) continue; // pré-ancre : hors solde
       if (t.subcategory_id && deferredSubIds.has(t.subcategory_id)) continue; // débit différé
       flowByDay.set(
         t.operation_date,

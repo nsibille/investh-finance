@@ -57,6 +57,8 @@ export interface DashCategory {
   monthly: number[]; // magnitude par mois de la fenêtre (12), pour sparkline
   /** Variation du mois de référence vs mois précédent (%). */
   changePct: number | null;
+  /** Écart du mois de référence vs moyenne mensuelle de l'année glissante (%). */
+  vsAvgPct: number | null;
   topTransactions: DashTx[]; // 10 plus grosses sur la portée
 }
 
@@ -66,8 +68,9 @@ export interface DashSegment {
   total: number; // magnitude cumulée sur la portée
   count: number;
   monthly: number[]; // magnitude par mois de la fenêtre (12)
-  avgMonthly: number; // moyenne mensuelle sur la fenêtre
+  avgMonthly: number; // moyenne mensuelle sur l'année glissante (mois actifs)
   changePct: number | null; // segment : mois de réf vs précédent
+  vsAvgPct: number | null; // segment : mois de réf vs moyenne 12 mois
   categories: DashCategory[]; // triées par total décroissant
   topTransactions: DashTx[]; // 10 plus grosses du segment sur la portée
   funFacts: string[];
@@ -268,7 +271,11 @@ export async function getDashboardData(
     for (const r of all) monthly[r.monthIdx] += mag(r);
     const activeMonths = monthly.filter((v) => v > 0.005).length || 1;
     const windowTotal = monthly.reduce((s, v) => s + v, 0);
+    // Moyenne mensuelle sur l'année glissante (mois actifs) : référence stable
+    // quel que soit le zoom, base de l'écart « vs moyenne ».
+    const avgMonthly = windowTotal / activeMonths;
     const changePct = refIdx > 0 ? pct(monthly[refIdx], monthly[refIdx - 1]) : null;
+    const vsAvgPct = pct(monthly[refIdx], avgMonthly);
 
     // Regroupement par catégorie sur la portée.
     const byCat = new Map<string, Rec[]>();
@@ -282,6 +289,8 @@ export async function getDashboardData(
         const catMonthly = new Array(months).fill(0) as number[];
         for (const r of all)
           if (r.categoryId === categoryId) catMonthly[r.monthIdx] += mag(r);
+        const catActive = catMonthly.filter((v) => v > 0.005).length || 1;
+        const catAvg = catMonthly.reduce((s, v) => s + v, 0) / catActive;
         return {
           categoryId,
           name: list[0].categoryName,
@@ -290,6 +299,7 @@ export async function getDashboardData(
           count: list.length,
           monthly: catMonthly,
           changePct: refIdx > 0 ? pct(catMonthly[refIdx], catMonthly[refIdx - 1]) : null,
+          vsAvgPct: pct(catMonthly[refIdx], catAvg),
           topTransactions: topTen(list),
         };
       })
@@ -324,8 +334,9 @@ export async function getDashboardData(
       total: scoped.reduce((s, r) => s + mag(r), 0),
       count: scoped.length,
       monthly,
-      avgMonthly: zoomMonth ? monthly[refIdx] : windowTotal / activeMonths,
+      avgMonthly,
       changePct,
+      vsAvgPct,
       categories: categoriesOut,
       topTransactions: topTen(scoped),
       funFacts,

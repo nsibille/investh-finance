@@ -908,6 +908,7 @@ body {
 .seg-delta[data-tone="good"] { color: var(--color-success); }
 .seg-delta[data-tone="bad"] { color: var(--color-danger); }
 .seg-delta[data-tone="flat"] { color: var(--color-text-muted); }
+.seg-delta__note { color: var(--color-text-muted); font-weight: var(--fw-regular); }
 /* Encart drill-down (top transactions) : une ligne compacte par opération. */
 .seg-drill { grid-column: 1 / -1; display: flex; flex-direction: column; padding: var(--space-1) 0 var(--space-1) var(--space-6); }
 .seg-drill__row {

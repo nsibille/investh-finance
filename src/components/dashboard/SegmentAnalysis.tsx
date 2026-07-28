@@ -24,16 +24,45 @@ function dmy(iso: string): string {
   return `${d}/${m}/${y.slice(2)}`;
 }
 
-function Delta({ pct, goodWhenUp }: { pct: number | null; goodWhenUp: boolean }) {
+function Delta({
+  pct,
+  goodWhenUp,
+  note,
+  title,
+}: {
+  pct: number | null;
+  goodWhenUp: boolean;
+  note?: string;
+  title: string;
+}) {
   if (pct == null) return null;
   const up = pct >= 0;
   const tone = Math.abs(pct) < 1 ? "flat" : up === goodWhenUp ? "good" : "bad";
   return (
-    <span className="seg-delta" data-tone={tone} title="vs mois précédent">
+    <span className="seg-delta" data-tone={tone} title={title}>
+      {note && <span className="seg-delta__note">{note}</span>}
       {up ? <TrendingUp size={12} aria-hidden /> : <TrendingDown size={12} aria-hidden />}
       {up ? "+" : "−"}
       {Math.abs(pct).toFixed(0)}%
     </span>
+  );
+}
+
+/** Deux indicateurs : variation vs mois précédent, et écart vs moyenne 12 mois. */
+function Deltas({
+  changePct,
+  vsAvgPct,
+  goodWhenUp,
+}: {
+  changePct: number | null;
+  vsAvgPct: number | null;
+  goodWhenUp: boolean;
+}) {
+  return (
+    <>
+      <Delta pct={changePct} goodWhenUp={goodWhenUp} title="vs mois précédent" />
+      <Delta pct={vsAvgPct} goodWhenUp={goodWhenUp} note="∅" title="écart vs moyenne sur 12 mois" />
+    </>
   );
 }
 
@@ -149,7 +178,7 @@ export function SegmentAnalysis({
               <h2 style={{ fontSize: "var(--text-lg)", fontWeight: "var(--fw-semibold)", margin: 0 }}>
                 {SEGMENT_LABEL[segment.key]}
               </h2>
-              <Delta pct={segment.changePct} goodWhenUp={goodWhenUp} />
+              <Deltas changePct={segment.changePct} vsAvgPct={segment.vsAvgPct} goodWhenUp={goodWhenUp} />
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)", marginTop: "var(--space-1)" }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-2xl)", fontWeight: "var(--fw-semibold)" }}>
@@ -204,7 +233,7 @@ export function SegmentAnalysis({
                     <span className="badge-dot" style={{ ["--dot-color" as string]: c.color ?? undefined }} aria-hidden />
                     <span className="seg-cat__name">{c.name}</span>
                     <span className="seg-cat__count">{c.count}×</span>
-                    <Delta pct={c.changePct} goodWhenUp={goodWhenUp} />
+                    <Deltas changePct={c.changePct} vsAvgPct={c.vsAvgPct} goodWhenUp={goodWhenUp} />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                     <Sparkline monthly={c.monthly} refIndex={refIndex} />

@@ -184,13 +184,13 @@ export function TransactionEditorTable({
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <span>{r.label}</span>
 
-                  {r.recurring && (
+                  {r.recurring ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
                       <Repeat size={12} aria-hidden />
                       <button
                         type="button"
                         className="flag-editable"
-                        title="Modifier la récurrente"
+                        title="Voir / modifier la récurrente"
                         onClick={() => setEditRecurringId(r.recurring!.id)}
                         style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
                       >
@@ -207,6 +207,16 @@ export function TransactionEditorTable({
                         </button>
                       )}
                     </span>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Associer une récurrente"
+                      onClick={() => setRecurringKey(r.key)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
+                    >
+                      <Repeat size={12} aria-hidden />
+                      Récurrence…
+                    </button>
                   )}
 
                   {r.merchant ? (
@@ -322,9 +332,6 @@ export function TransactionEditorTable({
                     </button>
                     <IconButton label="Rattacher un achat" onClick={() => setPurchaseKey(r.key)}>
                       <ShoppingBag size={15} />
-                    </IconButton>
-                    <IconButton label="Associer une récurrente" onClick={() => setRecurringKey(r.key)}>
-                      <Repeat size={15} />
                     </IconButton>
                   </div>
                 )}

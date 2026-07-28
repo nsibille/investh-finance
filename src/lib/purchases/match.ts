@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { merchantCompatible } from "@/lib/import/merchantGate";
 import {
   matchInstallmentsToTransactions,
   installmentOccurrence,
@@ -10,11 +11,43 @@ import type { Database } from "@/types/database.types";
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type TransactionUpdate = Database["public"]["Tables"]["transactions"]["Update"];
 
+/**
+ * Construit, par achat, l'ensemble des enseignes acceptables : l'enseigne de
+ * l'achat + celles de ses transactions déjà rattachées (historique). Sert au
+ * gate d'appariement (on ne rattache pas une transaction dont l'enseigne
+ * contredit cet ensemble).
+ */
+function buildAcceptableMerchants(
+  purchases: { id: string; merchant_id: string | null }[],
+  attachedTx: { purchase_id: string | null; merchant_id: string | null }[],
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const p of purchases) {
+    const set = new Set<string>();
+    if (p.merchant_id) set.add(p.merchant_id);
+    map.set(p.id, set);
+  }
+  for (const t of attachedTx) {
+    if (!t.purchase_id || !t.merchant_id) continue;
+    let set = map.get(t.purchase_id);
+    if (!set) {
+      set = new Set();
+      map.set(t.purchase_id, set);
+    }
+    set.add(t.merchant_id);
+  }
+  return map;
+}
+
+const EMPTY_MERCHANTS: Set<string> = new Set();
+
 export interface PreviewRow {
   index: number;
   operation_date: string;
   amount: number;
   raw_label: string;
+  /** Enseigne déjà résolue de la ligne (règles/récurrence) : gate d'appariement. */
+  merchantId?: string | null;
 }
 export interface PreviewPurchaseMatch {
   purchaseId: string;
@@ -59,7 +92,7 @@ export async function matchPreviewRowsToPurchases(
         .in("id", purchaseIds),
       supabase
         .from("transactions")
-        .select("purchase_id")
+        .select("purchase_id, merchant_id")
         .in("purchase_id", purchaseIds),
       // Toutes les mensualités (appariées comprises) : occurrence X/Y fiable.
       supabase
@@ -71,6 +104,9 @@ export async function matchPreviewRowsToPurchases(
   const hasAttached = new Set(
     (attached ?? []).map((t) => t.purchase_id).filter((x): x is string => !!x),
   );
+  // Ensemble d'enseignes acceptables par achat (son enseigne + celles de ses
+  // transactions déjà rattachées) : sert au gate d'appariement.
+  const acceptableByPurchase = buildAcceptableMerchants(purchases ?? [], attached ?? []);
 
   // Mois triés par achat → mois de départ (X=1) et total (Y).
   const monthsByPurchase = new Map<string, string[]>();
@@ -118,6 +154,9 @@ export async function matchPreviewRowsToPurchases(
     amount: r.amount,
     raw_label: r.raw_label,
   }));
+  const rowMerchantById = new Map(
+    rows.map((r) => [String(r.index), r.merchantId ?? null] as const),
+  );
 
   const out = new Map<number, PreviewPurchaseMatch>();
   for (const { installmentId, transactionId } of matchInstallmentsToTransactions(
@@ -126,6 +165,14 @@ export async function matchPreviewRowsToPurchases(
   )) {
     const pid = purchaseByInst.get(installmentId);
     if (!pid) continue;
+    // Gate enseigne : l'enseigne de la ligne ne doit pas contredire l'achat.
+    if (
+      !merchantCompatible(
+        rowMerchantById.get(transactionId) ?? null,
+        acceptableByPurchase.get(pid) ?? EMPTY_MERCHANTS,
+      )
+    )
+      continue;
     const p = pInfo.get(pid);
     const merchantId = p?.merchant_id ?? null;
     const months = monthsByPurchase.get(pid) ?? [];
@@ -177,10 +224,13 @@ export async function matchPurchaseInstallments(
   const purchaseIds = [...new Set(installments.map((i) => i.purchase_id))];
   const { data: purchases } = await supabase
     .from("purchases")
-    .select("id, subcategory_id")
+    .select("id, subcategory_id, merchant_id")
     .in("id", purchaseIds);
   const subByPurchase = new Map(
     (purchases ?? []).map((p) => [p.id, p.subcategory_id]),
+  );
+  const merchantByPurchase = new Map(
+    (purchases ?? []).map((p) => [p.id, p.merchant_id]),
   );
 
   const { data: linkedRows } = await supabase
@@ -204,10 +254,24 @@ export async function matchPurchaseInstallments(
   for (const [purchaseId, items] of byPurchase) {
     const { data: txs } = await supabase
       .from("transactions")
-      .select("id, operation_date, amount, raw_label, purchase_id")
+      .select("id, operation_date, amount, raw_label, purchase_id, merchant_id")
       .or(`purchase_id.is.null,purchase_id.eq.${purchaseId}`);
+    // Ensemble d'enseignes acceptables : enseigne de l'achat + celles de ses
+    // transactions déjà rattachées (historique).
+    const acceptable = new Set<string>();
+    const purchaseMerchant = merchantByPurchase.get(purchaseId) ?? null;
+    if (purchaseMerchant) acceptable.add(purchaseMerchant);
+    for (const t of txs ?? []) {
+      if (t.purchase_id === purchaseId && t.merchant_id) acceptable.add(t.merchant_id);
+    }
     const candidates: (MatchableTx & { purchase_id: string | null })[] = (txs ?? [])
-      .filter((t) => !linked.has(t.id))
+      .filter(
+        (t) =>
+          !linked.has(t.id) &&
+          // Gate enseigne : une nouvelle transaction ne s'apparie que si son
+          // enseigne ne contredit pas l'achat (les tx déjà rattachées passent).
+          (t.purchase_id === purchaseId || merchantCompatible(t.merchant_id, acceptable)),
+      )
       .map((t) => ({
         id: t.id,
         operation_date: t.operation_date,

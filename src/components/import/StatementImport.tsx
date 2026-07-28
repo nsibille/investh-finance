@@ -548,6 +548,9 @@ export function StatementImport({
       base.merchant_id = r.merchantId ?? null;
       if (r.persons && r.persons.personIds.length > 0) base.persons = r.persons;
       if (r.note?.trim()) base.note = r.note.trim();
+      // Doublon déjà en base ré-inclus manuellement (déflagué) : force l'import
+      // via une occurrence libre au lieu d'être ignoré par la dédup.
+      if (r.duplicateReason === "existing") base.force = true;
       return base;
     });
 
@@ -592,7 +595,6 @@ export function StatementImport({
         amount: r.amount,
         currency: r.currency,
         categoryId: r.categoryId,
-        categoryLocked: Boolean(r.purchaseId),
         purchase: r.purchaseId
           ? {
               id: r.purchaseId,
@@ -755,17 +757,25 @@ export function StatementImport({
                 const i = Number(row.key);
                 const src = preview.rows[i];
                 if (!src) return null;
+                // Doublon déjà en base ré-inclus manuellement (déflagué) : la
+                // détection était un faux positif, la ligne sera bien importée.
+                const isDup = src.duplicateReason === "existing";
+                const kind = !isDup ? "new" : src.include ? "forced" : "duplicate";
                 return (
                   <>
                     <td>
-                      <ImportRowBadge kind={src.duplicateReason === "existing" ? "duplicate" : "new"} />
+                      <ImportRowBadge kind={kind} />
                     </td>
                     <td>
                       <Toggle
                         checked={src.include}
-                        disabled={src.duplicateReason === "existing"}
                         onChange={() => patchRow(i, { include: !src.include })}
                         aria-label="Inclure"
+                        title={
+                          isDup
+                            ? "Doublon détecté : activer pour forcer l'import (faux positif)"
+                            : undefined
+                        }
                       />
                     </td>
                   </>

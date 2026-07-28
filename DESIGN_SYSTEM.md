@@ -505,6 +505,19 @@ Idem avec `--color-bg-subtle` / `--color-text-disabled` + texte rayé (import pr
 ### `badge-status-duplicate-file`
 Idem avec `--color-warning-light` / `--color-warning-dark` (import preview, doublon répété dans le fichier importé).
 
+### `badge-status-forced`
+Idem avec `--color-brand-primary-50` / `--color-brand-primary-700` (import preview, doublon déjà en base déflagué manuellement : sera importé via une occurrence libre). Libellé « Ré-inclus ».
+
+### `flag-editable`
+Utilitaire d'interaction pour un nom d'entité cliquable (enseigne, récurrente) affiché sous une transaction. Signale l'action d'édition : curseur main + soulignement au survol.
+```css
+.flag-editable { cursor: pointer; }
+.flag-editable:hover { text-decoration: underline; text-underline-offset: 2px; }
+```
+
+### `modal-entity-detail` + panneau stats `ms-*`
+Variante élargie (`max-width: 940px`) de `modal-surface` pour le détail d'une **entité** (enseigne, achat) : grille 2 colonnes générique (`entity-detail-layout`) avec le formulaire d'édition à gauche et le panneau statistiques à droite (empilées sous 820px). Le panneau `ms-*` (famille partagée) regroupe : en-tête (`ms-head`), héro (`ms-hero`, + barre `ms-progress` pour un achat), grille de KPIs (`ms-kpi`), fun facts (`ms-funfact`), un graphe temporel, listes compactes (`ms-list` : échéances à venir, transactions rattachées, personnes) et répartition (`ms-cat`). Graphes : `chart-merchant-spend` (enseigne) / `chart-purchase-timeline` (achat, payé vs à venir). Fonds/bordures via tokens (compatibles dark).
+
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
 ```css
@@ -1197,6 +1210,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-recurring-missing` | Status | Badge récurrente manquante | auto |
 | `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |
 | `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
+| `badge-status-forced` | Status | Badge import row doublon déflagué (ré-inclus, sera importé) | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |
 | `badge-status-new` | Status | Badge import row nouvelle | auto |
 | `badge-status-pending` | Status | Badge transaction à valider | auto |
@@ -1226,6 +1240,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `category-group` | Table | Regroupement d'items par catégorie (hiérarchie Type→Cat) | auto |
 | `chart-bar-monthly` | Chart | Bar chart 12 mois | auto |
 | `chart-comparison` | Chart | Bar chart groupé comparaison | auto |
+| `chart-merchant-spend` | Chart | Bar chart dépenses enseigne 12 mois (mois record en relief + ligne moyenne) | auto |
+| `chart-purchase-timeline` | Chart | Bar chart paiements d'un achat dans le temps (payé vs à venir) | auto |
 | `chart-net-worth-evolution` | Chart | Line chart évolution patrimoine | auto |
 | `chart-pie-categories` | Chart | Camembert catégories | auto |
 | `dashboard-hero` | Métier | Hero du dashboard avec aurora | auto |
@@ -1236,6 +1252,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `file-dropzone-mini` | Métier | Zone upload justificatif | auto |
 | `filter-amount-range` | Form | Range de montant (2 champs devise min/max) | auto |
 | `filter-chips` | Métier | Barre de filtres actifs retirables | auto |
+| `flag-editable` | Interaction | Nom d'enseigne/récurrente cliquable (curseur main + soulignement au survol) | auto |
 | `form-error-msg` | Form | Message erreur sous un champ | auto |
 | `form-field` | Form | Wrapper label+input+erreur | auto |
 | `form-help-text` | Form | Texte d'aide sous un champ | auto |
@@ -1257,6 +1274,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `merchant-quick-view` | Métier | Aperçu stats enseigne (popover liste) | auto |
 | `merchant-detail-page` | Métier | Fiche détail d'une enseigne | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
+| `modal-entity-detail` | Modal | Variante élargie détail entité — enseigne/achat (form + stats) | auto |
+| `entity-detail-layout` | Layout | Grille 2 colonnes form/stats de la modale de détail | auto |
+| `merchant-stats-panel` | Métier | Panneau stats (KPIs, fun facts, graphe, listes) — famille `ms-*`, partagé enseigne/achat | auto |
 | `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |
 | `modal-export-options` | Modal | Variante options export | auto |

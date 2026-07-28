@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { isValidRegex } from "./matcher";
+import { parseAmountInput } from "@/lib/format/amount";
 
 const nullableNumber = z.preprocess(
-  (v) => (v === "" || v == null ? null : Number(v)),
+  (v) => (v === "" || v == null ? null : parseAmountInput(v)),
   z.number().finite("Montant invalide").nullable(),
 );
 

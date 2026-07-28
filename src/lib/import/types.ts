@@ -54,6 +54,13 @@ export interface ParsedTransaction {
   } | null;
   /** Note libre saisie dans l'aperçu d'import (annotation directe). */
   note?: string | null;
+  /**
+   * Force l'import d'une ligne détectée comme doublon déjà en base (déflaguée
+   * manuellement dans l'aperçu quand la détection est un faux positif) : le
+   * pipeline lui attribue la première occurrence libre pour contourner la
+   * contrainte d'unicité `(account_id, dedup_hash)` au lieu de l'ignorer.
+   */
+  force?: boolean;
 }
 
 export interface ImportSummary {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Store, ArrowRight, Globe } from "lucide-react";
+import { Store, ArrowRight, Globe, Pencil } from "lucide-react";
 import { formatCurrency } from "@/lib/format/currency";
 import { getMerchantQuickStats } from "@/server/actions/merchants";
 import type { MerchantStats } from "@/lib/merchants/stats";
@@ -29,9 +29,12 @@ function monthShort(ym: string): string {
 export function MerchantQuickView({
   merchantId,
   name,
+  onEdit,
 }: {
   merchantId: string;
   name: string;
+  /** Ouvre l'édition de l'enseigne (bouton « Modifier » dans l'aperçu). */
+  onEdit?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState<MerchantStats | null>(null);
@@ -199,6 +202,20 @@ export function MerchantQuickView({
               </>
             )}
 
+            {onEdit && (
+              <button
+                type="button"
+                className="mq-popover__link"
+                onClick={() => {
+                  setOpen(false);
+                  onEdit();
+                }}
+                style={{ background: "none", border: "none", cursor: "pointer", width: "100%", font: "inherit" }}
+              >
+                <Pencil size={14} aria-hidden />
+                Modifier l&apos;enseigne
+              </button>
+            )}
             <Link href={`/enseignes/${merchantId}`} className="mq-popover__link">
               Voir la fiche de l&apos;enseigne
               <ArrowRight size={14} aria-hidden />

@@ -21,9 +21,10 @@ export default async function PendingPage({
 }) {
   const sp = await searchParams;
   const parseList = (v?: string) => (v ? v.split(",").filter(Boolean) : undefined);
+  // Filtre par magnitude : montant signé accepté, valeur absolue appliquée.
   const parseAmount = (v?: string) => {
     const n = Number(v);
-    return v && Number.isFinite(n) && n >= 0 ? n : undefined;
+    return v && Number.isFinite(n) ? Math.abs(n) : undefined;
   };
 
   const [

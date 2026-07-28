@@ -75,6 +75,26 @@ export async function createMerchant(input: MerchantInput): Promise<CreateResult
   return { ok: true, id: data.id, subcategoryId: data.subcategory_id };
 }
 
+/** Données d'une enseigne pour pré-remplir le formulaire d'édition (modale). */
+export async function getMerchantEditInitial(id: string): Promise<
+  | { name: string | null; subcategoryId: string | null; country: string | null; isOnline: boolean }
+  | null
+> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("merchants")
+    .select("name, subcategory_id, country, is_online")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    name: data.name,
+    subcategoryId: data.subcategory_id,
+    country: data.country,
+    isOnline: data.is_online,
+  };
+}
+
 export async function updateMerchant(
   id: string,
   input: MerchantInput,

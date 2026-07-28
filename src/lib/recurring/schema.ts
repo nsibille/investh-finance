@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { parseAmountInput } from "@/lib/format/amount";
 
 const nullableNumber = z.preprocess(
-  (v) => (v === "" || v == null ? null : Number(v)),
+  (v) => (v === "" || v == null ? null : parseAmountInput(v)),
   z.number().finite("Montant invalide").nullable(),
 );
 
@@ -14,7 +15,7 @@ const amountsArray = z.preprocess(
   (v) =>
     Array.isArray(v)
       ? v
-          .map((x) => (x === "" || x == null ? NaN : Number(x)))
+          .map((x) => (x === "" || x == null ? NaN : parseAmountInput(x)))
           .filter((n) => Number.isFinite(n))
       : [],
   z.array(z.number().finite()),

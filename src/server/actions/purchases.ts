@@ -5,10 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { generateInstallments } from "@/lib/purchases/installments";
 import { matchPurchaseInstallments } from "@/lib/purchases/match";
 import { ensureRecurringInstallments } from "@/lib/purchases/recurring";
+import { getPurchases } from "@/lib/purchases/queries";
 import { isValidParent, type PurchaseEdge } from "@/lib/purchases/tree";
 import type {
   AttachableTransaction,
   CategoryOverrideMode,
+  PurchaseParentOption,
+  PurchaseWithDetails,
 } from "@/lib/purchases/types";
 import type { Database } from "@/types/database.types";
 
@@ -637,4 +640,46 @@ export async function deleteInstallment(id: string): Promise<ActionResult> {
   if (error) return fail(error.message);
   revalidatePath("/achats");
   return { ok: true };
+}
+
+/**
+ * Données d'un achat pour la modale de détail/édition ouverte depuis une
+ * transaction : initial du formulaire, achat complet (échéancier), options de
+ * groupe parent et nombre de transactions rattachées (politique de surcharge).
+ */
+export async function getPurchaseEditData(id: string): Promise<
+  | {
+      initial: {
+        name: string;
+        description: string | null;
+        subcategoryId: string | null;
+        merchantId: string | null;
+        parentId: string | null;
+      };
+      purchase: PurchaseWithDetails;
+      parentOptions: PurchaseParentOption[];
+      attachedTransactionCount: number;
+    }
+  | null
+> {
+  const all = await getPurchases();
+  const self = all.find((p) => p.id === id);
+  if (!self) return null;
+  return {
+    initial: {
+      name: self.name,
+      description: self.description,
+      subcategoryId: self.subcategory_id,
+      merchantId: self.merchant_id,
+      parentId: self.parent_id,
+    },
+    purchase: self,
+    parentOptions: all.map((p) => ({
+      id: p.id,
+      name: p.name,
+      parentId: p.parent_id,
+      isArchived: p.is_archived,
+    })),
+    attachedTransactionCount: self.transactionCount,
+  };
 }

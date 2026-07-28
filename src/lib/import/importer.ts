@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { applyRules } from "@/lib/rules/engine";
 import { loadEngineRules } from "@/lib/rules/loader";
 import { matchesPattern } from "@/lib/recurring/checker";
-import { computeDedupHash, dedupeBatch, assignOccurrences, baseKey } from "./dedup";
+import { merchantCompatible, recurringAcceptableMerchants } from "./merchantGate";
+import { dedupeBatch, resolveDedupHashes } from "./dedup";
 import type { ParsedTransaction, ImportSummary } from "./types";
 import type { Database } from "@/types/database.types";
 
@@ -62,7 +63,20 @@ export async function importParsedTransactions(
     const patterns = patternRows ?? [];
 
     const nowIso = new Date().toISOString();
-    const occurrences = assignOccurrences(parsed, (p) => baseKey(p));
+
+    // Lignes déflaguées (`force`) : détectées à tort comme doublon déjà en base.
+    // On charge les hashs existants du compte pour leur attribuer une occurrence
+    // libre (les lignes normales restent idempotentes). Requête évitée sans
+    // ligne forcée.
+    let existingHashes = new Set<string>();
+    if (parsed.some((p) => p.force)) {
+      const { data: existing } = await supabase
+        .from("transactions")
+        .select("dedup_hash")
+        .eq("account_id", accountId);
+      existingHashes = new Set((existing ?? []).map((r) => r.dedup_hash));
+    }
+    const dedupHashes = resolveDedupHashes(accountId, parsed, existingHashes);
 
     const rows: (TransactionInsert & { dedup_hash: string })[] = parsed.map(
       (p, i) => {
@@ -85,25 +99,37 @@ export async function importParsedTransactions(
           : outcome.status;
         const appliedRuleId = overridden ? null : outcome.applied_rule_id;
 
+        // Enseigne : l'aperçu fait foi quand il fournit `merchant_id` (règle,
+        // achat ou choix manuel) ; sinon rattachement automatique par la règle.
+        const explicitMerchant =
+          "merchant_id" in p ? (p.merchant_id ?? null) : undefined;
+        // Enseigne faisant autorité (aperçu sinon règle) : elle gate la
+        // récurrence et n'est jamais écrasée par celle-ci.
+        const authorityMerchant =
+          explicitMerchant !== undefined
+            ? explicitMerchant
+            : overridden
+              ? null
+              : outcome.merchant_id;
+
         // Récurrentes : une transaction qui correspond à un modèle récurrent
-        // (libellé + montant) est marquée récurrente ; si elle n'a pas encore
-        // de catégorie, on applique celle du modèle.
-        const pattern = patterns.find((pat) =>
-          matchesPattern(pat, {
-            account_id: accountId,
-            raw_label: p.raw_label,
-            amount: p.amount,
-            operation_date: p.operation_date,
-          }),
+        // (libellé + montant) est marquée récurrente — à condition que
+        // l'enseigne du modèle ne contredise pas celle de la transaction. Si
+        // elle n'a pas encore de catégorie, on applique celle du modèle.
+        const pattern = patterns.find(
+          (pat) =>
+            matchesPattern(pat, {
+              account_id: accountId,
+              raw_label: p.raw_label,
+              amount: p.amount,
+              operation_date: p.operation_date,
+            }) &&
+            merchantCompatible(authorityMerchant, recurringAcceptableMerchants(pat.merchant_id)),
         );
         if (pattern && subcategoryId == null && pattern.subcategory_id) {
           subcategoryId = pattern.subcategory_id;
           status = "validated";
         }
-        // Enseigne : l'aperçu fait foi quand il fournit `merchant_id` (règle,
-        // achat ou choix manuel) ; sinon rattachement automatique par la règle.
-        const explicitMerchant =
-          "merchant_id" in p ? (p.merchant_id ?? null) : undefined;
         const merchantId =
           explicitMerchant !== undefined
             ? explicitMerchant
@@ -132,7 +158,7 @@ export async function importParsedTransactions(
           split_nature:
             p.persons && p.persons.personIds.length > 0 ? p.persons.nature : null,
           validated_at: status === "validated" ? nowIso : null,
-          dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
+          dedup_hash: dedupHashes[i],
         };
       },
     );

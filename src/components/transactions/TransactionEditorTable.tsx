@@ -4,13 +4,15 @@ import { useMemo, useState } from "react";
 import { ShoppingBag, Store, Repeat, Users, X } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
-import { IconButton } from "@/components/ui/IconButton";
 import { CategoryInlineEditor } from "./CategoryInlineEditor";
 import { NoteCell } from "./NoteCell";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
 import { PersonAttachModal } from "@/components/import/PersonAttachModal";
+import { MerchantEditModal } from "@/components/merchants/MerchantEditModal";
+import { RecurringEditModal } from "@/components/recurring/RecurringEditModal";
+import { PurchaseEditModal } from "@/components/purchases/PurchaseEditModal";
 import { formatShortDate } from "@/lib/format/date";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { PurchaseOption, InstallmentChoice } from "@/lib/purchases/types";
@@ -34,8 +36,6 @@ export interface EditorRowVM {
   amount: number;
   currency: string;
   categoryId: string | null;
-  /** Catégorie héritée d'un achat : sélecteur en lecture seule. */
-  categoryLocked?: boolean;
   purchase?: {
     id: string;
     name: string;
@@ -125,6 +125,10 @@ export function TransactionEditorTable({
   const [merchantKey, setMerchantKey] = useState<string | null>(null);
   const [recurringKey, setRecurringKey] = useState<string | null>(null);
   const [personKey, setPersonKey] = useState<string | null>(null);
+  // Édition directe de l'entité enseigne/récurrente/achat (clic sur le flag).
+  const [editMerchantId, setEditMerchantId] = useState<string | null>(null);
+  const [editRecurringId, setEditRecurringId] = useState<string | null>(null);
+  const [editPurchaseId, setEditPurchaseId] = useState<string | null>(null);
 
   const optLabel = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, o.label])),
@@ -181,10 +185,18 @@ export function TransactionEditorTable({
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <span>{r.label}</span>
 
-                  {r.recurring && (
+                  {r.recurring ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
                       <Repeat size={12} aria-hidden />
-                      Récurrent · {r.recurring.name}
+                      <button
+                        type="button"
+                        className="flag-editable"
+                        title="Voir / modifier la récurrente"
+                        onClick={() => setEditRecurringId(r.recurring!.id)}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
+                      >
+                        Récurrent · {r.recurring.name}
+                      </button>
                       {handlers.onDetachRecurring && (
                         <button
                           type="button"
@@ -196,31 +208,45 @@ export function TransactionEditorTable({
                         </button>
                       )}
                     </span>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Associer une récurrente"
+                      onClick={() => setRecurringKey(r.key)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
+                    >
+                      <Repeat size={12} aria-hidden />
+                      Récurrence…
+                    </button>
                   )}
 
                   {r.merchant ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                       <Store size={12} aria-hidden />
-                      {r.merchant.locked ? (
-                        <span title="Enseigne imposée par l'achat rattaché">{r.merchant.name}</span>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setMerchantKey(r.key)}
-                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
-                          >
-                            {r.merchant.name}
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Détacher l'enseigne"
-                            onClick={() => handlers.onDetachMerchant(r.key)}
-                            style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
-                          >
-                            <X size={11} aria-hidden />
-                          </button>
-                        </>
+                      {/* Clic sur le nom = éditer les paramètres de l'enseigne.
+                          Changer d'enseigne = détacher (croix) puis en ré-ajouter. */}
+                      <button
+                        type="button"
+                        className="flag-editable"
+                        title={
+                          r.merchant.locked
+                            ? "Enseigne imposée par l'achat — modifier ses paramètres"
+                            : "Modifier l'enseigne"
+                        }
+                        onClick={() => setEditMerchantId(r.merchant!.id)}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)" }}
+                      >
+                        {r.merchant.name}
+                      </button>
+                      {!r.merchant.locked && (
+                        <button
+                          type="button"
+                          aria-label="Détacher l'enseigne"
+                          onClick={() => handlers.onDetachMerchant(r.key)}
+                          style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >
+                          <X size={11} aria-hidden />
+                        </button>
                       )}
                     </span>
                   ) : (
@@ -259,10 +285,18 @@ export function TransactionEditorTable({
                     </button>
                   )}
 
-                  {r.purchase && (
+                  {r.purchase ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-brand-primary-600)" }}>
                       <ShoppingBag size={12} aria-hidden />
-                      <span>{r.purchase.name}</span>
+                      <button
+                        type="button"
+                        className="flag-editable"
+                        title="Voir / modifier l'achat"
+                        onClick={() => setEditPurchaseId(r.purchase!.id)}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
+                      >
+                        {r.purchase.name}
+                      </button>
                       {(() => {
                         const total = r.purchase.installmentTotal ?? 0;
                         if (r.purchase.occurrence == null || (!r.purchase.endless && total <= 1)) return null;
@@ -281,16 +315,22 @@ export function TransactionEditorTable({
                         <X size={11} aria-hidden />
                       </button>
                     </span>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Rattacher à un achat"
+                      onClick={() => setPurchaseKey(r.key)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-xs)", color: "var(--color-text-muted)", cursor: "pointer", opacity: 0.75 }}
+                    >
+                      <ShoppingBag size={12} aria-hidden />
+                      Achat…
+                    </button>
                   )}
                 </div>
               </td>
 
               <td data-col="category">
-                {r.categoryLocked ? (
-                  <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                    {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Catégorie de l'achat"}
-                  </span>
-                ) : editing === r.key ? (
+                {editing === r.key ? (
                   <CategoryInlineEditor
                     options={subcategoryOptions}
                     value={r.categoryId}
@@ -300,22 +340,14 @@ export function TransactionEditorTable({
                     onClose={() => setEditing(null)}
                   />
                 ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <button
-                      type="button"
-                      className="import-cat-edit"
-                      onClick={() => setEditing(r.key)}
-                      data-empty={r.categoryId ? undefined : "true"}
-                    >
-                      {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Non catégorisée"}
-                    </button>
-                    <IconButton label="Rattacher un achat" onClick={() => setPurchaseKey(r.key)}>
-                      <ShoppingBag size={15} />
-                    </IconButton>
-                    <IconButton label="Associer une récurrente" onClick={() => setRecurringKey(r.key)}>
-                      <Repeat size={15} />
-                    </IconButton>
-                  </div>
+                  <button
+                    type="button"
+                    className="import-cat-edit"
+                    onClick={() => setEditing(r.key)}
+                    data-empty={r.categoryId ? undefined : "true"}
+                  >
+                    {r.categoryId ? (optLabel.get(r.categoryId) ?? "—") : "Non catégorisée"}
+                  </button>
                 )}
               </td>
 
@@ -390,6 +422,26 @@ export function TransactionEditorTable({
             }}
           />
         )}
+
+      <MerchantEditModal
+        merchantId={editMerchantId}
+        onClose={() => setEditMerchantId(null)}
+        subcategoryOptions={subcategoryOptions}
+      />
+
+      <RecurringEditModal
+        recurringId={editRecurringId}
+        onClose={() => setEditRecurringId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
+
+      <PurchaseEditModal
+        purchaseId={editPurchaseId}
+        onClose={() => setEditPurchaseId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
     </>
   );
 }

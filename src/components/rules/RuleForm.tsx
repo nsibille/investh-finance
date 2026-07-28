@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { ruleSchema, type RuleInput } from "@/lib/rules/schema";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { Input, CurrencyInput } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
@@ -164,12 +164,12 @@ export function RuleForm({
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
         <div style={{ flex: 1 }}>
           <FormField label="Montant min (optionnel)" error={errors.amount_min?.message}>
-            <Input type="number" step="0.01" placeholder="—" {...register("amount_min")} />
+            <CurrencyInput placeholder="—" {...register("amount_min")} />
           </FormField>
         </div>
         <div style={{ flex: 1 }}>
           <FormField label="Montant max (optionnel)" error={errors.amount_max?.message}>
-            <Input type="number" step="0.01" placeholder="—" {...register("amount_max")} />
+            <CurrencyInput placeholder="—" {...register("amount_max")} />
           </FormField>
         </div>
       </div>

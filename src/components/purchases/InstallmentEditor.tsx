@@ -20,12 +20,25 @@ function parseAmount(s: string): number {
 /** Éditeur d'échéancier : suppression ligne à ligne (échéances non appariées)
  *  + ajout d'une mensualité. Réutilisé par la modale d'édition (page Achats)
  *  et la page de détail d'un achat. */
-export function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails }) {
+export function InstallmentEditor({
+  purchase,
+  onChanged,
+}: {
+  purchase: PurchaseWithDetails;
+  /**
+   * Rafraîchissement après ajout/suppression d'échéance. Fourni ⇒ appelé à la
+   * place de `router.refresh()` (permet de recharger le contenu d'une modale
+   * sans la fermer). Absent ⇒ `router.refresh()` (page Achats).
+   */
+  onChanged?: () => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [month, setMonth] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const refresh = () => (onChanged ? onChanged() : router.refresh());
 
   const startMonth = purchase.installments[0]?.month;
   const total = purchase.installments.length;
@@ -41,13 +54,13 @@ export function InstallmentEditor({ purchase }: { purchase: PurchaseWithDetails 
     if (!res.ok) return toast.error(res.error);
     setMonth("");
     setAmount("");
-    router.refresh();
+    refresh();
   }
 
   async function remove(id: string) {
     const res = await deleteInstallment(id);
     if (!res.ok) return toast.error(res.error);
-    router.refresh();
+    refresh();
   }
 
   return (

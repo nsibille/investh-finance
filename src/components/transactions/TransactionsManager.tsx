@@ -469,7 +469,6 @@ export function TransactionsManager({
       amount: row.amount,
       currency: row.currency,
       categoryId: r.subcategory_id,
-      categoryLocked: Boolean(r.purchase),
       purchase: r.purchase
         ? {
             id: r.purchase.id,

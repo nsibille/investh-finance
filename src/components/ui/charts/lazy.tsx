@@ -39,3 +39,13 @@ export const NetWorthChart = dynamic(
   () => import("./NetWorthChart").then((m) => m.NetWorthChart),
   { ssr: false, loading: chartFallback(300) },
 );
+
+export const MerchantSpendChart = dynamic(
+  () => import("./MerchantSpendChart").then((m) => m.MerchantSpendChart),
+  { ssr: false, loading: chartFallback(200) },
+);
+
+export const PurchaseTimelineChart = dynamic(
+  () => import("./PurchaseTimelineChart").then((m) => m.PurchaseTimelineChart),
+  { ssr: false, loading: chartFallback(200) },
+);

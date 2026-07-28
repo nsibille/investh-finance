@@ -20,6 +20,9 @@ import { MerchantQuickView } from "@/components/merchants/MerchantQuickView";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
+import { MerchantEditModal } from "@/components/merchants/MerchantEditModal";
+import { RecurringEditModal } from "@/components/recurring/RecurringEditModal";
+import { PurchaseEditModal } from "@/components/purchases/PurchaseEditModal";
 import { formatShortDate } from "@/lib/format/date";
 import type { EditorRowVM, EditorHandlers } from "./TransactionEditorTable";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -88,6 +91,10 @@ export function TransactionsTable({
   const [merchantKey, setMerchantKey] = useState<string | null>(null);
   const [recurringKey, setRecurringKey] = useState<string | null>(null);
   const [personKey, setPersonKey] = useState<string | null>(null);
+  // Édition directe de l'entité enseigne/récurrente/achat (clic sur le flag).
+  const [editMerchantId, setEditMerchantId] = useState<string | null>(null);
+  const [editRecurringId, setEditRecurringId] = useState<string | null>(null);
+  const [editPurchaseId, setEditPurchaseId] = useState<string | null>(null);
 
   const optById = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, o])),
@@ -131,7 +138,11 @@ export function TransactionsTable({
                   <div className="tx-main">
                     <div className="tx-main__title">
                       {r.merchant ? (
-                        <MerchantQuickView merchantId={r.merchant.id} name={r.merchant.name} />
+                        <MerchantQuickView
+                          merchantId={r.merchant.id}
+                          name={r.merchant.name}
+                          onEdit={() => setEditMerchantId(r.merchant!.id)}
+                        />
                       ) : (
                         <code className="tx-label-code">{r.label}</code>
                       )}
@@ -143,7 +154,15 @@ export function TransactionsTable({
                       {r.purchase && (
                         <span className="tx-meta tx-meta--purchase">
                           <ShoppingBag size={12} aria-hidden />
-                          <span className="tx-meta__text">{r.purchase.name}</span>
+                          <button
+                            type="button"
+                            className="tx-meta__text flag-editable"
+                            title="Voir / modifier l'achat"
+                            onClick={() => setEditPurchaseId(r.purchase!.id)}
+                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
+                          >
+                            {r.purchase.name}
+                          </button>
                           {occurrenceLabel(r.purchase) && (
                             <span className="tx-meta__mono">{occurrenceLabel(r.purchase)}</span>
                           )}
@@ -160,7 +179,15 @@ export function TransactionsTable({
                       {r.recurring && (
                         <span className="tx-meta tx-meta--recurring">
                           <Repeat size={12} aria-hidden />
-                          <span className="tx-meta__text">{r.recurring.name}</span>
+                          <button
+                            type="button"
+                            className="tx-meta__text flag-editable"
+                            title="Modifier la récurrente"
+                            onClick={() => setEditRecurringId(r.recurring!.id)}
+                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
+                          >
+                            {r.recurring.name}
+                          </button>
                           {handlers.onDetachRecurring && (
                             <button
                               type="button"
@@ -205,21 +232,7 @@ export function TransactionsTable({
 
                 {/* — Catégorie — */}
                 <td data-col="category">
-                  {r.categoryLocked ? (
-                    <span className="tx-cat" data-locked title={cat?.full}>
-                      {cat ? (
-                        <>
-                          <span className="badge-dot" style={{ ["--dot-color" as string]: opt?.categoryColor ?? undefined }} aria-hidden />
-                          {cat.path && <span className="tx-cat__path">{cat.path} /</span>}
-                          <span className="tx-cat__leaf">{cat.leaf}</span>
-                        </>
-                      ) : (
-                        <span className="tx-cat__leaf" style={{ color: "var(--color-text-muted)" }}>
-                          Catégorie de l&apos;achat
-                        </span>
-                      )}
-                    </span>
-                  ) : editing === r.key ? (
+                  {editing === r.key ? (
                     <CategoryInlineEditor
                       options={subcategoryOptions}
                       value={r.categoryId}
@@ -360,6 +373,26 @@ export function TransactionsTable({
       />
 
       {personRow ? renderPersonModal(personRow, () => setPersonKey(null)) : null}
+
+      <MerchantEditModal
+        merchantId={editMerchantId}
+        onClose={() => setEditMerchantId(null)}
+        subcategoryOptions={subcategoryOptions}
+      />
+
+      <RecurringEditModal
+        recurringId={editRecurringId}
+        onClose={() => setEditRecurringId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
+
+      <PurchaseEditModal
+        purchaseId={editPurchaseId}
+        onClose={() => setEditPurchaseId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
     </>
   );
 }

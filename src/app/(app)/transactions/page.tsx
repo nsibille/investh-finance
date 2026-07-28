@@ -30,9 +30,11 @@ export default async function TransactionsPage({
     ? (sp.status as TransactionStatus)
     : undefined;
   const parseList = (v?: string) => (v ? v.split(",").filter(Boolean) : undefined);
+  // Filtre par magnitude : on accepte un montant signé (tel qu'affiché) et on
+  // applique sa valeur absolue.
   const parseAmount = (v?: string) => {
     const n = Number(v);
-    return v && Number.isFinite(n) && n >= 0 ? n : undefined;
+    return v && Number.isFinite(n) ? Math.abs(n) : undefined;
   };
 
   const [

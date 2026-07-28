@@ -67,10 +67,10 @@ export async function createRecurringPattern(
 
 /**
  * Propage l'enseigne et la catégorie du modèle aux transactions déjà rattachées
- * à cette récurrente, sans écraser les choix manuels : l'enseigne n'est posée
- * que là où elle est vide, la catégorie que là où elle est vide (la récurrence
- * porte l'enseigne, qui porte la catégorie). Retourne le nombre de transactions
- * touchées (union des deux mises à jour).
+ * à cette récurrente (la récurrence porte l'enseigne, qui porte la catégorie) :
+ * - l'enseigne est FORCÉE partout (écrase même un choix manuel) ;
+ * - la catégorie n'est posée que là où elle est vide (ne pas écraser).
+ * Retourne le nombre de transactions touchées (union des deux mises à jour).
  */
 async function propagateRecurringToLinked(
   supabase: Supa,
@@ -80,11 +80,12 @@ async function propagateRecurringToLinked(
 ): Promise<number> {
   const touched = new Set<string>();
   if (merchantId) {
+    // Toutes les transactions rattachées dont l'enseigne diffère (vide ou autre).
     const { data } = await supabase
       .from("transactions")
       .update({ merchant_id: merchantId })
       .eq("recurring_pattern_id", patternId)
-      .is("merchant_id", null)
+      .or(`merchant_id.is.null,merchant_id.neq.${merchantId}`)
       .select("id");
     for (const t of data ?? []) touched.add(t.id);
   }

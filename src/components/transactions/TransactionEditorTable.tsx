@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ShoppingBag, Store, Repeat, Users, X, RefreshCw } from "lucide-react";
+import { ShoppingBag, Store, Repeat, Users, X } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
@@ -213,36 +213,29 @@ export function TransactionEditorTable({
                   {r.merchant ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                       <Store size={12} aria-hidden />
-                      {r.merchant.locked ? (
-                        <span title="Enseigne imposée par l'achat rattaché">{r.merchant.name}</span>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            title="Modifier l'enseigne"
-                            onClick={() => setEditMerchantId(r.merchant!.id)}
-                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
-                          >
-                            {r.merchant.name}
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Changer d'enseigne"
-                            title="Changer d'enseigne"
-                            onClick={() => setMerchantKey(r.key)}
-                            style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
-                          >
-                            <RefreshCw size={11} aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Détacher l'enseigne"
-                            onClick={() => handlers.onDetachMerchant(r.key)}
-                            style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
-                          >
-                            <X size={11} aria-hidden />
-                          </button>
-                        </>
+                      {/* Clic sur le nom = éditer les paramètres de l'enseigne.
+                          Changer d'enseigne = détacher (croix) puis en ré-ajouter. */}
+                      <button
+                        type="button"
+                        title={
+                          r.merchant.locked
+                            ? "Enseigne imposée par l'achat — modifier ses paramètres"
+                            : "Modifier l'enseigne"
+                        }
+                        onClick={() => setEditMerchantId(r.merchant!.id)}
+                        style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
+                      >
+                        {r.merchant.name}
+                      </button>
+                      {!r.merchant.locked && (
+                        <button
+                          type="button"
+                          aria-label="Détacher l'enseigne"
+                          onClick={() => handlers.onDetachMerchant(r.key)}
+                          style={{ background: "none", border: "none", padding: 0, display: "inline-flex", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >
+                          <X size={11} aria-hidden />
+                        </button>
                       )}
                     </span>
                   ) : (

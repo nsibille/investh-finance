@@ -466,6 +466,7 @@ export function TransactionsManager({
         ? { name: row.account.name, color: row.account.color }
         : null,
       label: row.label,
+      rawLabel: row.raw_label,
       amount: row.amount,
       currency: row.currency,
       categoryId: r.subcategory_id,

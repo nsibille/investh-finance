@@ -959,6 +959,26 @@ body {
   }
 }
 
+/* Variante « stats à gauche » — modale d'édition d'une récurrence : panneau de
+   stats (KPI / fun fact / graphe) à gauche, formulaire à droite. */
+.recurring-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.recurring-detail-layout__stats {
+  border-right: 1px solid var(--color-border);
+  padding-right: var(--space-6);
+}
+@media (max-width: 820px) {
+  .recurring-detail-layout { grid-template-columns: 1fr; }
+  .recurring-detail-layout__stats {
+    border-right: none; border-bottom: 1px solid var(--color-border);
+    padding-right: 0; padding-bottom: var(--space-5);
+  }
+}
+
 .ms-panel { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .ms-head { display: flex; align-items: center; gap: var(--space-3); }

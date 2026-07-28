@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Modal } from "@/components/ui/Modal";
+import { SearchInput } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Amount } from "@/components/ui/Amount";
 import { RecurringBadge } from "@/components/ui/Badge";
@@ -14,9 +15,11 @@ import { Toggle } from "@/components/ui/Checkbox";
 import { useToast } from "@/hooks/useToast";
 import { runOptimistic } from "@/lib/optimistic";
 import { RecurringForm } from "./RecurringForm";
+import { RecurringEditModal } from "./RecurringEditModal";
 import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
 import { groupByCategory, preciseSubName } from "@/lib/categories/group";
 import { formatShortDate } from "@/lib/format/date";
+import { matchesQuery } from "@/lib/search/filter";
 import { useImportStore } from "@/stores/import";
 import {
   detectRecurring,
@@ -31,10 +34,7 @@ import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
 
-type ModalState =
-  | { mode: "create" }
-  | { mode: "edit"; pattern: RecurringPatternView }
-  | null;
+type ModalState = { mode: "create" } | null;
 
 export function RecurringManager({
   patterns,
@@ -50,8 +50,10 @@ export function RecurringManager({
   const router = useRouter();
   const toast = useToast();
   const [modal, setModal] = useState<ModalState>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<DetectedRecurring[] | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const [query, setQuery] = useState("");
 
   const [localPatterns, setLocalPatterns] = useState(patterns);
   const [prevPatterns, setPrevPatterns] = useState(patterns);
@@ -65,14 +67,30 @@ export function RecurringManager({
     [subcategoryOptions],
   );
 
+  // Recherche : nom, enseigne, catégorie, compte et motifs du libellé.
+  const filteredPatterns = useMemo(
+    () =>
+      localPatterns.filter((p) =>
+        matchesQuery(query, [
+          p.name,
+          p.merchantName,
+          p.categoryLabel,
+          p.subcategory_id ? preciseNames.get(p.subcategory_id) : null,
+          p.accountName,
+          p.label_pattern,
+        ]),
+      ),
+    [localPatterns, query, preciseNames],
+  );
+
   const groups = useMemo(
     () =>
       groupByCategory(
-        localPatterns,
+        filteredPatterns,
         (p) => p.subcategory_id,
         subcategoryOptions,
       ),
-    [localPatterns, subcategoryOptions],
+    [filteredPatterns, subcategoryOptions],
   );
 
   async function detect() {
@@ -213,7 +231,7 @@ export function RecurringManager({
               <td>{p.status === "missing" ? <RecurringBadge missing /> : <RecurringBadge />}</td>
               <td>
                 <div style={{ display: "flex", gap: "var(--space-1)", justifyContent: "flex-end" }}>
-                  <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", pattern: p })}>
+                  <IconButton label="Modifier" onClick={() => setEditId(p.id)}>
                     <Pencil size={16} />
                   </IconButton>
                   <IconButton label="Supprimer" onClick={() => remove(p.id)}>
@@ -230,13 +248,23 @@ export function RecurringManager({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
-        <Button variant="secondary" leftIcon={<Sparkles size={16} />} loading={detecting} onClick={detect}>
-          Détecter automatiquement
-        </Button>
-        <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
-          Nouvelle récurrente
-        </Button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-5)" }}>
+        <div style={{ flex: "1 1 260px", maxWidth: 360 }}>
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher une récurrente, enseigne, motif…"
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+          <Button variant="secondary" leftIcon={<Sparkles size={16} />} loading={detecting} onClick={detect}>
+            Détecter automatiquement
+          </Button>
+          <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
+            Nouvelle récurrente
+          </Button>
+        </div>
       </div>
 
       {candidates && candidates.length > 0 && (
@@ -284,6 +312,14 @@ export function RecurringManager({
             description="Détecte automatiquement tes abonnements et revenus réguliers, ou ajoute-les manuellement."
           />
         </Card>
+      ) : filteredPatterns.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Repeat}
+            title="Aucun résultat"
+            description={`Aucune récurrente ne correspond à « ${query} ».`}
+          />
+        </Card>
       ) : (
         <GroupedByCategory groups={groups} renderTable={renderTable} />
       )}
@@ -291,41 +327,25 @@ export function RecurringManager({
       <Modal
         open={modal !== null}
         onClose={() => setModal(null)}
-        title={modal?.mode === "edit" ? "Modifier la récurrente" : "Nouvelle récurrente"}
+        title="Nouvelle récurrente"
       >
         {modal && (
           <RecurringForm
-            mode={modal.mode}
-            id={modal.mode === "edit" ? modal.pattern.id : undefined}
+            mode="create"
             accountOptions={accountOptions}
             subcategoryOptions={subcategoryOptions}
             merchantOptions={merchantOptions}
-            initial={
-              modal.mode === "edit"
-                ? {
-                    name: modal.pattern.name,
-                    account_id: modal.pattern.account_id ?? "",
-                    merchant_id: modal.pattern.merchant_id ?? "",
-                    subcategory_id: modal.pattern.subcategory_id ?? "",
-                    expected_amount: modal.pattern.expected_amount ?? "",
-                    expected_amounts:
-                      modal.pattern.expected_amounts &&
-                      modal.pattern.expected_amounts.length > 0
-                        ? modal.pattern.expected_amounts
-                        : modal.pattern.expected_amount != null
-                          ? [modal.pattern.expected_amount]
-                          : [],
-                    amount_tolerance: modal.pattern.amount_tolerance,
-                    frequency_days: modal.pattern.frequency_days,
-                    label_pattern: modal.pattern.label_pattern ?? "",
-                    alert_if_missing: modal.pattern.alert_if_missing,
-                  }
-                : undefined
-            }
             onDone={() => setModal(null)}
           />
         )}
       </Modal>
+
+      <RecurringEditModal
+        recurringId={editId}
+        onClose={() => setEditId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
     </>
   );
 }

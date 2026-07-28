@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Modal } from "@/components/ui/Modal";
-import { Input } from "@/components/ui/Input";
+import { Input, SearchInput } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Alert } from "@/components/ui/Alert";
@@ -32,6 +32,7 @@ import { GroupedByCategory } from "@/components/categories/GroupedByCategory";
 import { groupByCategory, preciseSubName } from "@/lib/categories/group";
 import { deleteMerchant, addMerchantRule } from "@/server/actions/merchants";
 import { deleteRule } from "@/server/actions/rules";
+import { matchesQuery } from "@/lib/search/filter";
 import type { MerchantWithDetails, MerchantRule } from "@/lib/merchants/types";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { AccountOption } from "@/lib/rules/queries";
@@ -204,20 +205,38 @@ export function MerchantsManager({
   const [motifModal, setMotifModal] = useState<MotifModal>(null);
   const [toDelete, setToDelete] = useState<MerchantWithDetails | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
 
   const preciseNames = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, preciseSubName(o)])),
     [subcategoryOptions],
   );
 
+  // Recherche textuelle : nom, catégorie, localisation et motifs (pattern +
+  // type « contient / regex / exact ») — insensible casse/accents, multi-tokens.
+  const filtered = useMemo(
+    () =>
+      merchants.filter((m) =>
+        matchesQuery(query, [
+          displayName(m),
+          m.categoryLabel,
+          m.subcategory_id ? preciseNames.get(m.subcategory_id) : null,
+          m.is_online ? "en ligne online" : null,
+          m.country,
+          ...m.rules.flatMap((r) => [r.pattern, MATCH_LABEL[r.match_type]]),
+        ]),
+      ),
+    [merchants, query, preciseNames],
+  );
+
   // Enseignes nommées (vraies marques) vs « Sans enseigne » (motifs seuls).
   const named = useMemo(
-    () => merchants.filter((m) => displayName(m) !== null),
-    [merchants],
+    () => filtered.filter((m) => displayName(m) !== null),
+    [filtered],
   );
   const nameless = useMemo(
-    () => merchants.filter((m) => displayName(m) === null),
-    [merchants],
+    () => filtered.filter((m) => displayName(m) === null),
+    [filtered],
   );
 
   const namedGroups = useMemo(
@@ -364,11 +383,21 @@ export function MerchantsManager({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-5)" }}>
-        <RuleImport subcategoryOptions={subcategoryOptions} />
-        <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
-          Nouvelle enseigne
-        </Button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-5)" }}>
+        <div style={{ flex: "1 1 260px", maxWidth: 360 }}>
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher une enseigne, catégorie, motif…"
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+          <RuleImport subcategoryOptions={subcategoryOptions} />
+          <Button leftIcon={<Plus size={16} />} onClick={() => setModal({ mode: "create" })}>
+            Nouvelle enseigne
+          </Button>
+        </div>
       </div>
 
       {merchants.length === 0 ? (
@@ -382,6 +411,14 @@ export function MerchantsManager({
                 Nouvelle enseigne
               </Button>
             }
+          />
+        </Card>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Store}
+            title="Aucun résultat"
+            description={`Aucune enseigne ne correspond à « ${query} ».`}
           />
         </Card>
       ) : (

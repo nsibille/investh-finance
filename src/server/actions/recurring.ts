@@ -10,6 +10,7 @@ import {
   type RecurringCandidate,
 } from "@/lib/recurring/detector";
 import { matchesPattern, labelPatterns } from "@/lib/recurring/checker";
+import { getRecurringStats, type RecurringStats } from "@/lib/recurring/stats";
 import type { Database } from "@/types/database.types";
 
 /** Candidat détecté : soit nouveau, soit correspondant à une règle existante. */
@@ -177,6 +178,13 @@ export async function getRecurringEditData(id: string): Promise<
       alert_if_missing: p.alert_if_missing,
     },
   };
+}
+
+/** Stats d'une récurrence pour le panneau de la modale d'édition. */
+export async function getRecurringStatsAction(
+  id: string,
+): Promise<RecurringStats | null> {
+  return getRecurringStats(id);
 }
 
 export async function setRecurringActive(

@@ -16,9 +16,13 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
+import { SearchInput } from "@/components/ui/Input";
 import { Dot } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FolderTree } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
+import { matchesQuery } from "@/lib/search/filter";
 import { runOptimistic } from "@/lib/optimistic";
 import { CategoryForm } from "./CategoryForm";
 import { SubcategoryForm } from "./SubcategoryForm";
@@ -59,6 +63,8 @@ export function CategoryTree({
   const toast = useToast();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState("");
+  const hasQuery = query.trim().length > 0;
   const [categoryModal, setCategoryModal] = useState<CategoryModal>(null);
   const [subModal, setSubModal] = useState<SubModal>(null);
   const [deleteTarget, setDeleteTarget] = useState<CategoryNode | null>(null);
@@ -195,9 +201,48 @@ export function CategoryTree({
     }
   }
 
+  // Recherche : une sous-catégorie matche si le chemin complet (type / catégorie
+  // / sous-catégorie) contient tous les tokens. Le placeholder « — » est ignoré.
+  function subMatches(typeName: string, catName: string, sub: Subcategory) {
+    return matchesQuery(query, [
+      typeName,
+      catName,
+      sub.name === "—" ? null : sub.name,
+    ]);
+  }
+
+  // Nombre de types encore visibles sous la recherche (pour l'état « aucun résultat »).
+  const visibleTypeCount = hasQuery
+    ? localTree.filter((t) =>
+        t.categories.some(
+          (c) =>
+            (showArchived || !c.is_archived) &&
+            (matchesQuery(query, [t.name, c.name]) ||
+              c.subcategories.some((s) => subMatches(t.name, c.name, s))),
+        ),
+      ).length
+    : localTree.length;
+
   return (
     <>
-      <div style={{ marginBottom: "var(--space-5)" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--space-4)",
+          flexWrap: "wrap",
+          marginBottom: "var(--space-5)",
+        }}
+      >
+        <div style={{ flex: "1 1 260px", maxWidth: 360 }}>
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un type, une catégorie…"
+            style={{ width: "100%" }}
+          />
+        </div>
         <label
           style={{
             display: "flex",
@@ -215,11 +260,26 @@ export function CategoryTree({
         </label>
       </div>
 
+      {hasQuery && visibleTypeCount === 0 && (
+        <Card>
+          <EmptyState
+            icon={FolderTree}
+            title="Aucun résultat"
+            description={`Aucun type, catégorie ou sous-catégorie ne correspond à « ${query} ».`}
+          />
+        </Card>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
         {localTree.map((type) => {
           const cats = type.categories.filter(
-            (c) => showArchived || !c.is_archived,
+            (c) =>
+              (showArchived || !c.is_archived) &&
+              (matchesQuery(query, [type.name, c.name]) ||
+                c.subcategories.some((s) => subMatches(type.name, c.name, s))),
           );
+          // Sous recherche, on masque les types sans catégorie visible.
+          if (hasQuery && cats.length === 0) return null;
           return (
             <Card key={type.id}>
               <div
@@ -274,10 +334,14 @@ export function CategoryTree({
                   </span>
                 )}
                 {cats.map((cat) => {
-                  const isOpen = expanded.has(cat.id);
                   const subs = cat.subcategories.filter(
-                    (s) => showArchived || !s.is_archived,
+                    (s) =>
+                      (showArchived || !s.is_archived) &&
+                      subMatches(type.name, cat.name, s),
                   );
+                  // Sous recherche, on déplie d'office les catégories qui ont une
+                  // sous-catégorie correspondante pour révéler le match.
+                  const isOpen = hasQuery ? subs.length > 0 : expanded.has(cat.id);
                   return (
                     <div key={cat.id} style={{ borderTop: "1px solid var(--color-border)" }}>
                       <div

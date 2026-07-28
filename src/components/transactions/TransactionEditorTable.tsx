@@ -33,6 +33,8 @@ export interface EditorRowVM {
   operationDate: string;
   account?: { name: string; color: string | null } | null;
   label: string;
+  /** Libellé bancaire d'origine (jamais masqué : sert de garde-fou sous l'enseigne). */
+  rawLabel?: string | null;
   amount: number;
   currency: string;
   categoryId: string | null;

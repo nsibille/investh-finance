@@ -129,7 +129,14 @@ export function TransactionsTable({
             const opt = r.categoryId ? optById.get(r.categoryId) : null;
             const cat = opt ? splitCategory(opt) : null;
             const status: TransactionStatus = r.status ?? "pending";
-            const showLabelSub = Boolean(r.merchant) && r.label !== r.merchant?.name;
+            // Libellé bancaire d'origine : toujours affiché sous l'enseigne (une
+            // enseigne peut masquer une opération très différente — garde-fou).
+            const rawLabel = r.rawLabel ?? r.label;
+            const showLabelSub =
+              Boolean(r.merchant) &&
+              rawLabel.trim().length > 0 &&
+              rawLabel.trim().toLowerCase() !==
+                (r.merchant?.name ?? "").trim().toLowerCase();
 
             return (
               <tr key={r.key}>
@@ -149,7 +156,7 @@ export function TransactionsTable({
                     </div>
                     <div className="tx-main__meta">
                       {showLabelSub && (
-                        <code className="tx-label-code tx-label-code--sub">{r.label}</code>
+                        <code className="tx-label-code tx-label-code--sub">{rawLabel}</code>
                       )}
                       {r.purchase && (
                         <span className="tx-meta tx-meta--purchase">

@@ -7,10 +7,9 @@ import { useRouter } from "next/navigation";
 import { recurringSchema, type RecurringInput } from "@/lib/recurring/schema";
 import { FormField } from "@/components/ui/FormField";
 import { Input, CurrencyInput } from "@/components/ui/Input";
-import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { IconButton } from "@/components/ui/IconButton";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Wand2 } from "lucide-react";
 import { CategorySelect } from "@/components/transactions/CategorySelect";
 import { MerchantSelect } from "@/components/merchants/MerchantSelect";
 import { Toggle } from "@/components/ui/Checkbox";
@@ -159,8 +158,53 @@ export function RecurringForm({
         />
       </FormField>
 
-      <FormField label="Motifs du libellé (optionnel)" help="Un motif par ligne — la transaction matche si l'un d'eux est présent (ex: NETFLIX).">
-        <Textarea placeholder={"NETFLIX\nNETFLIX.COM"} rows={2} {...register("label_pattern")} />
+      <FormField
+        label="Motifs du libellé (optionnel)"
+        help="La transaction matche si l'un des motifs est présent dans son libellé (ex: NETFLIX)."
+      >
+        <Controller
+          control={control}
+          name="label_pattern"
+          render={({ field }) => {
+            const raw = typeof field.value === "string" ? field.value : "";
+            const rows = raw.length ? raw.split("\n") : [""];
+            const setAll = (next: string[]) => field.onChange(next.join("\n"));
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                {rows.map((motif, i) => (
+                  <div key={i} style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+                    <Wand2 size={14} aria-hidden style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
+                    <Input
+                      value={motif}
+                      placeholder="NETFLIX"
+                      style={{ flex: 1, fontFamily: "var(--font-mono)" }}
+                      onChange={(e) => {
+                        const next = [...rows];
+                        next[i] = e.target.value;
+                        setAll(next);
+                      }}
+                    />
+                    {rows.length > 1 && (
+                      <IconButton
+                        label="Retirer ce motif"
+                        onClick={() => setAll(rows.filter((_, j) => j !== i))}
+                      >
+                        <X size={14} />
+                      </IconButton>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setAll([...rows, ""])}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "fit-content", background: "none", border: "none", padding: 0, fontSize: "var(--text-sm)", color: "var(--color-brand-primary-600)", cursor: "pointer" }}
+                >
+                  <Plus size={14} aria-hidden /> Ajouter un motif
+                </button>
+              </div>
+            );
+          }}
+        />
       </FormField>
 
       <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-start" }}>

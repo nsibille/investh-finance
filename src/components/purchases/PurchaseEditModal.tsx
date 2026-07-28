@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
 import { PurchaseForm } from "./PurchaseForm";
 import { InstallmentEditor } from "./InstallmentEditor";
+import { PurchaseStatsPanel } from "./PurchaseStatsPanel";
 import { getPurchaseEditData } from "@/server/actions/purchases";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
@@ -44,7 +45,12 @@ export function PurchaseEditModal({
   merchantOptions: MerchantOption[];
 }) {
   return (
-    <Modal open={purchaseId !== null} onClose={onClose} title="Détail de l'achat">
+    <Modal
+      open={purchaseId !== null}
+      onClose={onClose}
+      title="Détail de l'achat"
+      variantClass="modal-entity-detail"
+    >
       {purchaseId !== null && (
         <PurchaseEditLoader
           id={purchaseId}
@@ -89,16 +95,23 @@ function PurchaseEditLoader({
   }
 
   return (
-    <PurchaseForm
-      mode="edit"
-      id={id}
-      initial={data.initial}
-      subcategoryOptions={subcategoryOptions}
-      merchantOptions={merchantOptions}
-      parentOptions={data.parentOptions}
-      attachedTransactionCount={data.attachedTransactionCount}
-      installmentsEditor={<InstallmentEditor purchase={data.purchase} />}
-      onDone={onDone}
-    />
+    <div className="entity-detail-layout">
+      <div className="entity-detail-layout__form">
+        <PurchaseForm
+          mode="edit"
+          id={id}
+          initial={data.initial}
+          subcategoryOptions={subcategoryOptions}
+          merchantOptions={merchantOptions}
+          parentOptions={data.parentOptions}
+          attachedTransactionCount={data.attachedTransactionCount}
+          installmentsEditor={<InstallmentEditor purchase={data.purchase} />}
+          onDone={onDone}
+        />
+      </div>
+      <div className="entity-detail-layout__stats">
+        <PurchaseStatsPanel purchase={data.purchase} />
+      </div>
+    </div>
   );
 }

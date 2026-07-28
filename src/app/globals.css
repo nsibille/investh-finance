@@ -938,21 +938,22 @@ body {
   padding: var(--space-5) var(--space-6); border-top: 1px solid var(--color-border);
 }
 
-/* — Modale détail enseigne : formulaire (gauche) + statistiques (droite) — */
-.modal-merchant-detail { max-width: 940px; }
-.merchant-detail-layout {
+/* — Modale détail d'entité (enseigne, achat…) : formulaire (gauche) +
+     statistiques (droite). Layout générique partagé. — */
+.modal-entity-detail { max-width: 940px; }
+.entity-detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
   gap: var(--space-6);
   align-items: start;
 }
-.merchant-detail-layout__stats {
+.entity-detail-layout__stats {
   border-left: 1px solid var(--color-border);
   padding-left: var(--space-6);
 }
 @media (max-width: 820px) {
-  .merchant-detail-layout { grid-template-columns: 1fr; }
-  .merchant-detail-layout__stats {
+  .entity-detail-layout { grid-template-columns: 1fr; }
+  .entity-detail-layout__stats {
     border-left: none; border-top: 1px solid var(--color-border);
     padding-left: 0; padding-top: var(--space-5);
   }
@@ -1025,6 +1026,22 @@ body {
 .ms-empty svg { color: var(--color-brand-primary); }
 .ms-empty p { font-weight: var(--fw-medium); color: var(--color-text-secondary); margin: 0; }
 .ms-empty span { font-size: var(--text-xs); }
+
+/* Barre de progression (achat : payé / total prévu). */
+.ms-progress { height: 8px; margin-top: var(--space-2); border-radius: var(--radius-full); background: var(--color-bg-surface); overflow: hidden; }
+.ms-progress__fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--color-brand-primary); transition: width var(--transition-base); }
+
+/* Pastille de légende (payé plein / à venir clair). */
+.ms-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--color-brand-primary); }
+.ms-swatch[data-upcoming] { background: var(--color-brand-primary-200); }
+
+/* Listes compactes (échéances à venir, transactions rattachées, personnes). */
+.ms-list { display: flex; flex-direction: column; gap: var(--space-1); }
+.ms-list__row { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); }
+.ms-list__row[data-upcoming] { color: var(--color-text-muted); }
+.ms-list__date { flex-shrink: 0; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.ms-list__main { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.ms-list__amount { flex-shrink: 0; font-family: var(--font-mono); color: var(--color-text-secondary); }
 
 /* ================================================================
    COMPOSANTS — Tables

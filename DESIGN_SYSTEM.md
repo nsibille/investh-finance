@@ -515,8 +515,8 @@ Utilitaire d'interaction pour un nom d'entité cliquable (enseigne, récurrente)
 .flag-editable:hover { text-decoration: underline; text-underline-offset: 2px; }
 ```
 
-### `modal-merchant-detail` + `merchant-stats-panel`
-Variante élargie (`max-width: 940px`) de `modal-surface` pour le détail d'une enseigne : grille 2 colonnes (`merchant-detail-layout`) avec le formulaire d'édition à gauche et le panneau statistiques à droite (empilées sous 820px). Le panneau `ms-*` regroupe : en-tête enseigne, héro « Total dépensé », grille de KPIs (`ms-kpi`), fun facts (`ms-funfact`), graphe `chart-merchant-spend`, et répartition par catégorie (`ms-cat` avec barre de proportion). Fonds/bordures via tokens (compatibles dark).
+### `modal-entity-detail` + panneau stats `ms-*`
+Variante élargie (`max-width: 940px`) de `modal-surface` pour le détail d'une **entité** (enseigne, achat) : grille 2 colonnes générique (`entity-detail-layout`) avec le formulaire d'édition à gauche et le panneau statistiques à droite (empilées sous 820px). Le panneau `ms-*` (famille partagée) regroupe : en-tête (`ms-head`), héro (`ms-hero`, + barre `ms-progress` pour un achat), grille de KPIs (`ms-kpi`), fun facts (`ms-funfact`), un graphe temporel, listes compactes (`ms-list` : échéances à venir, transactions rattachées, personnes) et répartition (`ms-cat`). Graphes : `chart-merchant-spend` (enseigne) / `chart-purchase-timeline` (achat, payé vs à venir). Fonds/bordures via tokens (compatibles dark).
 
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
@@ -1241,6 +1241,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `chart-bar-monthly` | Chart | Bar chart 12 mois | auto |
 | `chart-comparison` | Chart | Bar chart groupé comparaison | auto |
 | `chart-merchant-spend` | Chart | Bar chart dépenses enseigne 12 mois (mois record en relief + ligne moyenne) | auto |
+| `chart-purchase-timeline` | Chart | Bar chart paiements d'un achat dans le temps (payé vs à venir) | auto |
 | `chart-net-worth-evolution` | Chart | Line chart évolution patrimoine | auto |
 | `chart-pie-categories` | Chart | Camembert catégories | auto |
 | `dashboard-hero` | Métier | Hero du dashboard avec aurora | auto |
@@ -1273,8 +1274,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `merchant-quick-view` | Métier | Aperçu stats enseigne (popover liste) | auto |
 | `merchant-detail-page` | Métier | Fiche détail d'une enseigne | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
-| `modal-merchant-detail` | Modal | Variante élargie détail enseigne (form + stats) | auto |
-| `merchant-stats-panel` | Métier | Panneau stats enseigne (KPIs, fun facts, graphe, catégories) — classes `ms-*` | auto |
+| `modal-entity-detail` | Modal | Variante élargie détail entité — enseigne/achat (form + stats) | auto |
+| `entity-detail-layout` | Layout | Grille 2 colonnes form/stats de la modale de détail | auto |
+| `merchant-stats-panel` | Métier | Panneau stats (KPIs, fun facts, graphe, listes) — famille `ms-*`, partagé enseigne/achat | auto |
 | `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |
 | `modal-export-options` | Modal | Variante options export | auto |

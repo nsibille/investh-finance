@@ -31,7 +31,7 @@ export function MerchantEditModal({
       open={merchantId !== null}
       onClose={onClose}
       title="Détail de l'enseigne"
-      variantClass="modal-merchant-detail"
+      variantClass="modal-entity-detail"
     >
       {merchantId !== null && (
         <MerchantDetailLoader
@@ -75,8 +75,8 @@ function MerchantDetailLoader({
   }, [id]);
 
   return (
-    <div className="merchant-detail-layout">
-      <div className="merchant-detail-layout__form">
+    <div className="entity-detail-layout">
+      <div className="entity-detail-layout__form">
         {!initial ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-6)" }}>
             <Spinner size="lg" />
@@ -92,7 +92,7 @@ function MerchantDetailLoader({
         )}
       </div>
 
-      <div className="merchant-detail-layout__stats">
+      <div className="entity-detail-layout__stats">
         {!statsLoaded ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
             <SkeletonBlock height={72} />

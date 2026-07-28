@@ -62,6 +62,46 @@ export function assignOccurrences<T>(
   });
 }
 
+/**
+ * Résout le `dedup_hash` de chaque ligne d'un lot pour un compte.
+ *
+ * Les lignes normales gardent leur hash naturel (occurrence indexée dans le
+ * lot) : ré-importer le même fichier reste idempotent. Une ligne marquée
+ * `force` a été déflaguée manuellement (faux positif de la dédup) : on décale
+ * son occurrence jusqu'à un hash absent à la fois de la base et des autres
+ * lignes du lot, pour qu'elle soit réellement insérée malgré la contrainte
+ * d'unicité `(account_id, dedup_hash)`.
+ */
+export function resolveDedupHashes<T extends DedupInput & { force?: boolean }>(
+  accountId: string,
+  items: T[],
+  existingHashes: Set<string>,
+): string[] {
+  const occurrences = assignOccurrences(items, (t) => baseKey(t));
+  const natural = items.map((t, i) =>
+    computeDedupHash(accountId, t, occurrences[i]),
+  );
+  if (!items.some((t) => t.force)) return natural;
+
+  // Hashs déjà pris : la base + les hashs naturels des lignes non forcées.
+  const taken = new Set<string>(existingHashes);
+  items.forEach((t, i) => {
+    if (!t.force) taken.add(natural[i]);
+  });
+
+  return items.map((t, i) => {
+    if (!t.force) return natural[i];
+    let occ = occurrences[i];
+    let hash = natural[i];
+    while (taken.has(hash)) {
+      occ += 1;
+      hash = computeDedupHash(accountId, t, occ);
+    }
+    taken.add(hash);
+    return hash;
+  });
+}
+
 /** Removes in-batch duplicates by dedup hash, keeping the first occurrence. */
 export function dedupeBatch<T extends { dedup_hash: string }>(rows: T[]): T[] {
   const seen = new Set<string>();

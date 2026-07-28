@@ -747,6 +747,7 @@ body {
 .badge-status-new,
 .badge-status-duplicate,
 .badge-status-duplicate-file,
+.badge-status-forced,
 .badge-recurring-active,
 .badge-recurring-missing,
 .badge-group,
@@ -762,6 +763,7 @@ body {
 .badge-status-new      { background: var(--color-info-light); color: var(--color-info-dark); }
 .badge-status-duplicate { background: var(--color-bg-subtle); color: var(--color-text-disabled); text-decoration: line-through; }
 .badge-status-duplicate-file { background: var(--color-warning-light); color: var(--color-warning-dark); }
+.badge-status-forced   { background: var(--color-brand-primary-50); color: var(--color-brand-primary-700); }
 .badge-recurring-active { background: var(--color-success-light); color: var(--color-success-dark); }
 .badge-recurring-missing { background: var(--color-warning-light); color: var(--color-warning-dark); }
 .badge-group { background: var(--color-info-light); color: var(--color-info-dark); }

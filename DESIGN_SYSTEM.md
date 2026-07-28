@@ -505,6 +505,9 @@ Idem avec `--color-bg-subtle` / `--color-text-disabled` + texte rayé (import pr
 ### `badge-status-duplicate-file`
 Idem avec `--color-warning-light` / `--color-warning-dark` (import preview, doublon répété dans le fichier importé).
 
+### `badge-status-forced`
+Idem avec `--color-brand-primary-50` / `--color-brand-primary-700` (import preview, doublon déjà en base déflagué manuellement : sera importé via une occurrence libre). Libellé « Ré-inclus ».
+
 ### `badge-category`
 **Badge catégorie avec pastille couleur**
 ```css
@@ -1197,6 +1200,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-recurring-missing` | Status | Badge récurrente manquante | auto |
 | `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |
 | `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
+| `badge-status-forced` | Status | Badge import row doublon déflagué (ré-inclus, sera importé) | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |
 | `badge-status-new` | Status | Badge import row nouvelle | auto |
 | `badge-status-pending` | Status | Badge transaction à valider | auto |

@@ -167,6 +167,7 @@ export default function DesignSystemPage() {
         <StatusBadge status="ignored" />
         <ImportRowBadge kind="new" />
         <ImportRowBadge kind="duplicate" />
+        <ImportRowBadge kind="forced" />
         <CategoryBadge name="Courses" color="#8B5CF6" />
         <TagBadge>Vacances 2026</TagBadge>
         <RecurringBadge />

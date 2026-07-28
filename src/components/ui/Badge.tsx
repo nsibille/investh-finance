@@ -16,11 +16,19 @@ export function StatusBadge({ status }: { status: TxStatus }) {
   );
 }
 
-export function ImportRowBadge({ kind }: { kind: "new" | "duplicate" }) {
+const IMPORT_ROW_LABELS = {
+  new: "Nouvelle",
+  duplicate: "Doublon",
+  forced: "Ré-inclus",
+} as const;
+
+export function ImportRowBadge({
+  kind,
+}: {
+  kind: "new" | "duplicate" | "forced";
+}) {
   return (
-    <span className={`badge-status-${kind}`}>
-      {kind === "new" ? "Nouvelle" : "Doublon"}
-    </span>
+    <span className={`badge-status-${kind}`}>{IMPORT_ROW_LABELS[kind]}</span>
   );
 }
 

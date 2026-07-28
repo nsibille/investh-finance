@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { applyRules } from "@/lib/rules/engine";
 import { loadEngineRules } from "@/lib/rules/loader";
 import { matchesPattern } from "@/lib/recurring/checker";
-import { computeDedupHash, dedupeBatch, assignOccurrences, baseKey } from "./dedup";
+import { dedupeBatch, resolveDedupHashes } from "./dedup";
 import type { ParsedTransaction, ImportSummary } from "./types";
 import type { Database } from "@/types/database.types";
 
@@ -62,7 +62,20 @@ export async function importParsedTransactions(
     const patterns = patternRows ?? [];
 
     const nowIso = new Date().toISOString();
-    const occurrences = assignOccurrences(parsed, (p) => baseKey(p));
+
+    // Lignes déflaguées (`force`) : détectées à tort comme doublon déjà en base.
+    // On charge les hashs existants du compte pour leur attribuer une occurrence
+    // libre (les lignes normales restent idempotentes). Requête évitée sans
+    // ligne forcée.
+    let existingHashes = new Set<string>();
+    if (parsed.some((p) => p.force)) {
+      const { data: existing } = await supabase
+        .from("transactions")
+        .select("dedup_hash")
+        .eq("account_id", accountId);
+      existingHashes = new Set((existing ?? []).map((r) => r.dedup_hash));
+    }
+    const dedupHashes = resolveDedupHashes(accountId, parsed, existingHashes);
 
     const rows: (TransactionInsert & { dedup_hash: string })[] = parsed.map(
       (p, i) => {
@@ -132,7 +145,7 @@ export async function importParsedTransactions(
           split_nature:
             p.persons && p.persons.personIds.length > 0 ? p.persons.nature : null,
           validated_at: status === "validated" ? nowIso : null,
-          dedup_hash: computeDedupHash(accountId, p, occurrences[i]),
+          dedup_hash: dedupHashes[i],
         };
       },
     );

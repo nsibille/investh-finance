@@ -48,7 +48,7 @@ export default async function DashboardPage({
 
       <section className="dashboard-hero">
         <div className="deco-aurora-gradient" />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-4)", marginBottom: "var(--space-5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-4)" }}>
           <div>
             <h1 style={{ fontSize: "var(--text-2xl)", fontWeight: "var(--fw-semibold)", letterSpacing: "var(--tracking-tight)", margin: 0 }}>
               Tableau de bord
@@ -60,12 +60,6 @@ export default async function DashboardPage({
           <Suspense>
             <MonthZoomSelector months={data.months} labels={data.monthLabels} zoom={validZoom} />
           </Suspense>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "var(--space-4)" }}>
-          <KpiCard kind="revenus" label="Revenus" value={formatCurrency(data.totals.revenus)} />
-          <KpiCard kind="depenses" label="Dépenses" value={formatCurrency(data.totals.depenses)} />
-          <KpiCard kind="epargne" label="Investissements" value={formatCurrency(data.totals.investissements)} />
-          <KpiCard kind="solde" label="Solde" value={formatCurrency(data.totals.solde)} />
         </div>
       </section>
 
@@ -89,7 +83,14 @@ export default async function DashboardPage({
         )}
       </Card>
 
-      {/* Vue d'ensemble : flux mensuels sur l'année glissante */}
+      {/* Vue d'ensemble : totaux + flux mensuels sur l'année glissante */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "var(--space-4)" }}>
+        <KpiCard kind="revenus" label="Revenus" value={formatCurrency(data.totals.revenus)} />
+        <KpiCard kind="depenses" label="Dépenses" value={formatCurrency(data.totals.depenses)} />
+        <KpiCard kind="epargne" label="Investissements" value={formatCurrency(data.totals.investissements)} />
+        <KpiCard kind="solde" label="Solde" value={formatCurrency(data.totals.solde)} />
+      </div>
+
       <Card>
         <h2 className="card-analytics__title">Revenus · Dépenses · Investissements (12 mois)</h2>
         <DashboardFlowChart data={data.series} highlightMonth={validZoom} />

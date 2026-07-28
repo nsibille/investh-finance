@@ -57,18 +57,10 @@ function DrillRows({ txs, href }: { txs: DashTx[]; href: string }) {
   return (
     <div className="seg-drill">
       {txs.map((t) => (
-        <div className="seg-drill__item" key={t.id}>
-          <div className="seg-drill__row">
-            <span className="seg-drill__date">{dmy(t.date)}</span>
+        <div className="seg-drill__row" key={t.id}>
+          <span className="seg-drill__date">{dmy(t.date)}</span>
+          <span className="seg-drill__body">
             <span className="seg-drill__label">{t.label}</span>
-            <span
-              className="seg-drill__amount"
-              style={{ color: t.amount >= 0 ? "var(--color-success)" : undefined }}
-            >
-              {formatCurrency(t.amount)}
-            </span>
-          </div>
-          <div className="seg-drill__meta">
             {t.subName && (
               <span className="seg-chip">
                 <Dot color={t.categoryColor ?? undefined} />
@@ -93,7 +85,13 @@ function DrillRows({ txs, href }: { txs: DashTx[]; href: string }) {
                 {t.recurring}
               </span>
             )}
-          </div>
+          </span>
+          <span
+            className="seg-drill__amount"
+            style={{ color: t.amount >= 0 ? "var(--color-success)" : undefined }}
+          >
+            {formatCurrency(t.amount)}
+          </span>
         </div>
       ))}
       <Link href={href} className="btn-ghost-sm" style={{ alignSelf: "flex-start", textDecoration: "none" }}>

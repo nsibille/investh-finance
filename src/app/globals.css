@@ -908,21 +908,26 @@ body {
 .seg-delta[data-tone="good"] { color: var(--color-success); }
 .seg-delta[data-tone="bad"] { color: var(--color-danger); }
 .seg-delta[data-tone="flat"] { color: var(--color-text-muted); }
-/* Encart drill-down (top transactions). */
-.seg-drill { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) 0 var(--space-1) var(--space-6); }
-.seg-drill__item { display: flex; flex-direction: column; gap: 2px; }
-.seg-drill__row { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-xs); }
-.seg-drill__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); }
+/* Encart drill-down (top transactions) : une ligne compacte par opération. */
+.seg-drill { grid-column: 1 / -1; display: flex; flex-direction: column; padding: var(--space-1) 0 var(--space-1) var(--space-6); }
+.seg-drill__row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; column-gap: var(--space-3);
+  font-size: var(--text-xs); padding: 3px var(--space-2); border-radius: var(--radius-sm);
+}
+.seg-drill__row:hover { background: var(--color-bg-subtle); }
 .seg-drill__date { color: var(--color-text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.seg-drill__amount { font-family: var(--font-mono); flex-shrink: 0; }
-/* Puces contextuelles d'une transaction (sous-catégorie, enseigne, achat, récurrente). */
-.seg-drill__meta { display: flex; flex-wrap: wrap; gap: 4px 6px; padding-left: 52px; }
+/* Libellé + puces contextuelles alignés sur une seule ligne (le libellé tronque en premier). */
+.seg-drill__body { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.seg-drill__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.seg-drill__amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .seg-chip {
-  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; max-width: 40%;
   font-size: 11px; color: var(--color-text-muted);
   background: var(--color-bg-subtle); padding: 1px 7px; border-radius: var(--radius-full);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.seg-drill__row:hover .seg-chip { background: var(--color-bg-surface); }
 .seg-chip > svg { flex-shrink: 0; }
 .seg-chip--purchase { color: var(--color-brand-primary-600); }
 

@@ -1,7 +1,14 @@
 import { startOfMonth, endOfMonth, subMonths, addDays, format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import { getCategoryDisplayMap } from "@/lib/transactions/queries";
+import { normalizeText } from "@/lib/search/filter";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
+
+/** Nom (normalisé) de la catégorie des débits différés (règlement mensuel de
+ * carte) : ces opérations consolident des achats déjà comptés, on les exclut de
+ * la trésorerie pour ne pas compter deux fois. */
+const DEFERRED_CATEGORY = "debit differe";
 
 export interface TreasuryPoint {
   date: string; // YYYY-MM-DD
@@ -44,13 +51,19 @@ export async function getTreasurySeries(
   const startIso = iso(windowStart);
   const drawEndIso = iso(windowEnd) < todayIso ? iso(windowEnd) : todayIso;
 
-  const [{ data: balances }, { data: accts }, { data: rebases }] =
+  const [{ data: balances }, { data: accts }, { data: rebases }, categories] =
     await Promise.all([
       supabase.from("account_balances").select("current_balance"),
       supabase.from("accounts").select("id, initial_date").eq("is_archived", false),
       supabase.from("account_rebases").select("account_id, rebase_date"),
+      getCategoryDisplayMap(),
     ]);
   const total = (balances ?? []).reduce((s, b) => s + Number(b.current_balance), 0);
+
+  // Sous-catégories « Débit différé » à exclure des flux (double comptage).
+  const deferredSubIds = new Set<string>();
+  for (const [subId, d] of categories)
+    if (normalizeText(d.categoryName) === DEFERRED_CATEGORY) deferredSubIds.add(subId);
 
   // Date d'ancre effective par compte (solde initial ou dernier rebasement).
   const anchorDate = new Map<string, string>();
@@ -68,7 +81,7 @@ export async function getTreasurySeries(
   for (;;) {
     const { data } = await supabase
       .from("transactions")
-      .select("account_id, operation_date, amount")
+      .select("account_id, operation_date, amount, subcategory_id")
       .eq("status", "validated")
       .gte("operation_date", startIso)
       .lte("operation_date", todayIso)
@@ -78,10 +91,12 @@ export async function getTreasurySeries(
       account_id: string;
       operation_date: string;
       amount: number;
+      subcategory_id: string | null;
     }[];
     for (const t of rows) {
       const ad = anchorDate.get(t.account_id);
       if (ad && t.operation_date <= ad) continue; // pré-ancre : hors solde
+      if (t.subcategory_id && deferredSubIds.has(t.subcategory_id)) continue; // débit différé
       flowByDay.set(
         t.operation_date,
         (flowByDay.get(t.operation_date) ?? 0) + Number(t.amount),

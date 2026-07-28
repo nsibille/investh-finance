@@ -8,6 +8,7 @@ import type {
   TransactionRow,
   TransactionFilters,
   TransactionsPage,
+  TransactionsSummary,
   CategoryDisplay,
   AccountDisplay,
 } from "./types";
@@ -109,16 +110,21 @@ function enrich(
   };
 }
 
-export async function getTransactionsPage(
-  filters: TransactionFilters,
-): Promise<TransactionsPage> {
-  const supabase = await createClient();
-  const page = Math.max(1, filters.page ?? 1);
-  const perPage = filters.perPage ?? DEFAULT_PER_PAGE;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
+/**
+ * Construit la requête `transactions` avec tous les prédicats de filtrage (mais
+ * sans tri ni pagination). Partagé par le listing paginé et l'agrégat d'en-tête
+ * pour garantir que les KPIs portent exactement sur le même jeu que la liste.
+ */
+function filteredTransactionsQuery(
+  supabase: SupabaseServerClient,
+  columns: string,
+  filters: TransactionFilters,
+) {
   let query = supabase
     .from("transactions")
-    .select(LIST_COLUMNS, { count: "exact" });
+    .select(columns, { count: "exact" });
 
   if (filters.accountId) query = query.eq("account_id", filters.accountId);
   if (filters.status) query = query.eq("status", filters.status);
@@ -148,6 +154,59 @@ export async function getTransactionsPage(
       config: "french",
     });
   }
+
+  return query;
+}
+
+/**
+ * Agrège le jeu filtré complet (toutes pages) pour l'en-tête du listing : total
+ * dépenses/revenus, solde net et nombre d'opérations. Les montants excluent les
+ * opérations « ignorées » (non suivies). Parcouru par tranches pour rester juste
+ * quel que soit le nombre de lignes.
+ */
+export async function getTransactionsSummary(
+  filters: TransactionFilters,
+): Promise<TransactionsSummary> {
+  const supabase = await createClient();
+  const CHUNK = 1000;
+  let offset = 0;
+  let count = 0;
+  let totalExpense = 0;
+  let totalIncome = 0;
+
+  for (;;) {
+    // Tri stable (id) indispensable pour paginer sans doublon ni saut.
+    const { data, count: c } = await filteredTransactionsQuery(
+      supabase,
+      "amount, status",
+      filters,
+    )
+      .order("id", { ascending: true })
+      .range(offset, offset + CHUNK - 1);
+
+    if (c != null) count = c;
+    const rows = (data ?? []) as unknown as { amount: number; status: string }[];
+    for (const r of rows) {
+      if (r.status === "ignored") continue;
+      const amount = Number(r.amount);
+      if (amount < 0) totalExpense += -amount;
+      else totalIncome += amount;
+    }
+    if (rows.length < CHUNK) break;
+    offset += CHUNK;
+  }
+
+  return { count, totalExpense, totalIncome, net: totalIncome - totalExpense };
+}
+
+export async function getTransactionsPage(
+  filters: TransactionFilters,
+): Promise<TransactionsPage> {
+  const supabase = await createClient();
+  const page = Math.max(1, filters.page ?? 1);
+  const perPage = filters.perPage ?? DEFAULT_PER_PAGE;
+
+  let query = filteredTransactionsQuery(supabase, LIST_COLUMNS, filters);
 
   switch (filters.sort) {
     case "date_asc":

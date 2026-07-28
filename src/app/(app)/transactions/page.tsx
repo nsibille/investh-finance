@@ -3,10 +3,15 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TransactionsTabs } from "@/components/transactions/TransactionsTabs";
 import { TransactionFilters } from "@/components/transactions/TransactionFilters";
 import { TransactionsManager } from "@/components/transactions/TransactionsManager";
+import { TransactionsSummaryBar } from "@/components/transactions/TransactionsSummaryBar";
 import { ExportMenu } from "@/components/transactions/ExportMenu";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getTransactionsPage, countPending } from "@/lib/transactions/queries";
+import {
+  getTransactionsPage,
+  getTransactionsSummary,
+  countPending,
+} from "@/lib/transactions/queries";
 import { countTransferOrphans } from "@/lib/transactions/transfersReconciliation";
 import { getAccountOptions } from "@/lib/rules/queries";
 import { getSubcategoryOptions } from "@/lib/categories/queries";
@@ -37,8 +42,28 @@ export default async function TransactionsPage({
     return v && Number.isFinite(n) ? Math.abs(n) : undefined;
   };
 
+  const filters = {
+    accountId: sp.account,
+    status,
+    subcategoryId: sp.subcategory,
+    merchantIds: parseList(sp.merchant),
+    purchaseIds: parseList(sp.purchase),
+    amountMin: parseAmount(sp.amin),
+    amountMax: parseAmount(sp.amax),
+    search: sp.q,
+    from: sp.from,
+    to: sp.to,
+    sort: sp.sort as
+      | "date_desc"
+      | "date_asc"
+      | "amount_desc"
+      | "amount_asc"
+      | undefined,
+  };
+
   const [
     data,
+    summary,
     pendingCount,
     transferAlerts,
     accountOptions,
@@ -48,25 +73,8 @@ export default async function TransactionsPage({
     recurringOptions,
     personOptions,
   ] = await Promise.all([
-    getTransactionsPage({
-      accountId: sp.account,
-      status,
-      subcategoryId: sp.subcategory,
-      merchantIds: parseList(sp.merchant),
-      purchaseIds: parseList(sp.purchase),
-      amountMin: parseAmount(sp.amin),
-      amountMax: parseAmount(sp.amax),
-      search: sp.q,
-      from: sp.from,
-      to: sp.to,
-      sort: sp.sort as
-        | "date_desc"
-        | "date_asc"
-        | "amount_desc"
-        | "amount_asc"
-        | undefined,
-      page: Number(sp.page) || 1,
-    }),
+    getTransactionsPage({ ...filters, page: Number(sp.page) || 1 }),
+    getTransactionsSummary(filters),
     countPending(),
     countTransferOrphans(),
     getAccountOptions(),
@@ -96,6 +104,7 @@ export default async function TransactionsPage({
           merchantOptions={merchantOptions}
           purchaseOptions={purchaseOptions}
         />
+        {summary.count > 0 && <TransactionsSummaryBar summary={summary} />}
         {data.rows.length === 0 ? (
           <Card>
             <EmptyState

@@ -91,3 +91,19 @@ export interface TransactionsPage {
   page: number;
   perPage: number;
 }
+
+/**
+ * Agrégats du jeu filtré complet (toutes pages), pour l'en-tête du listing.
+ * Les montants excluent les opérations « ignorées » (non suivies) ; `count`
+ * reflète en revanche l'ensemble affiché (aligné sur la pagination).
+ */
+export interface TransactionsSummary {
+  /** Nombre total d'opérations du set filtré (ignorées incluses). */
+  count: number;
+  /** Somme des débits, en valeur absolue (hors ignorées). */
+  totalExpense: number;
+  /** Somme des crédits (hors ignorées). */
+  totalIncome: number;
+  /** Solde net = crédits − débits (hors ignorées). */
+  net: number;
+}

@@ -59,6 +59,41 @@ export type Database = {
         }
         Relationships: []
       }
+      account_rebases: {
+        Row: {
+          account_id: string
+          balance: number
+          created_at: string
+          id: string
+          note: string | null
+          rebase_date: string
+        }
+        Insert: {
+          account_id: string
+          balance: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          rebase_date: string
+        }
+        Update: {
+          account_id?: string
+          balance?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          rebase_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_rebases_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attachments: {
         Row: {
           created_at: string

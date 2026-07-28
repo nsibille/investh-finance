@@ -35,6 +35,11 @@ export const DashboardFlowChart = dynamic(
   { ssr: false, loading: chartFallback(300) },
 );
 
+export const TreasuryChart = dynamic(
+  () => import("./TreasuryChart").then((m) => m.TreasuryChart),
+  { ssr: false, loading: chartFallback(260) },
+);
+
 export const ComparisonChart = dynamic(
   () => import("./ComparisonChart").then((m) => m.ComparisonChart),
   { ssr: false, loading: chartFallback(300) },

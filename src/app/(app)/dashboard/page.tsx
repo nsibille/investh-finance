@@ -8,8 +8,9 @@ import { AccountAvatar } from "@/components/ui/Avatar";
 import { MonthZoomSelector } from "@/components/dashboard/MonthZoomSelector";
 import { SegmentAnalysis } from "@/components/dashboard/SegmentAnalysis";
 import { MissingRecurringAlert } from "@/components/recurring/MissingRecurringAlert";
-import { DashboardFlowChart } from "@/components/ui/charts/lazy";
+import { DashboardFlowChart, TreasuryChart } from "@/components/ui/charts/lazy";
 import { getDashboardData } from "@/lib/dashboard/analysis";
+import { getTreasurySeries } from "@/lib/dashboard/treasury";
 import { SEGMENT_TYPE_SLUGS } from "@/lib/dashboard/segments";
 import { getAccountsWithBalances } from "@/lib/accounts/queries";
 import { getMissingRecurring } from "@/lib/recurring/queries";
@@ -26,8 +27,9 @@ export default async function DashboardPage({
   const now = new Date();
   const zoom = sp.zoom && /^\d{4}-\d{2}$/.test(sp.zoom) ? sp.zoom : null;
 
-  const [data, accounts, missingRecurring] = await Promise.all([
+  const [data, treasury, accounts, missingRecurring] = await Promise.all([
     getDashboardData(now, zoom),
+    getTreasurySeries(now, zoom),
     getAccountsWithBalances(),
     getMissingRecurring(),
   ]);
@@ -40,6 +42,7 @@ export default async function DashboardPage({
     : "année glissante";
 
   const activeAccounts = accounts.filter((a) => !a.is_archived);
+  const totalBalance = activeAccounts.reduce((s, a) => s + a.current_balance, 0);
   const { from: scopeFrom, to: scopeTo } = { from: data.scopeFrom, to: data.scopeTo };
 
   return (
@@ -65,7 +68,15 @@ export default async function DashboardPage({
 
       {/* Premier étage : comptes */}
       <Card>
-        <h2 className="card-analytics__title">Comptes</h2>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-4)", flexWrap: "wrap", marginBottom: "var(--space-4)" }}>
+          <h2 className="card-analytics__title" style={{ margin: 0 }}>Comptes</h2>
+          {activeAccounts.length > 0 && (
+            <span style={{ display: "inline-flex", alignItems: "baseline", gap: "var(--space-2)" }}>
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>Solde total</span>
+              <Amount value={totalBalance} size="lg" />
+            </span>
+          )}
+        </div>
         {activeAccounts.length === 0 ? (
           <EmptyState title="Aucun compte" description="Crée un compte pour suivre tes soldes." />
         ) : (
@@ -82,6 +93,17 @@ export default async function DashboardPage({
           </div>
         )}
       </Card>
+
+      {/* Trésorerie consolidée au jour le jour sur la fenêtre */}
+      {treasury.points.length > 0 && (
+        <Card>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-4)", flexWrap: "wrap", marginBottom: "var(--space-2)" }}>
+            <h2 className="card-analytics__title" style={{ margin: 0 }}>Trésorerie (solde global au jour le jour)</h2>
+            <Amount value={treasury.total} size="md" />
+          </div>
+          <TreasuryChart points={treasury.points} />
+        </Card>
+      )}
 
       {/* Vue d'ensemble : totaux + flux mensuels sur l'année glissante */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "var(--space-4)" }}>

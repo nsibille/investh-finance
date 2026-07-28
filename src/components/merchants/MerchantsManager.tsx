@@ -57,6 +57,23 @@ function displayName(m: { name: string | null }): string | null {
   return m.name && m.name.trim() ? m.name : null;
 }
 
+/**
+ * Résumé des motifs d'une enseigne sans nom, affiché à la place de « Sans
+ * enseigne » : les motifs regroupés par type, ex. « contient xxx, yyy · regex zzz ».
+ */
+function rulesSummary(rules: MerchantRule[]): string | null {
+  if (rules.length === 0) return null;
+  const byType = new Map<string, string[]>();
+  for (const r of rules) {
+    const list = byType.get(r.match_type) ?? [];
+    list.push(r.pattern);
+    byType.set(r.match_type, list);
+  }
+  return [...byType.entries()]
+    .map(([type, pats]) => `${MATCH_LABEL[type] ?? type} ${pats.join(", ")}`)
+    .join(" · ");
+}
+
 function RuleEditor({
   merchant,
   onEditMotif,
@@ -260,6 +277,7 @@ export function MerchantsManager({
           {items.map((m) => {
             const isOpen = expanded.has(m.id);
             const label = displayName(m);
+            const summary = label ? null : rulesSummary(m.rules);
             return (
               <Fragment key={m.id}>
                 <tr>
@@ -272,11 +290,16 @@ export function MerchantsManager({
                     </IconButton>
                   </td>
                   <td data-wrap="true" style={{ fontWeight: "var(--fw-medium)" }}>
-                    {label ?? (
-                      <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
-                        Sans enseigne
-                      </span>
-                    )}
+                    {label ??
+                      (summary ? (
+                        <span style={{ fontWeight: "var(--fw-regular)", color: "var(--color-text-secondary)" }}>
+                          {summary}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
+                          Sans enseigne
+                        </span>
+                      ))}
                   </td>
                   <td>
                     {m.subcategory_id ? (

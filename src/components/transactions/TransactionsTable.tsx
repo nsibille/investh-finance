@@ -129,14 +129,12 @@ export function TransactionsTable({
             const opt = r.categoryId ? optById.get(r.categoryId) : null;
             const cat = opt ? splitCategory(opt) : null;
             const status: TransactionStatus = r.status ?? "pending";
-            // Libellé bancaire d'origine : toujours affiché sous l'enseigne (une
-            // enseigne peut masquer une opération très différente — garde-fou).
+            // Anatomie constante d'une ligne : titre = enseigne (si connue),
+            // sinon libellé bancaire ; quand une enseigne occupe le titre, le
+            // libellé bancaire d'origine est TOUJOURS rappelé en sous-ligne
+            // (garde-fou : une enseigne peut masquer une opération différente).
             const rawLabel = r.rawLabel ?? r.label;
-            const showLabelSub =
-              Boolean(r.merchant) &&
-              rawLabel.trim().length > 0 &&
-              rawLabel.trim().toLowerCase() !==
-                (r.merchant?.name ?? "").trim().toLowerCase();
+            const showLabelSub = Boolean(r.merchant) && rawLabel.trim().length > 0;
 
             return (
               <tr key={r.key}>

@@ -131,10 +131,10 @@ export function TransactionsTable({
             const status: TransactionStatus = r.status ?? "pending";
             // Anatomie constante d'une ligne : titre = enseigne (si connue),
             // sinon libellé bancaire ; quand une enseigne occupe le titre, le
-            // libellé bancaire d'origine est TOUJOURS rappelé en sous-ligne
-            // (garde-fou : une enseigne peut masquer une opération différente).
+            // Anatomie de ligne constante : le libellé bancaire d'origine est
+            // TOUJOURS le titre (grand). L'enseigne, l'achat, la récurrente… sont
+            // des méta rappelés en dessous (garde-fou : jamais masquer le libellé).
             const rawLabel = r.rawLabel ?? r.label;
-            const showLabelSub = Boolean(r.merchant) && rawLabel.trim().length > 0;
 
             return (
               <tr key={r.key}>
@@ -142,19 +142,15 @@ export function TransactionsTable({
                 <td data-col="main">
                   <div className="tx-main">
                     <div className="tx-main__title">
-                      {r.merchant ? (
+                      <code className="tx-label-code">{rawLabel}</code>
+                    </div>
+                    <div className="tx-main__meta">
+                      {r.merchant && (
                         <MerchantQuickView
                           merchantId={r.merchant.id}
                           name={r.merchant.name}
                           onEdit={() => setEditMerchantId(r.merchant!.id)}
                         />
-                      ) : (
-                        <code className="tx-label-code">{r.label}</code>
-                      )}
-                    </div>
-                    <div className="tx-main__meta">
-                      {showLabelSub && (
-                        <code className="tx-label-code tx-label-code--sub">{rawLabel}</code>
                       )}
                       {r.purchase && (
                         <span className="tx-meta tx-meta--purchase">

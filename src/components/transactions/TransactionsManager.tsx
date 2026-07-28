@@ -15,7 +15,9 @@ import {
   setTransactionStatus,
   validateTransaction,
   updateTransactionNote,
+  deleteTransaction,
 } from "@/server/actions/transactions";
+import { Alert } from "@/components/ui/Alert";
 import { createCategoryOnTheFly } from "@/server/actions/categories";
 import {
   attachTransactionToPurchase,
@@ -95,6 +97,8 @@ export function TransactionsManager({
   const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
   const [extraOptions, setExtraOptions] = useState<SubcategoryOption[]>([]);
   const [ruleFor, setRuleFor] = useState<TransactionRow | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Réconcilie l'état optimiste avec le serveur : dès qu'un `router.refresh()`
   // renvoie de nouvelles lignes, les surcharges deviennent caduques (le serveur
@@ -441,6 +445,17 @@ export function TransactionsManager({
     if (res.ok) router.refresh();
   }
 
+  async function confirmDelete() {
+    if (!deleteId) return;
+    setDeleting(true);
+    const res = await deleteTransaction(deleteId);
+    setDeleting(false);
+    if (!res.ok) return toast.error(res.error);
+    setDeleteId(null);
+    toast.success("Transaction supprimée");
+    router.refresh();
+  }
+
   const handlers: ListHandlers = {
     onAssignCategory: assignCategory,
     onCreateCategory: createCategory,
@@ -455,6 +470,7 @@ export function TransactionsManager({
     onSaveNote: saveNote,
     onValidate: quickValidate,
     onSetStatus: changeStatus,
+    onDelete: (key) => setDeleteId(key),
   };
 
   const editorRows: EditorRowVM[] = rows.map((row) => {
@@ -562,6 +578,29 @@ export function TransactionsManager({
             onDone={() => setRuleFor(null)}
           />
         )}
+      </Modal>
+
+      <Modal
+        open={deleteId !== null}
+        onClose={() => setDeleteId(null)}
+        title="Supprimer la transaction ?"
+        variantClass="modal-confirm-danger"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteId(null)} disabled={deleting}>
+              Annuler
+            </Button>
+            <Button variant="danger" onClick={confirmDelete} loading={deleting}>
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <Alert variant="warning">
+          Cette transaction sera supprimée définitivement. Ses pièces jointes,
+          partages et tags le seront aussi ; les échéances d&apos;achat et
+          remboursements associés seront détachés. Action irréversible.
+        </Alert>
       </Modal>
     </>
   );

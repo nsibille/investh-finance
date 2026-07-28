@@ -9,20 +9,12 @@ import {
   TrendingDown,
   ArrowRight,
   Lightbulb,
-  Store,
-  ShoppingBag,
-  Repeat,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { Dot } from "@/components/ui/Badge";
+import { TopTransactions } from "./TopTransactions";
 import { formatCurrency } from "@/lib/format/currency";
 import { SEGMENT_LABEL } from "@/lib/dashboard/segments";
-import type { DashSegment, DashCategory, DashTx } from "@/lib/dashboard/analysis";
-
-function dmy(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y.slice(2)}`;
-}
+import type { DashSegment, DashCategory } from "@/lib/dashboard/analysis";
 
 function Delta({
   pct,
@@ -79,55 +71,6 @@ function Sparkline({ monthly, refIndex }: { monthly: number[]; refIndex: number 
         />
       ))}
     </span>
-  );
-}
-
-function DrillRows({ txs, href }: { txs: DashTx[]; href: string }) {
-  return (
-    <div className="seg-drill">
-      {txs.map((t) => (
-        <div className="seg-drill__row" key={t.id}>
-          <span className="seg-drill__date">{dmy(t.date)}</span>
-          <span className="seg-drill__body">
-            <span className="seg-drill__label">{t.label}</span>
-            {t.subName && (
-              <span className="seg-chip">
-                <Dot color={t.categoryColor ?? undefined} />
-                {t.subName}
-              </span>
-            )}
-            {t.merchant && (
-              <span className="seg-chip">
-                <Store size={11} aria-hidden />
-                {t.merchant}
-              </span>
-            )}
-            {t.purchase && (
-              <span className="seg-chip seg-chip--purchase">
-                <ShoppingBag size={11} aria-hidden />
-                {t.purchase}
-              </span>
-            )}
-            {t.recurring && (
-              <span className="seg-chip">
-                <Repeat size={11} aria-hidden />
-                {t.recurring}
-              </span>
-            )}
-          </span>
-          <span
-            className="seg-drill__amount"
-            style={{ color: t.amount >= 0 ? "var(--color-success)" : undefined }}
-          >
-            {formatCurrency(t.amount)}
-          </span>
-        </div>
-      ))}
-      <Link href={href} className="btn-ghost-sm" style={{ alignSelf: "flex-start", textDecoration: "none" }}>
-        Tout afficher dans le listing
-        <ArrowRight size={13} aria-hidden />
-      </Link>
-    </div>
   );
 }
 
@@ -245,7 +188,7 @@ export function SegmentAnalysis({
                   <div className="seg-cat__bar">
                     <div className="seg-cat__bar-fill" style={{ width: `${share}%`, background: c.color ?? "var(--color-brand-primary)" }} />
                   </div>
-                  {isOpen && <DrillRows txs={c.topTransactions} href={href({ category: c.categoryId })} />}
+                  {isOpen && <TopTransactions txs={c.topTransactions} href={href({ category: c.categoryId })} />}
                 </div>
               );
             })}

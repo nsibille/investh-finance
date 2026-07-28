@@ -50,6 +50,8 @@ export default async function TransactionsPage({
     accountId: sp.account,
     status,
     flow,
+    categoryId: sp.category,
+    typeSlugs: parseList(sp.types),
     subcategoryId: sp.subcategory,
     merchantIds: parseList(sp.merchant),
     purchaseIds: parseList(sp.purchase),

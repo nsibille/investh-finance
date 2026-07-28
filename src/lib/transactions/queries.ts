@@ -66,6 +66,7 @@ export const getCategoryDisplayMap = cache(async function getCategoryDisplayMap(
         out.set(sub.id, {
           subcategory_id: sub.id,
           subcategoryName: sub.name,
+          categoryId: cat.id,
           categoryName: cat.name,
           typeName: type.name,
           typeSlug: type.slug,
@@ -141,6 +142,32 @@ async function flowSubcategoryIds(flow: TransactionFlow): Promise<string[]> {
 }
 
 /**
+ * Restriction de sous-catégories issue des filtres de drill-down (catégorie
+ * et/ou types) : intersection quand les deux sont présents. `null` si aucun.
+ */
+async function subcategoryRestriction(
+  filters: TransactionFilters,
+): Promise<string[] | null> {
+  if (!filters.categoryId && !filters.typeSlugs?.length) return null;
+  const map = await getCategoryDisplayMap();
+  const displays = [...map.values()];
+  let ids: string[] | null = null;
+  if (filters.categoryId) {
+    ids = displays
+      .filter((d) => d.categoryId === filters.categoryId)
+      .map((d) => d.subcategory_id);
+  }
+  if (filters.typeSlugs?.length) {
+    const wanted = new Set(filters.typeSlugs);
+    const byType = displays
+      .filter((d) => wanted.has(d.typeSlug))
+      .map((d) => d.subcategory_id);
+    ids = ids ? ids.filter((id) => byType.includes(id)) : byType;
+  }
+  return ids ?? [];
+}
+
+/**
  * Construit la requête `transactions` avec tous les prédicats de filtrage (mais
  * sans tri ni pagination). Partagé par le listing paginé et l'agrégat d'en-tête
  * pour garantir que les KPIs portent exactement sur le même jeu que la liste.
@@ -150,7 +177,7 @@ function filteredTransactionsQuery(
   supabase: SupabaseServerClient,
   columns: string,
   filters: TransactionFilters,
-  flowIds?: string[] | null,
+  opts: { restrictSubIds?: string[] | null; flowIds?: string[] | null } = {},
 ) {
   let query = supabase
     .from("transactions")
@@ -164,10 +191,16 @@ function filteredTransactionsQuery(
     query = query.in("merchant_id", filters.merchantIds);
   if (filters.purchaseIds?.length)
     query = query.in("purchase_id", filters.purchaseIds);
+  // Drill-down (catégorie / types) : restriction toujours appliquée.
+  if (opts.restrictSubIds)
+    query = query.in(
+      "subcategory_id",
+      opts.restrictSubIds.length ? opts.restrictSubIds : [NO_MATCH_UUID],
+    );
   // Flux (revenu/dépense/investissement) : restreint aux sous-catégories du flux
   // (UUID nul si aucune, pour ne rien renvoyer plutôt que tout).
-  if (flowIds)
-    query = query.in("subcategory_id", flowIds.length ? flowIds : [NO_MATCH_UUID]);
+  if (opts.flowIds)
+    query = query.in("subcategory_id", opts.flowIds.length ? opts.flowIds : [NO_MATCH_UUID]);
   // Montant filtré en valeur absolue : les dépenses sont stockées négatives, on
   // veut « entre 10 et 50 € » qu'il s'agisse d'un débit ou d'un crédit.
   const { amountMin: aMin, amountMax: aMax } = filters;
@@ -205,6 +238,9 @@ export async function getTransactionsSummary(
 ): Promise<TransactionsSummary> {
   const supabase = await createClient();
   const categories = await getCategoryDisplayMap();
+  // Le drill-down (catégorie / types) fait partie du set filtré ; le flux, lui,
+  // est ignoré ici pour garder la vue d'ensemble stable (cible du clic).
+  const restrictSubIds = await subcategoryRestriction(filters);
   const CHUNK = 1000;
   let offset = 0;
   let count = 0;
@@ -213,12 +249,12 @@ export async function getTransactionsSummary(
   let totalInvested = 0;
 
   for (;;) {
-    // Tri stable (id) indispensable pour paginer sans doublon ni saut. Le flux
-    // n'est pas appliqué ici : la vue d'ensemble couvre les trois catégories.
+    // Tri stable (id) indispensable pour paginer sans doublon ni saut.
     const { data, count: c } = await filteredTransactionsQuery(
       supabase,
       "amount, status, subcategory_id",
       filters,
+      { restrictSubIds },
     )
       .order("id", { ascending: true })
       .range(offset, offset + CHUNK - 1);
@@ -257,8 +293,14 @@ export async function getTransactionsPage(
   const page = Math.max(1, filters.page ?? 1);
   const perPage = filters.perPage ?? DEFAULT_PER_PAGE;
 
-  const flowIds = filters.flow ? await flowSubcategoryIds(filters.flow) : null;
-  let query = filteredTransactionsQuery(supabase, LIST_COLUMNS, filters, flowIds);
+  const [flowIds, restrictSubIds] = await Promise.all([
+    filters.flow ? flowSubcategoryIds(filters.flow) : Promise.resolve(null),
+    subcategoryRestriction(filters),
+  ]);
+  let query = filteredTransactionsQuery(supabase, LIST_COLUMNS, filters, {
+    flowIds,
+    restrictSubIds,
+  });
 
   switch (filters.sort) {
     case "date_asc":

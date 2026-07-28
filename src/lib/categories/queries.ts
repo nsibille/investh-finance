@@ -115,6 +115,7 @@ export const getSubcategoryOptions = cache(async function getSubcategoryOptions(
           id: sub.id,
           label: `${type.name} / ${cat.name}${subLabel}`,
           categoryColor: cat.color,
+          categoryId: cat.id,
           typeName: type.name,
           categoryName: cat.name,
           subName,

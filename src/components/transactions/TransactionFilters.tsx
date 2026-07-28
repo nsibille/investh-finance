@@ -8,6 +8,7 @@ import { SearchInput, DateInput, CurrencyInput } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { CategorySelect } from "./CategorySelect";
+import { SEGMENT_TYPE_SLUGS, SEGMENT_LABEL } from "@/lib/dashboard/segments";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
@@ -27,6 +28,16 @@ const FLOW_LABELS: Record<string, string> = {
 
 const parseList = (v: string | null): string[] =>
   v ? v.split(",").filter(Boolean) : [];
+
+/** Libellé d'un filtre `types` : le segment correspondant si l'ensemble matche. */
+function typesLabel(slugs: string[]): string {
+  const key = [...slugs].sort().join(",");
+  for (const [seg, list] of Object.entries(SEGMENT_TYPE_SLUGS)) {
+    if ([...list].sort().join(",") === key)
+      return SEGMENT_LABEL[seg as keyof typeof SEGMENT_LABEL];
+  }
+  return "Type";
+}
 
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split("-");
@@ -125,6 +136,10 @@ export function TransactionFilters({
     () => new Map(subcategoryOptions.map((s) => [s.id, s.label])),
     [subcategoryOptions],
   );
+  const categoryName = useMemo(
+    () => new Map(subcategoryOptions.map((s) => [s.categoryId, s.categoryName])),
+    [subcategoryOptions],
+  );
   const accountName = useMemo(
     () => new Map(accountOptions.map((a) => [a.id, a.name])),
     [accountOptions],
@@ -155,6 +170,20 @@ export function TransactionFilters({
       key: "flow",
       label: FLOW_LABELS[flow],
       onRemove: () => setParam("flow", ""),
+    });
+  const category = params.get("category");
+  if (category)
+    chips.push({
+      key: "category",
+      label: categoryName.get(category) ?? "Catégorie",
+      onRemove: () => setParam("category", ""),
+    });
+  const typesParam = params.get("types");
+  if (typesParam)
+    chips.push({
+      key: "types",
+      label: typesLabel(parseList(typesParam)),
+      onRemove: () => setParam("types", ""),
     });
   const subcategory = params.get("subcategory");
   if (subcategory)

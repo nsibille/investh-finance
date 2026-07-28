@@ -19,6 +19,8 @@ export interface SubcategoryOption {
   /** "Type / Catégorie / Sous-catégorie" */
   label: string;
   categoryColor: string | null;
+  /** Catégorie parente (id) — pour le drill-down par catégorie. */
+  categoryId?: string;
   /** Niveau 1 — ex. "Dépenses" */
   typeName: string;
   /** Niveau 2 — ex. "Alimentation" */

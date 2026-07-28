@@ -8,6 +8,8 @@ export type TransactionStatus =
 export interface CategoryDisplay {
   subcategory_id: string;
   subcategoryName: string;
+  /** Catégorie parente (id) : sert au regroupement et au drill-down. */
+  categoryId: string;
   categoryName: string;
   typeName: string;
   /** Slug du type (ex. « investissements », « virements ») pour classer le flux. */
@@ -90,6 +92,10 @@ export interface TransactionFilters {
   to?: string;
   /** Restreint aux catégories d'un flux : revenu / dépense / investissement. */
   flow?: TransactionFlow;
+  /** Drill-down : restreint à une catégorie (toutes ses sous-catégories). */
+  categoryId?: string;
+  /** Drill-down : restreint à un ou plusieurs types de catégorie (slugs). */
+  typeSlugs?: string[];
   sort?: "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
   page?: number;
   perPage?: number;

@@ -30,6 +30,11 @@ export const PieCategories = dynamic(
   { ssr: false, loading: chartFallback(300) },
 );
 
+export const DashboardFlowChart = dynamic(
+  () => import("./DashboardFlowChart").then((m) => m.DashboardFlowChart),
+  { ssr: false, loading: chartFallback(300) },
+);
+
 export const ComparisonChart = dynamic(
   () => import("./ComparisonChart").then((m) => m.ComparisonChart),
   { ssr: false, loading: chartFallback(300) },

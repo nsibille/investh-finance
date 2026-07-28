@@ -102,7 +102,7 @@ export default async function AccountDetailPage({
         <Stat label={`Solde initial (${formatShortDate(account.initial_date)})`}>
           <Amount value={account.initial_balance} size="lg" tone="neutral" />
         </Stat>
-        <Stat label="Somme des transactions validées">
+        <Stat label="Mouvements depuis l'ancrage (à ce jour)">
           <Amount value={account.transactions_sum} size="lg" />
         </Stat>
         <Stat label="En attente de validation">

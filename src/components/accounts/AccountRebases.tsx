@@ -67,9 +67,10 @@ export function AccountRebases({
             <Anchor size={16} aria-hidden /> Rebasement du solde
           </h2>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: "var(--space-1) 0 0" }}>
-            Ancre le solde réel à une date : le solde courant repart de cette
-            valeur plus les transactions validées postérieures. Le rebasement le
-            plus récent fait foi.
+            Ancre le solde réel à une date : à cette date le compte vaut
+            exactement la valeur saisie, puis les transactions validées
+            postérieures (jusqu&apos;à aujourd&apos;hui) s&apos;y ajoutent. Le
+            rebasement le plus récent fait foi.
           </p>
         </div>
 

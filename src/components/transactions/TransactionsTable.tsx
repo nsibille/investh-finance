@@ -22,6 +22,7 @@ import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
 import { MerchantEditModal } from "@/components/merchants/MerchantEditModal";
 import { RecurringEditModal } from "@/components/recurring/RecurringEditModal";
+import { PurchaseEditModal } from "@/components/purchases/PurchaseEditModal";
 import { formatShortDate } from "@/lib/format/date";
 import type { EditorRowVM, EditorHandlers } from "./TransactionEditorTable";
 import type { SubcategoryOption } from "@/lib/categories/types";
@@ -90,9 +91,10 @@ export function TransactionsTable({
   const [merchantKey, setMerchantKey] = useState<string | null>(null);
   const [recurringKey, setRecurringKey] = useState<string | null>(null);
   const [personKey, setPersonKey] = useState<string | null>(null);
-  // Édition directe de l'entité enseigne/récurrente (clic sur le flag).
+  // Édition directe de l'entité enseigne/récurrente/achat (clic sur le flag).
   const [editMerchantId, setEditMerchantId] = useState<string | null>(null);
   const [editRecurringId, setEditRecurringId] = useState<string | null>(null);
+  const [editPurchaseId, setEditPurchaseId] = useState<string | null>(null);
 
   const optById = useMemo(
     () => new Map(subcategoryOptions.map((o) => [o.id, o])),
@@ -152,7 +154,15 @@ export function TransactionsTable({
                       {r.purchase && (
                         <span className="tx-meta tx-meta--purchase">
                           <ShoppingBag size={12} aria-hidden />
-                          <span className="tx-meta__text">{r.purchase.name}</span>
+                          <button
+                            type="button"
+                            className="tx-meta__text flag-editable"
+                            title="Voir / modifier l'achat"
+                            onClick={() => setEditPurchaseId(r.purchase!.id)}
+                            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
+                          >
+                            {r.purchase.name}
+                          </button>
                           {occurrenceLabel(r.purchase) && (
                             <span className="tx-meta__mono">{occurrenceLabel(r.purchase)}</span>
                           )}
@@ -373,6 +383,13 @@ export function TransactionsTable({
       <RecurringEditModal
         recurringId={editRecurringId}
         onClose={() => setEditRecurringId(null)}
+        subcategoryOptions={subcategoryOptions}
+        merchantOptions={merchantOptions}
+      />
+
+      <PurchaseEditModal
+        purchaseId={editPurchaseId}
+        onClose={() => setEditPurchaseId(null)}
         subcategoryOptions={subcategoryOptions}
         merchantOptions={merchantOptions}
       />

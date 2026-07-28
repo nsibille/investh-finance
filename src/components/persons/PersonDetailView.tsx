@@ -22,6 +22,7 @@ import { Alert } from "@/components/ui/Alert";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dot } from "@/components/ui/Badge";
 import { PersonForm } from "./PersonForm";
+import { PersonSharePicker } from "./PersonSharePicker";
 import { useToast } from "@/hooks/useToast";
 import { formatCurrency } from "@/lib/format/currency";
 import { formatShortDate } from "@/lib/format/date";
@@ -32,12 +33,15 @@ import {
   addRepayment,
   updateRepayment,
   deleteRepayment,
+  getTransactionSplit,
 } from "@/server/actions/persons";
 import type {
   PersonLedger,
   PersonEvent,
   PersonManualEntryRow,
   PersonRepaymentRow,
+  PersonOption,
+  TransactionSplit,
   SplitNature,
 } from "@/lib/persons/types";
 import type { CreditCandidate } from "@/lib/persons/queries";
@@ -349,15 +353,34 @@ export function PersonDetailView({
   person,
   events,
   candidates,
+  persons,
 }: {
   person: PersonLedger;
   events: PersonEvent[];
   candidates: CreditCandidate[];
+  persons: PersonOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [edit, setEdit] = useState<EditState>(null);
   const [confirmManual, setConfirmManual] = useState<string | null>(null);
+  // Édition de la ventilation/nature d'une transaction rattachée (via le picker).
+  const [shareEdit, setShareEdit] = useState<{
+    transactionId: string;
+    amount: number;
+    currency: string;
+    split: TransactionSplit;
+  } | null>(null);
+  const [loadingShare, setLoadingShare] = useState<string | null>(null);
+
+  async function openShare(transactionId: string) {
+    const row = person.shares.find((s) => s.transactionId === transactionId);
+    if (!row) return;
+    setLoadingShare(transactionId);
+    const split = await getTransactionSplit(transactionId);
+    setLoadingShare(null);
+    setShareEdit({ transactionId, amount: row.amount, currency: row.currency, split });
+  }
 
   async function removeManual(id: string) {
     setConfirmManual(null);
@@ -470,6 +493,15 @@ export function PersonDetailView({
           {formatCurrency(e.amount)}
         </span>
         <div style={{ display: "flex", gap: 2, flexShrink: 0, width: 56, justifyContent: "flex-end" }}>
+          {e.kind === "share" && (
+            <IconButton
+              label="Modifier la ventilation / nature"
+              disabled={loadingShare === e.transactionId}
+              onClick={() => openShare(e.transactionId)}
+            >
+              <Pencil size={14} />
+            </IconButton>
+          )}
           {e.kind === "manual" && (
             <>
               <IconButton
@@ -612,6 +644,24 @@ export function PersonDetailView({
             personId={person.id}
             initial={edit.entry}
             onDone={() => setEdit(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={shareEdit !== null}
+        onClose={() => setShareEdit(null)}
+        title="Modifier la transaction rattachée"
+        variantClass="modal-surface"
+      >
+        {shareEdit && (
+          <PersonSharePicker
+            transactionId={shareEdit.transactionId}
+            amount={shareEdit.amount}
+            currency={shareEdit.currency}
+            persons={persons}
+            initial={shareEdit.split}
+            onSaved={() => setShareEdit(null)}
           />
         )}
       </Modal>

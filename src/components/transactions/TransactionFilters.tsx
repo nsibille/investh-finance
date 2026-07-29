@@ -8,7 +8,7 @@ import { SearchInput, DateInput, CurrencyInput } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { CategorySelect } from "./CategorySelect";
-import { SEGMENT_TYPE_SLUGS, SEGMENT_LABEL } from "@/lib/dashboard/segments";
+import { SEGMENT_TYPE_SLUGS, SEGMENT_LABEL, TYPE_LABEL } from "@/lib/dashboard/segments";
 import type { AccountOption } from "@/lib/rules/queries";
 import type { SubcategoryOption } from "@/lib/categories/types";
 import type { MerchantOption } from "@/lib/merchants/types";
@@ -29,8 +29,12 @@ const FLOW_LABELS: Record<string, string> = {
 const parseList = (v: string | null): string[] =>
   v ? v.split(",").filter(Boolean) : [];
 
-/** Libellé d'un filtre `types` : le segment correspondant si l'ensemble matche. */
+/**
+ * Libellé d'un filtre `types` : le type lui-même quand un seul est sélectionné
+ * (carte KPI), sinon le segment correspondant si l'ensemble matche.
+ */
 function typesLabel(slugs: string[]): string {
+  if (slugs.length === 1 && TYPE_LABEL[slugs[0]]) return TYPE_LABEL[slugs[0]];
   const key = [...slugs].sort().join(",");
   for (const [seg, list] of Object.entries(SEGMENT_TYPE_SLUGS)) {
     if ([...list].sort().join(",") === key)

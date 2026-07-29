@@ -617,7 +617,7 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 
 ### `card-kpi`
 **Card KPI dashboard** (valeur + delta vs mois précédent)
-- Variantes : `card-kpi-revenus`, `card-kpi-depenses`, `card-kpi-solde`, `card-kpi-epargne`
+- Variantes : `card-kpi-revenus`, `card-kpi-prelevements`, `card-kpi-frais-fixes`, `card-kpi-depenses`, `card-kpi-solde`, `card-kpi-epargne` (bord haut coloré via `--color-finance-*` : revenus vert, prélèvement gris, frais fixe orange, dépenses rouge, investissement violet, solde `--color-brand-primary`)
 ```css
 .card-kpi {
   background: var(--color-bg-surface);
@@ -637,7 +637,7 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 ```
 
 #### `kpi-link` (KPI cliquable)
-Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Hover : `shadow-md` + léger `translateY(-1px)` ; actif (`[data-active]`) : anneau intérieur `--color-brand-primary` + fond `--color-brand-primary-50`. Utilisé par le **bandeau KPI du listing transactions** (`TransactionsSummaryBar`) : cartes Revenus / Dépensé / Investi (classées par type de catégorie, hors virements internes) cliquables → filtre `flow` (bascule, autres filtres conservés) ; Solde net budgétaire (`revenus − dépensé − investi`) et compteur d'opérations non cliquables. La vue d'ensemble reste stable quel que soit le flux sélectionné (drill-down sur la liste seule).
+Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Hover : `shadow-md` + léger `translateY(-1px)` ; actif (`[data-active]`) : anneau intérieur `--color-brand-primary` + fond `--color-brand-primary-50`. Utilisé par le **bandeau KPI du listing transactions** (`TransactionsSummaryBar`) : une carte par **type de catégorie** — Revenus / Prélèvements / Frais fixes / Frais variables / Investi (hors virements internes et non catégorisées) — cliquable → filtre `types` sur ce type (bascule, autres filtres conservés) ; Solde net budgétaire (`revenus − prélèvements − frais fixes − frais variables − investi`) et compteur d'opérations non cliquables. La vue d'ensemble reste stable quel que soit le type sélectionné (drill-down sur la liste seule).
 
 ### `card-account`
 **Card compte bancaire** : `avatar-account-md` + nom + type + solde courant + `badge-count` (pending).
@@ -653,6 +653,9 @@ Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Ho
 
 ### `card-analytics`
 **Card section analytique** : titre + chart Recharts ou table.
+
+### `link-plain`
+**Lien discret** : hérite de la couleur du texte, sans soulignement, souligné au survol (`cursor: pointer`, focus `shadow-focus`). Pour un **nom cliquable dans une table** menant à une fiche — ex. nom d'enseigne dans le listing `MerchantsManager` → `/enseignes/[id]`. Les lignes « Sans enseigne » (sans nom) ne sont pas des liens.
 
 ---
 
@@ -1235,8 +1238,10 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `card-analytics` | Métier | Card section analytique | auto |
 | `card-interactive` | Card | Card cliquable | auto |
 | `card-kpi` | Métier | Card KPI dashboard | auto |
-| `card-kpi-depenses` | Métier | KPI variante dépenses | auto |
+| `card-kpi-depenses` | Métier | KPI variante dépenses (frais variables) | auto |
 | `card-kpi-epargne` | Métier | KPI variante épargne | auto |
+| `card-kpi-frais-fixes` | Métier | KPI variante frais fixes | auto |
+| `card-kpi-prelevements` | Métier | KPI variante prélèvements | auto |
 | `card-kpi-revenus` | Métier | KPI variante revenus | auto |
 | `card-kpi-solde` | Métier | KPI variante solde | auto |
 | `card-pending-validator` | Métier | Card workflow validation | auto |
@@ -1276,6 +1281,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `input-textarea-md` | Form | Zone texte multilignes | auto |
 | `input-toggle` | Form | Switch on/off | auto |
 | `layout-page-header` | Layout | Header de page avec titre + actions | auto |
+| `link-plain` | Nav | Lien discret (nom cliquable en table → fiche) | auto |
 | `merchant-quick-view` | Métier | Aperçu stats enseigne (popover liste) | auto |
 | `merchant-detail-page` | Métier | Fiche détail d'une enseigne | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |

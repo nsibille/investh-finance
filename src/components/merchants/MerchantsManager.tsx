@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -389,16 +390,23 @@ export function MerchantsManager({
                     </IconButton>
                   </td>
                   <td data-wrap="true" style={{ fontWeight: "var(--fw-medium)" }}>
-                    {label ??
-                      (summary ? (
-                        <span style={{ fontWeight: "var(--fw-regular)", color: "var(--color-text-secondary)" }}>
-                          {summary}
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
-                          Sans enseigne
-                        </span>
-                      ))}
+                    {label !== null ? (
+                      <Link
+                        href={`/enseignes/${m.id}`}
+                        className="link-plain"
+                        title={`Voir la fiche « ${label} »`}
+                      >
+                        {label}
+                      </Link>
+                    ) : summary ? (
+                      <span style={{ fontWeight: "var(--fw-regular)", color: "var(--color-text-secondary)" }}>
+                        {summary}
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
+                        Sans enseigne
+                      </span>
+                    )}
                   </td>
                   <td>
                     {m.subcategory_id ? (

@@ -3,14 +3,14 @@ import { getCategoryDisplayMap } from "@/lib/transactions/queries";
 
 export interface MerchantMonthlyPoint {
   month: string; // "YYYY-MM"
-  depenses: number; // dépenses du mois (montant positif)
+  amount: number; // flux principal du mois (dépenses, ou revenus si enseigne de revenu), positif
 }
 
 export interface MerchantCategorySlice {
   key: string;
   label: string;
   color: string | null;
-  amount: number; // dépenses cumulées (positif)
+  amount: number; // flux principal cumulé (positif)
   count: number;
 }
 
@@ -21,21 +21,35 @@ export interface MerchantStats {
   categoryColor: string | null;
   isOnline: boolean;
   country: string | null;
-  /** Dépenses cumulées (somme des débits, en valeur absolue). */
-  totalSpent: number;
+  /**
+   * Enseigne de revenu : sa catégorie par défaut est d'un type « revenu » (ou, à
+   * défaut de catégorie, son solde net est positif). Détermine le sens du flux
+   * principal (crédits pour un revenu, débits pour une dépense) et les libellés.
+   */
+  isIncome: boolean;
+  /**
+   * Flux principal cumulé (valeur absolue, positif) : dépenses pour une enseigne
+   * de dépense, revenus perçus pour une enseigne de revenu.
+   */
+  total: number;
+  /**
+   * Flux inverse cumulé (positif) : remboursements/avoirs pour une enseigne de
+   * dépense, sorties pour une enseigne de revenu.
+   */
+  counterTotal: number;
   /** Solde net (crédits − débits, signé). */
   netAmount: number;
   transactionCount: number;
   purchaseCount: number;
   firstDate: string | null;
   lastDate: string | null;
-  /** Plus grosse dépense unique (débit) et sa date. */
-  maxSpend: { amount: number; date: string } | null;
-  /** Dépense mensuelle moyenne sur la période d'activité. */
+  /** Plus grosse opération unique du flux principal et sa date. */
+  maxFlow: { amount: number; date: string } | null;
+  /** Moyenne mensuelle du flux principal sur la période d'activité. */
   avgMonthly: number;
   /** Série chronologique des 12 derniers mois (mois vides inclus). */
   monthly: MerchantMonthlyPoint[];
-  /** Répartition des dépenses par catégorie, décroissante. */
+  /** Répartition du flux principal par catégorie, décroissante. */
   categories: MerchantCategorySlice[];
 }
 
@@ -57,10 +71,11 @@ function subtractMonths(ym: string, n: number): string {
 
 /**
  * Statistiques agrégées d'une enseigne pour le quick view (liste) et la fiche
- * détail : dépenses totales, nombre de transactions, moyenne mensuelle, série
- * mensuelle et répartition par catégorie. Les montants « dépensés » sont en
- * valeur absolue (débits) ; les crédits (remboursements) ne comptent que dans
- * `netAmount`. Le mois courant sert de référence pour la fenêtre 12 mois.
+ * détail : total du flux principal, nombre de transactions, moyenne mensuelle,
+ * série mensuelle et répartition par catégorie. Le sens du flux dépend de la
+ * nature de l'enseigne : débits pour une enseigne de dépense, crédits pour une
+ * enseigne de revenu (salaire…), de sorte que les revenus soient correctement
+ * agrégés. Le mois courant sert de référence pour la fenêtre 12 mois.
  */
 export async function getMerchantStats(
   id: string,
@@ -94,29 +109,46 @@ export async function getMerchantStats(
     subcategory_id: string | null;
   }[];
 
-  let totalSpent = 0;
-  let netAmount = 0;
+  // Sens de l'enseigne : type de sa catégorie par défaut (revenu vs dépense) ;
+  // à défaut de catégorie, déduit du signe du solde net observé. Le « flux
+  // principal » suit ce sens (crédits pour un revenu, débits pour une dépense).
+  const merchantDisplay = merchant.subcategory_id
+    ? categories.get(merchant.subcategory_id)
+    : null;
+  const netAmount = rows.reduce((sum, t) => sum + Number(t.amount), 0);
+  const isIncome = merchantDisplay?.isIncome ?? netAmount > 0;
+
+  let total = 0;
+  let counterTotal = 0;
   let firstDate: string | null = null;
   let lastDate: string | null = null;
-  let maxSpend: { amount: number; date: string } | null = null;
+  let maxFlow: { amount: number; date: string } | null = null;
   const byMonth = new Map<string, number>();
   const byCat = new Map<string, MerchantCategorySlice>();
 
   for (const t of rows) {
     const amount = Number(t.amount);
-    netAmount += amount;
-    const spend = amount < 0 ? -amount : 0;
-    totalSpent += spend;
+    // Flux principal (positif) selon le sens de l'enseigne ; flux inverse pour le
+    // reste (remboursements d'une dépense, sorties d'un revenu).
+    const flow = isIncome
+      ? amount > 0
+        ? amount
+        : 0
+      : amount < 0
+        ? -amount
+        : 0;
+    total += flow;
+    counterTotal += Math.abs(amount) - flow;
 
     if (!firstDate || t.operation_date < firstDate) firstDate = t.operation_date;
     if (!lastDate || t.operation_date > lastDate) lastDate = t.operation_date;
-    if (spend > 0 && (!maxSpend || spend > maxSpend.amount)) {
-      maxSpend = { amount: spend, date: t.operation_date };
+    if (flow > 0 && (!maxFlow || flow > maxFlow.amount)) {
+      maxFlow = { amount: flow, date: t.operation_date };
     }
 
-    if (spend > 0) {
+    if (flow > 0) {
       const month = t.operation_date.slice(0, 7);
-      byMonth.set(month, (byMonth.get(month) ?? 0) + spend);
+      byMonth.set(month, (byMonth.get(month) ?? 0) + flow);
 
       const disp = t.subcategory_id ? categories.get(t.subcategory_id) : null;
       const key = disp ? disp.categoryName : "__none__";
@@ -127,7 +159,7 @@ export async function getMerchantStats(
         amount: 0,
         count: 0,
       };
-      slice.amount += spend;
+      slice.amount += flow;
       slice.count += 1;
       byCat.set(key, slice);
     }
@@ -137,7 +169,7 @@ export async function getMerchantStats(
   const monthly: MerchantMonthlyPoint[] = [];
   for (let i = 11; i >= 0; i--) {
     const month = subtractMonths(refMonth, i);
-    monthly.push({ month, depenses: byMonth.get(month) ?? 0 });
+    monthly.push({ month, amount: byMonth.get(month) ?? 0 });
   }
 
   const firstMonth = firstDate?.slice(0, 7) ?? null;
@@ -155,14 +187,16 @@ export async function getMerchantStats(
       : null,
     isOnline: merchant.is_online ?? false,
     country: merchant.country ?? null,
-    totalSpent,
+    isIncome,
+    total,
+    counterTotal,
     netAmount,
     transactionCount: rows.length,
     purchaseCount: purchaseCount ?? 0,
     firstDate,
     lastDate,
-    maxSpend,
-    avgMonthly: totalSpent / span,
+    maxFlow,
+    avgMonthly: total / span,
     monthly,
     categories: [...byCat.values()].sort((a, b) => b.amount - a.amount),
   };

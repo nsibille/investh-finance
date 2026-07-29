@@ -125,14 +125,19 @@ export const getPurchases = cache(async function getPurchases(): Promise<
     );
   };
 
-  // Agrégats (count/sum) + lignes de transactions détaillées, par achat.
-  const agg = new Map<string, { count: number; sum: number }>();
+  // Agrégats par achat : un achat peut se faire à plusieurs — on distingue le
+  // dépensé (débits) des versements reçus (crédits/remboursements) pour un coût
+  // net juste. `sum` reste la somme signée (= reçus − dépensé).
+  const agg = new Map<string, { count: number; sum: number; spent: number; received: number }>();
   const txLines = new Map<string, PurchaseTxLine[]>();
   for (const t of txs ?? []) {
     if (!t.purchase_id) continue;
-    const e = agg.get(t.purchase_id) ?? { count: 0, sum: 0 };
+    const amount = Number(t.amount);
+    const e = agg.get(t.purchase_id) ?? { count: 0, sum: 0, spent: 0, received: 0 };
     e.count += 1;
-    e.sum += Number(t.amount);
+    e.sum += amount;
+    if (amount < 0) e.spent += -amount;
+    else e.received += amount;
     agg.set(t.purchase_id, e);
     const acc = t.account_id ? accountInfo.get(t.account_id) : null;
     const list = txLines.get(t.purchase_id) ?? [];
@@ -159,7 +164,7 @@ export const getPurchases = cache(async function getPurchases(): Promise<
 
   // 1er passage : montants propres à chaque achat (hors descendants).
   const own = (purchases ?? []).map((p) => {
-    const a = agg.get(p.id) ?? { count: 0, sum: 0 };
+    const a = agg.get(p.id) ?? { count: 0, sum: 0, spent: 0, received: 0 };
     const inst = byPurchase.get(p.id) ?? [];
     const cat = p.subcategory_id ? subInfo.get(p.subcategory_id) : null;
     const matched = inst.filter((i) => i.transaction_id).length;
@@ -185,6 +190,9 @@ export const getPurchases = cache(async function getPurchases(): Promise<
       merchantName: p.merchant_id ? (merchantName.get(p.merchant_id) ?? null) : null,
       transactionCount: a.count,
       paidAmount: a.sum,
+      spentAmount: a.spent,
+      receivedAmount: a.received,
+      netAmount: a.spent - a.received,
       transactions: txs,
       persons: personSharesList(p.id),
       firstTransactionDate,

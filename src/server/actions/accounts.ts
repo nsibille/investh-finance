@@ -75,3 +75,40 @@ export async function deleteAccount(id: string): Promise<ActionResult> {
   revalidatePath("/accounts");
   return { ok: true };
 }
+
+/**
+ * Ajoute un rebasement : ancre le solde réel du compte à une date. Le solde
+ * courant repart ensuite de cette valeur + les transactions validées
+ * postérieures. Plusieurs rebasements peuvent coexister dans le temps.
+ */
+export async function addAccountRebase(
+  accountId: string,
+  input: { rebaseDate: string; balance: number; note?: string | null },
+): Promise<ActionResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.rebaseDate))
+    return { ok: false, error: "Date de rebasement invalide" };
+  if (!Number.isFinite(input.balance))
+    return { ok: false, error: "Solde invalide" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("account_rebases").insert({
+    account_id: accountId,
+    rebase_date: input.rebaseDate,
+    balance: input.balance,
+    note: input.note?.trim() ? input.note.trim() : null,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${accountId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function deleteAccountRebase(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("account_rebases").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}

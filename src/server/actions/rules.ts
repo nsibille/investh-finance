@@ -17,7 +17,7 @@ export type RuleSaveResult =
   | { ok: true; applied: number }
   | { ok: false; error: string };
 
-function fail(message: string): ActionResult {
+function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
 }
 
@@ -68,6 +68,79 @@ export async function saveRule(
 
   revalidate();
   return { ok: true, applied };
+}
+
+export type MoveRuleResult =
+  | { ok: true; moved: number; targetNamed: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Déplace un motif d'une enseigne vers une autre. Le motif est rattaché à
+ * l'enseigne cible, puis rejoué sur toutes les transactions qu'il matche : elles
+ * héritent alors de l'enseigne cible (si elle est nommée) et de sa catégorie par
+ * défaut. Les transactions que le motif avait rattachées à l'enseigne d'origine
+ * sont d'abord détachées, afin qu'un déplacement vers « Sans enseigne » les
+ * libère bien de l'ancienne marque.
+ */
+export async function moveRuleToMerchant(
+  ruleId: string,
+  targetMerchantId: string,
+): Promise<MoveRuleResult> {
+  const supabase = await createClient();
+
+  const { data: rule } = await supabase
+    .from("categorization_rules")
+    .select("id, merchant_id, is_active")
+    .eq("id", ruleId)
+    .maybeSingle();
+  if (!rule) return fail("Motif introuvable");
+
+  const sourceMerchantId = rule.merchant_id;
+  if (sourceMerchantId === targetMerchantId)
+    return { ok: true, moved: 0, targetNamed: false };
+
+  const { data: target } = await supabase
+    .from("merchants")
+    .select("name, subcategory_id")
+    .eq("id", targetMerchantId)
+    .maybeSingle();
+  if (!target) return fail("Enseigne cible introuvable");
+  // Un motif tire sa catégorie de l'enseigne : la cible doit en avoir une
+  // (même invariant que l'ajout d'un motif à une enseigne).
+  if (!target.subcategory_id)
+    return fail("L'enseigne cible n'a pas de catégorie par défaut.");
+  const targetNamed = Boolean(target.name && target.name.trim());
+
+  // 1. Rattacher le motif à l'enseigne cible.
+  const { error: upErr } = await supabase
+    .from("categorization_rules")
+    .update({ merchant_id: targetMerchantId })
+    .eq("id", ruleId);
+  if (upErr) return fail(upErr.message);
+
+  // Motif inactif : on déplace la propriété sans toucher aux transactions.
+  if (!rule.is_active) {
+    revalidate();
+    return { ok: true, moved: 0, targetNamed };
+  }
+
+  // 2. Détacher les transactions que ce motif avait rattachées à l'enseigne
+  // d'origine (réattachées à l'étape 3 si la cible est nommée).
+  await supabase
+    .from("transactions")
+    .update({ merchant_id: null })
+    .eq("applied_rule_id", ruleId)
+    .eq("merchant_id", sourceMerchantId);
+
+  // 3. Rejouer le motif : les transactions matchées héritent de l'enseigne cible
+  // et de sa catégorie par défaut.
+  const applicable = await loadApplicableRule(supabase, ruleId);
+  const moved = applicable
+    ? await applyRuleToTransactions(supabase, applicable, "all")
+    : 0;
+
+  revalidate();
+  return { ok: true, moved, targetNamed };
 }
 
 export async function setRuleActive(

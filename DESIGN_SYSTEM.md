@@ -636,6 +636,9 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 .card-kpi__delta[data-direction="down"] { color: var(--color-danger); }
 ```
 
+#### `kpi-link` (KPI cliquable)
+Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Hover : `shadow-md` + léger `translateY(-1px)` ; actif (`[data-active]`) : anneau intérieur `--color-brand-primary` + fond `--color-brand-primary-50`. Utilisé par le **bandeau KPI du listing transactions** (`TransactionsSummaryBar`) : cartes Revenus / Dépensé / Investi (classées par type de catégorie, hors virements internes) cliquables → filtre `flow` (bascule, autres filtres conservés) ; Solde net budgétaire (`revenus − dépensé − investi`) et compteur d'opérations non cliquables. La vue d'ensemble reste stable quel que soit le flux sélectionné (drill-down sur la liste seule).
+
 ### `card-account`
 **Card compte bancaire** : `avatar-account-md` + nom + type + solde courant + `badge-count` (pending).
 
@@ -1019,11 +1022,11 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 
 ### `table-transactions-list`
 **Table de la liste `/transactions`** (distincte de `table-transaction-editor`, réservée à l'aperçu d'import). Colonnes :
-- **Transaction** : titre = enseigne si connue (`tx-merchant`, cliquable → `merchant-quick-view`), sinon **libellé en style code** (`tx-label-code` : `font-mono`, fond `--color-bg-subtle`, bord + `radius-sm`). Sous-lignes `tx-main__meta` (xs, wrap) : libellé code réduit (`tx-label-code--sub`, quand l'enseigne occupe le titre) · achat (`tx-meta--purchase` + occurrence mono X/Y + croix détacher) · récurrence (`tx-meta--recurring` + croix) · personnes (`tx-meta--persons`, cliquable → éditeur de partage).
+- **Transaction** : titre = enseigne si connue (`tx-merchant`, cliquable → `merchant-quick-view`), sinon **libellé en style code** (`tx-label-code` : `font-mono`, fond `--color-bg-subtle`, bord + `radius-sm`). Sous-lignes `tx-main__meta` (xs, wrap) : virement interne apparié (`tx-meta--transfer` : `ArrowLeftRight` + « Virement apparié », vert `--color-success`, affiché quand la transaction a un `transfer_group_id`) · libellé code réduit (`tx-label-code--sub`, quand l'enseigne occupe le titre) · achat (`tx-meta--purchase` + occurrence mono X/Y + croix détacher) · récurrence (`tx-meta--recurring` + croix) · personnes (`tx-meta--persons`, cliquable → éditeur de partage).
 - **Compte · date** mutualisés (`tx-acctdate` : `badge-dot` + nom de compte ellipsé au-dessus, date muette en dessous) — une seule colonne.
 - **Catégorie** (`tx-cat`) : `badge-dot` couleur + **nom complet sans retour à la ligne** ; le chemin parent (`tx-cat__path` : « Type / Catégorie / ») est ellipsé et révélé au survol (`title`), la feuille (`tx-cat__leaf`) n'est jamais tronquée. Cliquable → `CategoryInlineEditor`. Verrouillée si héritée d'un achat.
 - **Montant** (`tx-amount`) : `amount-display` + `badge-status-*` empilés à droite.
-- **Actions** (`tx-actions`, rangée de `btn-icon-md` 30px, `data-on` = indigo quand défini) : enseigne (`Store`) · achat (`ShoppingBag`) · récurrence (`Repeat`) · partage (`Users`) · valider (`Check`, `data-validate`) ou invalider/rétablir (`RotateCcw`, → `pending`) · détail/éditer (`Pencil`, lien `/transactions/[id]`).
+- **Actions** (`tx-actions`, rangée de `btn-icon-md` 30px, `data-on` = indigo quand défini) : enseigne (`Store`) · achat (`ShoppingBag`) · récurrence (`Repeat`) · partage (`Users`) · valider (`Check`, `data-validate`) ou invalider/rétablir (`RotateCcw`, → `pending`) · détail/éditer (`Pencil`, lien `/transactions/[id]`) · supprimer (`Trash2`, `data-danger` = rouge au survol → modale `modal-confirm-danger`).
 > Implémentation : `src/components/transactions/TransactionsTable.tsx` + `TransactionsManager.tsx` (état + actions serveur optimistes). Section CSS `table-transactions-list` dans `globals.css`.
 
 ### `transfer-reconcile`

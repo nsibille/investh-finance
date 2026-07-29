@@ -11,6 +11,7 @@ import {
   ListChecks,
   Sparkles,
   CheckCircle2,
+  HandCoins,
 } from "lucide-react";
 import { PurchaseTimelineChart } from "@/components/ui/charts/lazy";
 import { formatCurrency } from "@/lib/format/currency";
@@ -59,7 +60,12 @@ function KpiTile({
  * venir, transactions rattachées). Même format que le panneau enseigne.
  */
 export function PurchaseStatsPanel({ purchase: p }: { purchase: PurchaseWithDetails }) {
-  const paid = Math.abs(p.paidAmount);
+  // Un achat peut se faire à plusieurs : on distingue le dépensé (débits) des
+  // versements reçus (crédits) pour un coût net juste.
+  const paid = p.spentAmount;
+  const received = p.receivedAmount;
+  const net = p.netAmount;
+  const shared = received > 0.01;
   const forecast = Math.abs(p.forecastAmount);
   const remaining = Math.abs(p.remaining);
   const hasInstallments = p.installments.length > 0;
@@ -82,8 +88,10 @@ export function PurchaseStatsPanel({ purchase: p }: { purchase: PurchaseWithDeta
     }
     const byMonth = new Map<string, number>();
     for (const t of p.transactions) {
+      // Paiements = débits uniquement ; les versements reçus ne sont pas des paiements.
+      if (t.amount >= 0) continue;
       const ym = t.operation_date.slice(0, 7);
-      byMonth.set(ym, (byMonth.get(ym) ?? 0) + Math.abs(t.amount));
+      byMonth.set(ym, (byMonth.get(ym) ?? 0) + -t.amount);
     }
     return [...byMonth.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -103,9 +111,11 @@ export function PurchaseStatsPanel({ purchase: p }: { purchase: PurchaseWithDeta
 
   const upcoming = p.installments.filter((i) => !i.transaction_id);
   const nextDue = upcoming[0] ?? null;
+  // Plus grosse dépense : sur les débits seulement (pas les versements reçus).
   const biggestTx = p.transactions.reduce<{ amount: number; date: string } | null>(
     (best, t) => {
-      const a = Math.abs(t.amount);
+      if (t.amount >= 0) return best;
+      const a = -t.amount;
       return !best || a > best.amount ? { amount: a, date: t.operation_date } : best;
     },
     null,
@@ -168,12 +178,12 @@ export function PurchaseStatsPanel({ purchase: p }: { purchase: PurchaseWithDeta
         </div>
       </div>
 
-      {/* Héro : payé */}
+      {/* Héro : coût net (partagé) ou payé */}
       <div className="ms-hero">
-        <span className="ms-hero__label">Payé</span>
-        <span className="ms-hero__value">{formatCurrency(paid)}</span>
+        <span className="ms-hero__label">{shared ? "Coût net" : "Payé"}</span>
+        <span className="ms-hero__value">{formatCurrency(shared ? net : paid)}</span>
         <span className="ms-hero__sub">
-          {p.transactionCount} transaction{p.transactionCount > 1 ? "s" : ""}
+          {shared ? `${formatCurrency(paid)} dépensés · ${formatCurrency(received)} reçus` : `${p.transactionCount} transaction${p.transactionCount > 1 ? "s" : ""}`}
           {plannedTotal > 0.01 && !endless ? ` · sur ${formatCurrency(plannedTotal)} prévu` : ""}
           {remaining > 0.01 ? ` · reste ${formatCurrency(remaining)}` : ""}
         </span>
@@ -186,8 +196,17 @@ export function PurchaseStatsPanel({ purchase: p }: { purchase: PurchaseWithDeta
 
       {/* KPIs */}
       <div className="ms-kpis">
-        <KpiTile icon={<Wallet size={15} />} label="Payé" value={formatCurrency(paid)} />
-        <KpiTile icon={<Hourglass size={15} />} label="Reste à payer" value={formatCurrency(remaining)} />
+        <KpiTile
+          icon={<Wallet size={15} />}
+          label="Dépensé"
+          value={formatCurrency(paid)}
+          hint={shared ? `net ${formatCurrency(net)}` : undefined}
+        />
+        {shared ? (
+          <KpiTile icon={<HandCoins size={15} />} label="Versements reçus" value={formatCurrency(received)} />
+        ) : (
+          <KpiTile icon={<Hourglass size={15} />} label="Reste à payer" value={formatCurrency(remaining)} />
+        )}
         <KpiTile
           icon={<Receipt size={15} />}
           label={hasInstallments ? "Total prévu" : "Transactions"}

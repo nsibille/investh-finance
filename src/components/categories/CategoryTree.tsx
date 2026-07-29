@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight,
@@ -11,6 +11,7 @@ import {
   ArchiveRestore,
   GripVertical,
   Trash2,
+  Receipt,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -18,12 +19,16 @@ import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { SearchInput } from "@/components/ui/Input";
 import { Dot } from "@/components/ui/Badge";
+import { Amount } from "@/components/ui/Amount";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FolderTree } from "lucide-react";
+import { MonthZoomSelector } from "@/components/dashboard/MonthZoomSelector";
+import { TopTransactions } from "@/components/dashboard/TopTransactions";
 import { useToast } from "@/hooks/useToast";
 import { matchesQuery } from "@/lib/search/filter";
 import { runOptimistic } from "@/lib/optimistic";
+import type { CategoryStatsResult } from "@/lib/categories/stats";
 import { CategoryForm } from "./CategoryForm";
 import { SubcategoryForm } from "./SubcategoryForm";
 import { CategoryDeleteModal } from "./CategoryDeleteModal";
@@ -52,18 +57,59 @@ type SubModal =
   | { mode: "edit"; categoryId: string; sub: Subcategory }
   | null;
 
+/** Total signé + nombre d'opérations d'un nœud sur la fenêtre, avec bouton drill. */
+function NodeStat({
+  stat,
+  isOpen,
+  onToggle,
+}: {
+  stat: { total: number; count: number } | undefined;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  if (!stat || stat.count === 0)
+    return (
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>—</span>
+    );
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+      <Amount value={stat.total} size="sm" />
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", fontVariantNumeric: "tabular-nums", minWidth: 42, textAlign: "right" }}>
+        {stat.count} op.
+      </span>
+      <IconButton
+        label="Voir les 10 plus grosses opérations"
+        data-on={isOpen ? "true" : undefined}
+        onClick={onToggle}
+      >
+        <Receipt size={15} />
+      </IconButton>
+    </span>
+  );
+}
+
 export function CategoryTree({
   tree,
   subcategoryOptions,
+  stats,
+  zoom,
 }: {
   tree: CategoryTypeNode[];
   subcategoryOptions: SubcategoryOption[];
+  stats: CategoryStatsResult;
+  zoom: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
+  // Nœud dont l'encart « 10 plus grosses » est déplié (clé `cat-<id>` / `sub-<id>`).
+  const [openTop, setOpenTop] = useState<string | null>(null);
+  const toggleTop = (key: string) =>
+    setOpenTop((cur) => (cur === key ? null : key));
+  const drillHref = (params: string) =>
+    `/transactions?${params}&from=${stats.from}&to=${stats.to}`;
   const hasQuery = query.trim().length > 0;
   const [categoryModal, setCategoryModal] = useState<CategoryModal>(null);
   const [subModal, setSubModal] = useState<SubModal>(null);
@@ -260,6 +306,11 @@ export function CategoryTree({
         </label>
       </div>
 
+      {/* Fenêtre temporelle : année glissante ou un mois — pilote les KPIs. */}
+      <div style={{ marginBottom: "var(--space-5)" }}>
+        <MonthZoomSelector months={stats.months} labels={stats.monthLabels} zoom={zoom} />
+      </div>
+
       {hasQuery && visibleTypeCount === 0 && (
         <Card>
           <EmptyState
@@ -397,6 +448,11 @@ export function CategoryTree({
                         <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                           {subs.length} sous-cat.
                         </span>
+                        <NodeStat
+                          stat={stats.byCat[cat.id]}
+                          isOpen={openTop === `cat-${cat.id}`}
+                          onToggle={() => toggleTop(`cat-${cat.id}`)}
+                        />
                         <IconButton
                           label="Ajouter une sous-catégorie"
                           onClick={() => setSubModal({ mode: "create", categoryId: cat.id })}
@@ -424,6 +480,15 @@ export function CategoryTree({
                           <Trash2 size={16} />
                         </IconButton>
                       </div>
+
+                      {openTop === `cat-${cat.id}` && (
+                        <div style={{ paddingLeft: "var(--space-10)", paddingBottom: "var(--space-2)" }}>
+                          <TopTransactions
+                            txs={stats.byCat[cat.id]?.top ?? []}
+                            href={drillHref(`category=${cat.id}`)}
+                          />
+                        </div>
+                      )}
 
                       {isOpen && (
                         <div
@@ -453,8 +518,8 @@ export function CategoryTree({
                             </div>
                           )}
                           {subs.map((sub) => (
+                            <Fragment key={sub.id}>
                             <div
-                              key={sub.id}
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.effectAllowed = "move";
@@ -498,6 +563,11 @@ export function CategoryTree({
                               <span style={{ flex: 1, fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
                                 {sub.name === "—" ? "(défaut)" : sub.name}
                               </span>
+                              <NodeStat
+                                stat={stats.bySub[sub.id]}
+                                isOpen={openTop === `sub-${sub.id}`}
+                                onToggle={() => toggleTop(`sub-${sub.id}`)}
+                              />
                               <IconButton
                                 label="Modifier la sous-catégorie"
                                 onClick={() =>
@@ -513,6 +583,15 @@ export function CategoryTree({
                                 {sub.is_archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                               </IconButton>
                             </div>
+                            {openTop === `sub-${sub.id}` && (
+                              <div style={{ paddingLeft: "var(--space-8)", paddingBottom: "var(--space-1)" }}>
+                                <TopTransactions
+                                  txs={stats.bySub[sub.id]?.top ?? []}
+                                  href={drillHref(`subcategory=${sub.id}`)}
+                                />
+                              </div>
+                            )}
+                            </Fragment>
                           ))}
                           {subs.length === 0 && (
                             <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>

@@ -2,12 +2,17 @@ import {
   startOfMonth,
   endOfMonth,
   subMonths,
+  subDays,
   format,
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
-import { getTransferSubcategoryIds } from "@/lib/categories/queries";
+import {
+  getTransferSubcategoryIds,
+  getIncomeSubcategoryIds,
+} from "@/lib/categories/queries";
 import { getPersonalAmountAdjustments } from "@/lib/persons/queries";
+import { accountingMonth } from "./accounting";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -41,27 +46,39 @@ export async function getMonthlyKpis(ref: Date): Promise<MonthlyKpis> {
   const monthEnd = endOfMonth(ref);
   const prevStart = startOfMonth(subMonths(ref, 1));
 
-  const [{ data }, transferIds, { debtByTx, repaymentTxIds }] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("id, operation_date, amount, subcategory_id")
-      .eq("status", "validated")
-      .gte("operation_date", iso(prevStart))
-      .lte("operation_date", iso(monthEnd)),
-    getTransferSubcategoryIds(),
-    getPersonalAmountAdjustments(),
-  ]);
+  const [{ data }, transferIds, incomeIds, { debtByTx, repaymentTxIds }] =
+    await Promise.all([
+      supabase
+        .from("transactions")
+        .select("id, operation_date, amount, subcategory_id")
+        .eq("status", "validated")
+        // On élargit la borne basse : un revenu de fin de mois précédent est
+        // rattaché au mois suivant (cf. `accountingMonth`), il doit donc être
+        // récupéré pour alimenter le bon bucket.
+        .gte("operation_date", iso(subDays(prevStart, 7)))
+        .lte("operation_date", iso(monthEnd)),
+      getTransferSubcategoryIds(),
+      getIncomeSubcategoryIds(),
+      getPersonalAmountAdjustments(),
+    ]);
 
   const cur: number[] = [];
   const prev: number[] = [];
-  const startStr = iso(monthStart);
+  const curKey = format(monthStart, "yyyy-MM");
+  const prevKey = format(prevStart, "yyyy-MM");
   for (const t of data ?? []) {
     if (t.subcategory_id && transferIds.has(t.subcategory_id)) continue;
     // Remboursement rattaché : pas un revenu (la créance est déjà déduite).
     if (repaymentTxIds.has(t.id)) continue;
+    const isIncome =
+      Number(t.amount) > 0 &&
+      !!t.subcategory_id &&
+      incomeIds.has(t.subcategory_id);
+    const key = accountingMonth(t.operation_date, isIncome);
     // Créance déduite : on ne garde que ma part (+ les cadeaux).
     const amount = Number(t.amount) + (debtByTx.get(t.id) ?? 0);
-    (t.operation_date >= startStr ? cur : prev).push(amount);
+    if (key === curKey) cur.push(amount);
+    else if (key === prevKey) prev.push(amount);
   }
   return { current: computeKpis(cur), previous: computeKpis(prev) };
 }
@@ -123,16 +140,20 @@ export async function getMonthlyTrend(
   const monthEnd = endOfMonth(ref);
   const firstStart = startOfMonth(subMonths(ref, months - 1));
 
-  const [{ data }, transferIds, { debtByTx, repaymentTxIds }] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("id, operation_date, amount, subcategory_id")
-      .eq("status", "validated")
-      .gte("operation_date", iso(firstStart))
-      .lte("operation_date", iso(monthEnd)),
-    getTransferSubcategoryIds(),
-    getPersonalAmountAdjustments(),
-  ]);
+  const [{ data }, transferIds, incomeIds, { debtByTx, repaymentTxIds }] =
+    await Promise.all([
+      supabase
+        .from("transactions")
+        .select("id, operation_date, amount, subcategory_id")
+        .eq("status", "validated")
+        // Borne basse élargie pour capter les revenus de fin de mois rattachés
+        // au mois suivant (cf. `accountingMonth`).
+        .gte("operation_date", iso(subDays(firstStart, 7)))
+        .lte("operation_date", iso(monthEnd)),
+      getTransferSubcategoryIds(),
+      getIncomeSubcategoryIds(),
+      getPersonalAmountAdjustments(),
+    ]);
 
   const buckets = new Map<string, { revenus: number; depenses: number }>();
   for (let i = 0; i < months; i++) {
@@ -143,7 +164,11 @@ export async function getMonthlyTrend(
   for (const t of data ?? []) {
     if (t.subcategory_id && transferIds.has(t.subcategory_id)) continue;
     if (repaymentTxIds.has(t.id)) continue;
-    const key = t.operation_date.slice(0, 7);
+    const isIncome =
+      Number(t.amount) > 0 &&
+      !!t.subcategory_id &&
+      incomeIds.has(t.subcategory_id);
+    const key = accountingMonth(t.operation_date, isIncome);
     const bucket = buckets.get(key);
     if (!bucket) continue;
     const a = Number(t.amount) + (debtByTx.get(t.id) ?? 0);

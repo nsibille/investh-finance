@@ -58,8 +58,14 @@ export interface PurchaseWithDetails extends Purchase {
   categoryColor: string | null;
   /** Nombre de transactions rattachées. */
   transactionCount: number;
-  /** Somme des transactions rattachées (réalisé). */
+  /** Somme signée des transactions rattachées (réalisé net). */
   paidAmount: number;
+  /** Dépensé brut : somme des débits rattachés, en valeur absolue. */
+  spentAmount: number;
+  /** Versements reçus : somme des crédits rattachés (remboursements d'un achat partagé). */
+  receivedAmount: number;
+  /** Coût net à ta charge = dépensé − versements reçus. */
+  netAmount: number;
   installments: PurchaseInstallment[];
   /** Somme des mensualités prévisionnelles. */
   forecastAmount: number;

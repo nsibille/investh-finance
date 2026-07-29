@@ -24,8 +24,9 @@ function monthFull(ym: string): string {
 
 /** Fiche détail (lecture) d'une enseigne : stats, 12 mois, catégories, lien liste. */
 export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
-  const maxMonth = Math.max(1, ...stats.monthly.map((m) => m.depenses));
+  const maxMonth = Math.max(1, ...stats.monthly.map((m) => m.amount));
   const maxCat = Math.max(1, ...stats.categories.map((c) => c.amount));
+  const flowKind = stats.isIncome ? "revenus" : "depenses";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
@@ -70,20 +71,20 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "var(--space-4)" }}>
-            <KpiCard kind="depenses" label="Total dépensé" value={formatCurrency(stats.totalSpent)} />
+            <KpiCard kind={flowKind} label={stats.isIncome ? "Total perçu" : "Total dépensé"} value={formatCurrency(stats.total)} />
             <KpiCard kind="solde" label="Transactions" value={String(stats.transactionCount)} />
-            <KpiCard kind="depenses" label="Dépense moyenne / mois" value={formatCurrency(stats.avgMonthly)} />
+            <KpiCard kind={flowKind} label={stats.isIncome ? "Revenu moyen / mois" : "Dépense moyenne / mois"} value={formatCurrency(stats.avgMonthly)} />
             <KpiCard kind="epargne" label="Achats rattachés" value={String(stats.purchaseCount)} />
           </div>
 
           <Card>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-              <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>Dépenses des 12 derniers mois</h2>
+              <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>{stats.isIncome ? "Revenus" : "Dépenses"} des 12 derniers mois</h2>
               <div className="mq-bars mq-bars--lg">
                 {stats.monthly.map((m) => (
-                  <div key={m.month} className="mq-bars__col" title={`${monthFull(m.month)} : ${formatCurrency(m.depenses)}`}>
+                  <div key={m.month} className="mq-bars__col" title={`${monthFull(m.month)} : ${formatCurrency(m.amount)}`}>
                     <div className="mq-bars__track">
-                      <div className="mq-bars__fill" style={{ height: `${Math.round((m.depenses / maxMonth) * 100)}%` }} />
+                      <div className="mq-bars__fill" style={{ height: `${Math.round((m.amount / maxMonth) * 100)}%` }} />
                     </div>
                     <span className="mq-bars__label">{monthInitial(m.month)}</span>
                   </div>

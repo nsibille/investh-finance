@@ -1,5 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Account, AccountWithBalance } from "./types";
+import type { Account, AccountWithBalance, AccountRebase } from "./types";
+
+/** Rebasements d'un compte, du plus récent au plus ancien. */
+export async function getAccountRebases(
+  accountId: string,
+): Promise<AccountRebase[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("account_rebases")
+    .select("*")
+    .eq("account_id", accountId)
+    .order("rebase_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  return (data ?? []) as AccountRebase[];
+}
 
 export async function getAccountsWithBalances(): Promise<AccountWithBalance[]> {
   const supabase = await createClient();

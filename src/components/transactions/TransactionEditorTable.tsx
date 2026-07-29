@@ -60,6 +60,8 @@ export interface EditorRowVM {
   dimmed?: boolean;
   /** Doublon déjà en base (import) : style dédié. */
   isExistingDuplicate?: boolean;
+  /** Virement interne apparié (contrepartie identifiée sur un autre compte). */
+  transferPaired?: boolean;
 }
 
 export interface EditorHandlers {

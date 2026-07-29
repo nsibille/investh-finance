@@ -6,8 +6,9 @@ import { AccountAvatar } from "@/components/ui/Avatar";
 import { StatusBadge } from "@/components/ui/Badge";
 import { ComingSoon } from "@/components/layout/ComingSoon";
 import { AccountDetailActions } from "@/components/accounts/AccountDetailActions";
+import { AccountRebases } from "@/components/accounts/AccountRebases";
 import { ACCOUNT_TYPE_LABELS } from "@/lib/accounts/constants";
-import { getAccount } from "@/lib/accounts/queries";
+import { getAccount, getAccountRebases } from "@/lib/accounts/queries";
 import { formatShortDate } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,10 @@ export default async function AccountDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const account = await getAccount(id);
+  const [account, rebases] = await Promise.all([
+    getAccount(id),
+    getAccountRebases(id),
+  ]);
 
   if (!account) notFound();
 
@@ -98,7 +102,7 @@ export default async function AccountDetailPage({
         <Stat label={`Solde initial (${formatShortDate(account.initial_date)})`}>
           <Amount value={account.initial_balance} size="lg" tone="neutral" />
         </Stat>
-        <Stat label="Somme des transactions validées">
+        <Stat label="Mouvements depuis l'ancrage (à ce jour)">
           <Amount value={account.transactions_sum} size="lg" />
         </Stat>
         <Stat label="En attente de validation">
@@ -112,6 +116,10 @@ export default async function AccountDetailPage({
             {account.pending_count}
           </span>
         </Stat>
+      </div>
+
+      <div style={{ marginBottom: "var(--space-6)" }}>
+        <AccountRebases accountId={account.id} rebases={rebases} />
       </div>
 
       <ComingSoon feature="L'historique des transactions du compte" />

@@ -4,6 +4,7 @@ import { PersonDetailView } from "@/components/persons/PersonDetailView";
 import {
   getPersonLedger,
   getCreditCandidates,
+  getPersonOptions,
   buildPersonEvents,
 } from "@/lib/persons/queries";
 
@@ -15,9 +16,10 @@ export default async function PersonneDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [person, candidates] = await Promise.all([
+  const [person, candidates, persons] = await Promise.all([
     getPersonLedger(id),
     getCreditCandidates(),
+    getPersonOptions(),
   ]);
 
   if (!person) notFound();
@@ -30,7 +32,7 @@ export default async function PersonneDetailPage({
         items={[{ label: "Personnes", href: "/personnes" }, { label: person.name }]}
       />
       <div style={{ marginTop: "var(--space-5)" }}>
-        <PersonDetailView person={person} events={events} candidates={candidates} />
+        <PersonDetailView person={person} events={events} candidates={candidates} persons={persons} />
       </div>
     </>
   );

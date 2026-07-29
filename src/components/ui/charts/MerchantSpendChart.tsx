@@ -29,9 +29,12 @@ export interface MerchantSpendPoint {
 export function MerchantSpendChart({
   data,
   average,
+  valueLabel = "Dépenses",
 }: {
   data: MerchantSpendPoint[];
   average: number;
+  /** Libellé de la série (tooltip + légende) : « Dépenses » par défaut. */
+  valueLabel?: string;
 }) {
   const max = Math.max(0, ...data.map((d) => d.depenses));
 
@@ -70,7 +73,7 @@ export function MerchantSpendChart({
           )}
           <RTooltip
             cursor={{ fill: "var(--color-brand-primary-50)" }}
-            formatter={(value: unknown) => [formatCurrency(Number(value)), "Dépenses"]}
+            formatter={(value: unknown) => [formatCurrency(Number(value)), valueLabel]}
             labelFormatter={(label, payload) => {
               const year = (payload?.[0]?.payload as { year?: number } | undefined)?.year;
               return year ? `${String(label)} ${year}` : String(label ?? "");
@@ -82,7 +85,7 @@ export function MerchantSpendChart({
               boxShadow: "var(--shadow-md)",
             }}
           />
-          <Bar dataKey="depenses" name="Dépenses" radius={[4, 4, 0, 0]} maxBarSize={26}>
+          <Bar dataKey="depenses" name={valueLabel} radius={[4, 4, 0, 0]} maxBarSize={26}>
             {data.map((d, i) => (
               <Cell
                 key={i}

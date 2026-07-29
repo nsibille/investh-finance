@@ -11,6 +11,8 @@ import {
   RotateCcw,
   Pencil,
   X,
+  ArrowLeftRight,
+  Trash2,
 } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
@@ -36,6 +38,7 @@ import type { TransactionStatus } from "@/lib/transactions/types";
 export interface ListHandlers extends EditorHandlers {
   onValidate: (key: string) => void;
   onSetStatus: (key: string, status: TransactionStatus) => void;
+  onDelete: (key: string) => void;
 }
 
 /** Découpe une catégorie en chemin parent (ellipsable) + feuille (jamais tronquée). */
@@ -145,6 +148,15 @@ export function TransactionsTable({
                       <code className="tx-label-code">{rawLabel}</code>
                     </div>
                     <div className="tx-main__meta">
+                      {r.transferPaired && (
+                        <span
+                          className="tx-meta tx-meta--transfer"
+                          title="Virement interne apparié à sa contrepartie sur un autre compte"
+                        >
+                          <ArrowLeftRight size={12} aria-hidden />
+                          <span className="tx-meta__text">Virement apparié</span>
+                        </span>
+                      )}
                       {r.merchant && (
                         <MerchantQuickView
                           merchantId={r.merchant.id}
@@ -325,6 +337,13 @@ export function TransactionsTable({
                         <Pencil size={16} />
                       </IconButton>
                     </Link>
+                    <IconButton
+                      label="Supprimer la transaction"
+                      data-danger
+                      onClick={() => handlers.onDelete(r.key)}
+                    >
+                      <Trash2 size={16} />
+                    </IconButton>
                   </div>
                 </td>
               </tr>

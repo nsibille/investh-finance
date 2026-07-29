@@ -8,8 +8,12 @@ export type TransactionStatus =
 export interface CategoryDisplay {
   subcategory_id: string;
   subcategoryName: string;
+  /** Catégorie parente (id) : sert au regroupement et au drill-down. */
+  categoryId: string;
   categoryName: string;
   typeName: string;
+  /** Slug du type (ex. « investissements », « virements ») pour classer le flux. */
+  typeSlug: string;
   color: string | null;
   isIncome: boolean;
 }
@@ -64,6 +68,12 @@ export interface TransactionRow {
    * personne remboursée. `null` quand la transaction n'est pas un remboursement.
    */
   repayment?: { personName: string } | null;
+  /**
+   * Virement interne apparié : rattaché à un groupe de réconciliation dont le net
+   * vaut 0 (contrepartie identifiée sur un autre compte). `undefined`/false pour
+   * un virement interne orphelin ou une transaction ordinaire.
+   */
+  transferPaired?: boolean;
 }
 
 export interface TransactionFilters {
@@ -80,6 +90,12 @@ export interface TransactionFilters {
   search?: string;
   from?: string;
   to?: string;
+  /** Restreint aux catégories d'un flux : revenu / dépense / investissement. */
+  flow?: TransactionFlow;
+  /** Drill-down : restreint à une catégorie (toutes ses sous-catégories). */
+  categoryId?: string;
+  /** Drill-down : restreint à un ou plusieurs types de catégorie (slugs). */
+  typeSlugs?: string[];
   sort?: "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
   page?: number;
   perPage?: number;
@@ -90,4 +106,27 @@ export interface TransactionsPage {
   total: number;
   page: number;
   perPage: number;
+}
+
+/** Sens d'un flux, pour distinguer revenus / dépenses / investissements. */
+export type TransactionFlow = "income" | "expense" | "investment";
+
+/**
+ * Agrégats du jeu filtré complet (toutes pages), pour l'en-tête du listing.
+ * Les montants sont classés par TYPE de catégorie (pas par signe) afin que
+ * chaque KPI corresponde exactement au filtre déclenché au clic. Les opérations
+ * ignorées, les virements internes et les non catégorisées ne comptent dans
+ * aucun des trois flux. `count` reflète l'ensemble affiché (aligné pagination).
+ */
+export interface TransactionsSummary {
+  /** Nombre total d'opérations du set filtré (ignorées incluses). */
+  count: number;
+  /** Revenus : catégories de type « revenu » (hors ignorées). */
+  totalIncome: number;
+  /** Dépensé : catégories de dépense hors investissements et virements. */
+  totalExpense: number;
+  /** Investi : catégories du type « Investissements ». */
+  totalInvested: number;
+  /** Solde net budgétaire = revenus − dépensé − investi. */
+  net: number;
 }

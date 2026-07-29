@@ -59,6 +59,9 @@ export const getCategoryTree = cache(async function getCategoryTree(): Promise<
 /** Slug du type réservé aux virements internes (exclu des KPIs revenus/dépenses). */
 export const TRANSFER_TYPE_SLUG = "virements";
 
+/** Slug du type « Investissements » : distingué des dépenses dans les KPIs. */
+export const INVESTMENT_TYPE_SLUG = "investissements";
+
 /**
  * Ids des sous-catégories de virement interne, dérivés de l'arbre (en cache).
  * Servent à exclure les virements des agrégats revenus/dépenses (ils ne sont
@@ -70,6 +73,24 @@ export const getTransferSubcategoryIds = cache(
     const ids = new Set<string>();
     for (const type of tree) {
       if (type.slug !== TRANSFER_TYPE_SLUG) continue;
+      for (const cat of type.categories)
+        for (const sub of cat.subcategories) ids.add(sub.id);
+    }
+    return ids;
+  },
+);
+
+/**
+ * Ids des sous-catégories rattachées à un type de revenu (`is_income`).
+ * Servent à rattacher les revenus de fin de mois au mois suivant (date de
+ * valeur métier — cf. `lib/dashboard/accounting`).
+ */
+export const getIncomeSubcategoryIds = cache(
+  async function getIncomeSubcategoryIds(): Promise<Set<string>> {
+    const tree = await getCategoryTree();
+    const ids = new Set<string>();
+    for (const type of tree) {
+      if (!type.is_income) continue;
       for (const cat of type.categories)
         for (const sub of cat.subcategories) ids.add(sub.id);
     }
@@ -94,6 +115,7 @@ export const getSubcategoryOptions = cache(async function getSubcategoryOptions(
           id: sub.id,
           label: `${type.name} / ${cat.name}${subLabel}`,
           categoryColor: cat.color,
+          categoryId: cat.id,
           typeName: type.name,
           categoryName: cat.name,
           subName,

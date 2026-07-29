@@ -1,6 +1,10 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getCategoryTree } from "@/lib/categories/queries";
+import {
+  getCategoryTree,
+  INVESTMENT_TYPE_SLUG,
+  TRANSFER_TYPE_SLUG,
+} from "@/lib/categories/queries";
 import { installmentOccurrence } from "@/lib/purchases/installments";
 import type { TransactionShare } from "@/lib/persons/types";
 import type {
@@ -8,6 +12,8 @@ import type {
   TransactionRow,
   TransactionFilters,
   TransactionsPage,
+  TransactionsSummary,
+  TransactionFlow,
   CategoryDisplay,
   AccountDisplay,
 } from "./types";
@@ -16,7 +22,7 @@ const DEFAULT_PER_PAGE = 50;
 
 /** Colonnes réellement affichées : on évite de tirer `search_vector`, `dedup_hash`, etc. */
 const LIST_COLUMNS =
-  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id, recurring_pattern_id, split_nature" as const;
+  "id, account_id, subcategory_id, operation_date, value_date, label, raw_label, amount, currency, status, note, is_recurring, purchase_id, merchant_id, recurring_pattern_id, split_nature, transfer_group_id" as const;
 
 /** Colonnes du détail : ajoute purchase_id, merchant_id, recurring_pattern_id. */
 const DETAIL_COLUMNS =
@@ -44,6 +50,7 @@ type ListRecord = TransactionRecord & {
   merchant_id: string | null;
   recurring_pattern_id: string | null;
   split_nature: Transaction["split_nature"];
+  transfer_group_id: string | null;
 };
 
 // Dérivé de l'arbre des catégories (mis en cache) : plus aucune requête
@@ -59,8 +66,10 @@ export const getCategoryDisplayMap = cache(async function getCategoryDisplayMap(
         out.set(sub.id, {
           subcategory_id: sub.id,
           subcategoryName: sub.name,
+          categoryId: cat.id,
           categoryName: cat.name,
           typeName: type.name,
+          typeSlug: type.slug,
           color: cat.color ?? type.color ?? null,
           isIncome: type.is_income,
         });
@@ -109,16 +118,70 @@ function enrich(
   };
 }
 
-export async function getTransactionsPage(
-  filters: TransactionFilters,
-): Promise<TransactionsPage> {
-  const supabase = await createClient();
-  const page = Math.max(1, filters.page ?? 1);
-  const perPage = filters.perPage ?? DEFAULT_PER_PAGE;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
+/** UUID nul : cible impossible pour forcer un `in` vide à ne rien matcher. */
+const NO_MATCH_UUID = "00000000-0000-0000-0000-000000000000";
+
+/** Sens du flux d'une catégorie (revenu / dépense / investissement), ou null
+ * pour les catégories neutres (virements internes) et les non catégorisées. */
+function flowOf(display: CategoryDisplay | null | undefined): TransactionFlow | null {
+  if (!display) return null;
+  if (display.isIncome) return "income";
+  if (display.typeSlug === INVESTMENT_TYPE_SLUG) return "investment";
+  if (display.typeSlug === TRANSFER_TYPE_SLUG) return null;
+  return "expense";
+}
+
+/** Sous-catégories appartenant à un flux donné (pour filtrer le listing). */
+async function flowSubcategoryIds(flow: TransactionFlow): Promise<string[]> {
+  const map = await getCategoryDisplayMap();
+  const ids: string[] = [];
+  for (const [id, display] of map) if (flowOf(display) === flow) ids.push(id);
+  return ids;
+}
+
+/**
+ * Restriction de sous-catégories issue des filtres de drill-down (catégorie
+ * et/ou types) : intersection quand les deux sont présents. `null` si aucun.
+ */
+async function subcategoryRestriction(
+  filters: TransactionFilters,
+): Promise<string[] | null> {
+  if (!filters.categoryId && !filters.typeSlugs?.length) return null;
+  const map = await getCategoryDisplayMap();
+  const displays = [...map.values()];
+  let ids: string[] | null = null;
+  if (filters.categoryId) {
+    ids = displays
+      .filter((d) => d.categoryId === filters.categoryId)
+      .map((d) => d.subcategory_id);
+  }
+  if (filters.typeSlugs?.length) {
+    const wanted = new Set(filters.typeSlugs);
+    const byType = displays
+      .filter((d) => wanted.has(d.typeSlug))
+      .map((d) => d.subcategory_id);
+    ids = ids ? ids.filter((id) => byType.includes(id)) : byType;
+  }
+  return ids ?? [];
+}
+
+/**
+ * Construit la requête `transactions` avec tous les prédicats de filtrage (mais
+ * sans tri ni pagination). Partagé par le listing paginé et l'agrégat d'en-tête
+ * pour garantir que les KPIs portent exactement sur le même jeu que la liste.
+ * `flowIds` restreint aux sous-catégories d'un flux (revenu/dépense/investi).
+ */
+function filteredTransactionsQuery(
+  supabase: SupabaseServerClient,
+  columns: string,
+  filters: TransactionFilters,
+  opts: { restrictSubIds?: string[] | null; flowIds?: string[] | null } = {},
+) {
   let query = supabase
     .from("transactions")
-    .select(LIST_COLUMNS, { count: "exact" });
+    .select(columns, { count: "exact" });
 
   if (filters.accountId) query = query.eq("account_id", filters.accountId);
   if (filters.status) query = query.eq("status", filters.status);
@@ -128,6 +191,16 @@ export async function getTransactionsPage(
     query = query.in("merchant_id", filters.merchantIds);
   if (filters.purchaseIds?.length)
     query = query.in("purchase_id", filters.purchaseIds);
+  // Drill-down (catégorie / types) : restriction toujours appliquée.
+  if (opts.restrictSubIds)
+    query = query.in(
+      "subcategory_id",
+      opts.restrictSubIds.length ? opts.restrictSubIds : [NO_MATCH_UUID],
+    );
+  // Flux (revenu/dépense/investissement) : restreint aux sous-catégories du flux
+  // (UUID nul si aucune, pour ne rien renvoyer plutôt que tout).
+  if (opts.flowIds)
+    query = query.in("subcategory_id", opts.flowIds.length ? opts.flowIds : [NO_MATCH_UUID]);
   // Montant filtré en valeur absolue : les dépenses sont stockées négatives, on
   // veut « entre 10 et 50 € » qu'il s'agisse d'un débit ou d'un crédit.
   const { amountMin: aMin, amountMax: aMax } = filters;
@@ -140,8 +213,10 @@ export async function getTransactionsPage(
   } else if (aMax != null) {
     query = query.gte("amount", -aMax).lte("amount", aMax);
   }
-  if (filters.from) query = query.gte("operation_date", filters.from);
-  if (filters.to) query = query.lte("operation_date", filters.to);
+  // Filtrage par date de rattachement comptable (revenus de fin de mois → mois
+  // suivant), pour rester raccord au dashboard.
+  if (filters.from) query = query.gte("accounting_date", filters.from);
+  if (filters.to) query = query.lte("accounting_date", filters.to);
   if (filters.search) {
     query = query.textSearch("search_vector", filters.search, {
       type: "websearch",
@@ -149,9 +224,90 @@ export async function getTransactionsPage(
     });
   }
 
+  return query;
+}
+
+/**
+ * Agrège le jeu filtré complet (toutes pages) pour l'en-tête du listing :
+ * revenus, dépensé, investi (classés par TYPE de catégorie, pas par signe),
+ * solde net budgétaire et nombre d'opérations. Ignore volontairement le filtre
+ * `flow` (les KPIs restent une vue d'ensemble stable, cible du clic). Les
+ * opérations ignorées ne comptent dans aucun total. Parcouru par tranches pour
+ * rester juste quel que soit le nombre de lignes.
+ */
+export async function getTransactionsSummary(
+  filters: TransactionFilters,
+): Promise<TransactionsSummary> {
+  const supabase = await createClient();
+  const categories = await getCategoryDisplayMap();
+  // Le drill-down (catégorie / types) fait partie du set filtré ; le flux, lui,
+  // est ignoré ici pour garder la vue d'ensemble stable (cible du clic).
+  const restrictSubIds = await subcategoryRestriction(filters);
+  const CHUNK = 1000;
+  let offset = 0;
+  let count = 0;
+  let totalIncome = 0;
+  let totalExpense = 0;
+  let totalInvested = 0;
+
+  for (;;) {
+    // Tri stable (id) indispensable pour paginer sans doublon ni saut.
+    const { data, count: c } = await filteredTransactionsQuery(
+      supabase,
+      "amount, status, subcategory_id",
+      filters,
+      { restrictSubIds },
+    )
+      .order("id", { ascending: true })
+      .range(offset, offset + CHUNK - 1);
+
+    if (c != null) count = c;
+    const rows = (data ?? []) as unknown as {
+      amount: number;
+      status: string;
+      subcategory_id: string | null;
+    }[];
+    for (const r of rows) {
+      if (r.status === "ignored") continue;
+      const amount = Number(r.amount);
+      const flow = flowOf(r.subcategory_id ? categories.get(r.subcategory_id) : null);
+      if (flow === "income") totalIncome += amount;
+      else if (flow === "expense") totalExpense += -amount;
+      else if (flow === "investment") totalInvested += -amount;
+    }
+    if (rows.length < CHUNK) break;
+    offset += CHUNK;
+  }
+
+  return {
+    count,
+    totalIncome,
+    totalExpense,
+    totalInvested,
+    net: totalIncome - totalExpense - totalInvested,
+  };
+}
+
+export async function getTransactionsPage(
+  filters: TransactionFilters,
+): Promise<TransactionsPage> {
+  const supabase = await createClient();
+  const page = Math.max(1, filters.page ?? 1);
+  const perPage = filters.perPage ?? DEFAULT_PER_PAGE;
+
+  const [flowIds, restrictSubIds] = await Promise.all([
+    filters.flow ? flowSubcategoryIds(filters.flow) : Promise.resolve(null),
+    subcategoryRestriction(filters),
+  ]);
+  let query = filteredTransactionsQuery(supabase, LIST_COLUMNS, filters, {
+    flowIds,
+    restrictSubIds,
+  });
+
+  // Tri par date : on suit la date de rattachement comptable (raccord dashboard).
   switch (filters.sort) {
     case "date_asc":
-      query = query.order("operation_date", { ascending: true });
+      query = query.order("accounting_date", { ascending: true });
       break;
     case "amount_desc":
       query = query.order("amount", { ascending: false });
@@ -160,7 +316,7 @@ export async function getTransactionsPage(
       query = query.order("amount", { ascending: true });
       break;
     default:
-      query = query.order("operation_date", { ascending: false });
+      query = query.order("accounting_date", { ascending: false });
   }
   query = query.order("created_at", { ascending: false });
   // Départage final : `operation_date`/`created_at` ne sont pas uniques (un
@@ -203,6 +359,7 @@ async function attachRelations(
     merchant_id: string | null;
     recurring_pattern_id: string | null;
     split_nature: Transaction["split_nature"];
+    transfer_group_id: string | null;
   }[],
   rows: TransactionRow[],
 ): Promise<void> {
@@ -344,6 +501,8 @@ async function attachRelations(
     }
     const repaidName = repaymentByTx.get(rec.id);
     if (repaidName) row.repayment = { personName: repaidName };
+    // Virement interne apparié : rattaché à un groupe de réconciliation (net 0).
+    if (rec.transfer_group_id) row.transferPaired = true;
   });
 }
 

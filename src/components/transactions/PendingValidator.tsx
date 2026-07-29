@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Wand2, Check, Ban, Store, ShoppingBag, X, Repeat, Users, ArrowDownLeft } from "lucide-react";
+import { Wand2, Check, Ban, Store, ShoppingBag, X, Repeat, Users, ArrowDownLeft, Trash2 } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Alert } from "@/components/ui/Alert";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
 import { Dot } from "@/components/ui/Badge";
@@ -25,6 +26,7 @@ import {
   setTransactionSubcategory,
   setTransactionStatus,
   updateTransactionNote,
+  deleteTransaction,
 } from "@/server/actions/transactions";
 import {
   attachTransactionToMerchant,
@@ -102,6 +104,8 @@ export function PendingValidator({
   const [personsFor, setPersonsFor] = useState<{ row: TransactionRow; split: TransactionSplit } | null>(null);
   const [loadingPersons, setLoadingPersons] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [deleteFor, setDeleteFor] = useState<TransactionRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
@@ -170,6 +174,19 @@ export function PendingValidator({
       onError: toast.error,
     });
     if (res.ok) router.refresh();
+  }
+
+  async function confirmDelete() {
+    if (!deleteFor) return;
+    const id = deleteFor.id;
+    setDeleting(true);
+    const res = await deleteTransaction(id);
+    setDeleting(false);
+    if (!res.ok) return toast.error(res.error);
+    setDeleteFor(null);
+    hide(id);
+    toast.success("Transaction supprimée");
+    router.refresh();
   }
 
   // --- Enseigne ------------------------------------------------------------
@@ -420,6 +437,15 @@ export function PendingValidator({
                 <Button variant="ghost" size="sm" leftIcon={<Ban size={14} />} onClick={() => ignore(raw)}>
                   Ignorer
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<Trash2 size={14} />}
+                  onClick={() => setDeleteFor(raw)}
+                  style={{ color: "var(--color-danger)" }}
+                >
+                  Supprimer
+                </Button>
               </div>
 
               {/* Enseigne · Achat · Note */}
@@ -628,6 +654,29 @@ export function PendingValidator({
             onSaved={() => setPersonsFor(null)}
           />
         )}
+      </Modal>
+
+      <Modal
+        open={deleteFor !== null}
+        onClose={() => setDeleteFor(null)}
+        title="Supprimer la transaction ?"
+        variantClass="modal-confirm-danger"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteFor(null)} disabled={deleting}>
+              Annuler
+            </Button>
+            <Button variant="danger" onClick={confirmDelete} loading={deleting}>
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <Alert variant="warning">
+          Cette transaction sera supprimée définitivement. Ses pièces jointes,
+          partages et tags le seront aussi ; les échéances d&apos;achat et
+          remboursements associés seront détachés. Action irréversible.
+        </Alert>
       </Modal>
     </>
   );

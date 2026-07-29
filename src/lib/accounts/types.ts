@@ -7,3 +7,5 @@ export interface AccountWithBalance extends Account {
   transactions_sum: number;
   pending_count: number;
 }
+
+export type AccountRebase = Database["public"]["Tables"]["account_rebases"]["Row"];

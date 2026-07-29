@@ -45,9 +45,11 @@ type Mode = "share" | "repayment";
 
 /**
  * Éditeur de lien d'une transaction avec des personnes.
- * - Mode « Partager » : ventilation entre personnes (dette/cadeau, parts éditables).
- * - Mode « Remboursement » (crédits uniquement) : marque le crédit comme
- *   remboursement d'une dette d'une personne (crée un `person_repayment` lié).
+ * - Dépense (montant < 0) : ventilation entre plusieurs personnes
+ *   (dette/cadeau, parts éditables).
+ * - Crédit (montant > 0) : une seule personne, sans partage —
+ *   « À rembourser » (argent reçu que tu dois à la personne → tu lui dois) ou
+ *   « Remboursement » (la personne éteint une dette qu'elle avait envers toi).
  * Slug design system : `person-share-editor`.
  */
 export function PersonSharePicker({
@@ -69,10 +71,6 @@ export function PersonSharePicker({
   const router = useRouter();
   const toast = useToast();
   const total = round2(Math.abs(amount));
-  // Transaction créditée (montant > 0) : une part « dette » = argent que JE
-  // dois à la personne (ex. virement pro reçu à rendre). Sinon (dépense
-  // avancée) : la personne ME doit. Un remboursement (argent qui rentre pour
-  // éteindre une dette) n'a de sens que sur un crédit.
   const isCredit = amount > 0;
 
   const selfId = useMemo(
@@ -86,33 +84,26 @@ export function PersonSharePicker({
   const [mode, setMode] = useState<Mode>(
     isCredit && initial.shares.length === 0 ? "repayment" : "share",
   );
-
-  // --- Mode Partager -------------------------------------------------------
-  const [nature, setNature] = useState<SplitNature>(initial.nature ?? "debt");
   const [saving, setSaving] = useState(false);
 
-  // État initial : parts existantes, sinon « moi » seul avec le montant total.
+  // --- Dépense partagée (montant < 0) : parts multi-personnes ---------------
+  const [nature, setNature] = useState<SplitNature>(initial.nature ?? "debt");
   const [checked, setChecked] = useState<Set<string>>(() => {
     if (initial.shares.length > 0)
       return new Set(initial.shares.map((s) => s.personId));
     return new Set(selfId ? [selfId] : []);
   });
   const [amounts, setAmounts] = useState<Record<string, string>>(() => {
-    if (initial.shares.length > 0) {
-      return Object.fromEntries(
-        initial.shares.map((s) => [s.personId, String(s.amount)]),
-      );
-    }
+    if (initial.shares.length > 0)
+      return Object.fromEntries(initial.shares.map((s) => [s.personId, String(s.amount)]));
     return selfId ? { [selfId]: String(total) } : {};
   });
-
   const checkedIds = persons.filter((p) => checked.has(p.id)).map((p) => p.id);
 
   function redistribute(ids: string[]) {
     const parts = equalShares(total, ids.length);
     setAmounts(Object.fromEntries(ids.map((id, i) => [id, String(parts[i])])));
   }
-
   function toggle(id: string) {
     setChecked((prev) => {
       const next = new Set(prev);
@@ -122,7 +113,6 @@ export function PersonSharePicker({
       return next;
     });
   }
-
   const parsed = useMemo(() => {
     const map = new Map<string, number>();
     for (const id of checkedIds) {
@@ -131,7 +121,6 @@ export function PersonSharePicker({
     }
     return map;
   }, [checkedIds, amounts]);
-
   const sumShares = [...parsed.values()].reduce((s, v) => s + v, 0);
   const othersSum = checkedIds
     .filter((id) => id !== selfId)
@@ -139,30 +128,43 @@ export function PersonSharePicker({
   const myShare = selfId ? (parsed.get(selfId) ?? 0) : 0;
   const mismatch = Math.abs(sumShares - total) > 0.01;
 
-  async function save() {
+  async function saveShares(shares: { personId: string; amount: number }[], natureVal: SplitNature) {
     setSaving(true);
-    const res = await setTransactionShares(transactionId, {
-      nature,
-      shares: checkedIds.map((id) => ({ personId: id, amount: parsed.get(id) ?? 0 })),
-    });
+    const res = await setTransactionShares(transactionId, { nature: natureVal, shares });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success(checkedIds.length ? "Partage enregistré" : "Partage retiré");
+    toast.success(shares.length ? "Enregistré" : "Partage retiré");
     router.refresh();
     onSaved?.();
   }
+  const saveSplit = () =>
+    saveShares(
+      checkedIds.map((id) => ({ personId: id, amount: parsed.get(id) ?? 0 })),
+      nature,
+    );
 
-  // --- Mode Remboursement --------------------------------------------------
-  const [repayCtx, setRepayCtx] = useState<TransactionRepaymentContext | null>(
-    null,
-  );
+  // --- Crédit « À rembourser » (montant > 0) : une seule personne -----------
+  const [owePerson, setOwePerson] = useState<string>(() => {
+    const first = initial.shares.find((s) => s.personId !== selfId);
+    return first?.personId ?? (others.length === 1 ? others[0].id : "");
+  });
+  const [oweAmount, setOweAmount] = useState<string>(String(total));
+
+  function saveOwe() {
+    if (!owePerson) return toast.error("Choisis une personne.");
+    const v = parseFloat(oweAmount.replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) return toast.error("Saisis un montant positif.");
+    // Part « dette » sur un crédit → argent que je dois à la personne.
+    return saveShares([{ personId: owePerson, amount: v }], "debt");
+  }
+
+  // --- Remboursement (crédits uniquement) ----------------------------------
+  const [repayCtx, setRepayCtx] = useState<TransactionRepaymentContext | null>(null);
   const [repayPerson, setRepayPerson] = useState<string>("");
   const [repayAmount, setRepayAmount] = useState<string>(String(total));
   const [repayNote, setRepayNote] = useState<string>("");
   const [savingRepay, setSavingRepay] = useState(false);
 
-  // Charge (crédits uniquement) l'éventuel remboursement déjà lié + la date
-  // d'opération. Si présent, force le mode « Remboursement » et pré-remplit.
   useEffect(() => {
     if (!isCredit) return;
     let alive = true;
@@ -175,7 +177,6 @@ export function PersonSharePicker({
         setRepayNote(ctx.repayment.note ?? "");
         setMode("repayment");
       } else if (others.length === 1) {
-        // Une seule autre personne : pré-sélectionnée pour un enregistrement 1-clic.
         setRepayPerson(others[0].id);
       }
     });
@@ -198,7 +199,6 @@ export function PersonSharePicker({
       transactionId,
       note: repayNote || null,
     };
-    // updateRepayment ne change pas la personne : si elle change, on recrée.
     let res;
     if (existing && existing.personId === repayPerson) {
       res = await updateRepayment(existing.id, payload);
@@ -214,9 +214,7 @@ export function PersonSharePicker({
     }
     setSavingRepay(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success(
-      existing ? "Remboursement mis à jour" : "Remboursement enregistré",
-    );
+    toast.success(existing ? "Remboursement mis à jour" : "Remboursement enregistré");
     router.refresh();
     onSaved?.();
   }
@@ -234,6 +232,7 @@ export function PersonSharePicker({
     onSaved?.();
   }
 
+  // --- Rendu ----------------------------------------------------------------
   const segBtn = (
     label: string,
     Icon: typeof Gift,
@@ -252,12 +251,8 @@ export function PersonSharePicker({
         padding: "0 var(--space-3)",
         borderRadius: "var(--radius-md)",
         border: `1px solid ${active ? "var(--color-brand-primary)" : "var(--color-border)"}`,
-        background: active
-          ? "var(--color-brand-primary-50)"
-          : "var(--color-bg-surface)",
-        color: active
-          ? "var(--color-brand-primary-700)"
-          : "var(--color-text-secondary)",
+        background: active ? "var(--color-brand-primary-50)" : "var(--color-bg-surface)",
+        color: active ? "var(--color-brand-primary-700)" : "var(--color-text-secondary)",
         fontSize: "var(--text-sm)",
         fontWeight: "var(--fw-medium)",
         cursor: "pointer",
@@ -268,8 +263,31 @@ export function PersonSharePicker({
     </button>
   );
 
-  const natureBtn = (value: SplitNature, label: string, Icon: typeof Gift) =>
-    segBtn(label, Icon, nature === value, () => setNature(value));
+  const personBtn = (id: string, name: string, color: string, active: boolean, onClick: () => void) => (
+    <button
+      key={id}
+      type="button"
+      onClick={onClick}
+      data-active={active}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        height: 36,
+        padding: "0 var(--space-3)",
+        borderRadius: "var(--radius-md)",
+        border: `1px solid ${active ? "var(--color-brand-primary)" : "var(--color-border)"}`,
+        background: active ? "var(--color-brand-primary-50)" : "var(--color-bg-surface)",
+        color: active ? "var(--color-brand-primary-700)" : "var(--color-text-secondary)",
+        fontSize: "var(--text-sm)",
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+    >
+      <Dot color={color} />
+      {name}
+    </button>
+  );
 
   if (persons.length === 0) {
     return (
@@ -279,38 +297,20 @@ export function PersonSharePicker({
     );
   }
 
-  const sharePanel = (
+  // Dépense : ventilation multi-personnes (dette / cadeau).
+  const splitPanel = (
     <>
-      {/* Personnes cochables */}
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
         {persons.map((p) => {
           const isChecked = checked.has(p.id);
           return (
-            <div
-              key={p.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-3)",
-                justifyContent: "space-between",
-              }}
-            >
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "var(--space-2)",
-                  fontSize: "var(--text-sm)",
-                  cursor: "pointer",
-                }}
-              >
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", justifyContent: "space-between" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-sm)", cursor: "pointer" }}>
                 <Checkbox checked={isChecked} onChange={() => toggle(p.id)} />
                 <Dot color={p.color} />
                 {p.name}
                 {p.isSelf && (
-                  <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                    (moi)
-                  </span>
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>(moi)</span>
                 )}
               </label>
               {isChecked && (
@@ -318,13 +318,8 @@ export function PersonSharePicker({
                   <Input
                     value={amounts[p.id] ?? ""}
                     inputMode="decimal"
-                    onChange={(e) =>
-                      setAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))
-                    }
-                    style={{
-                      textAlign: "right",
-                      fontFamily: "var(--font-mono)",
-                    }}
+                    onChange={(e) => setAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                    style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}
                   />
                 </div>
               )}
@@ -333,64 +328,27 @@ export function PersonSharePicker({
         })}
       </div>
 
-      {/* Actions répartition + nature */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          leftIcon={<Scale size={15} />}
-          onClick={() => redistribute(checkedIds)}
-          disabled={checkedIds.length === 0}
-        >
+        <Button type="button" variant="ghost" size="sm" leftIcon={<Scale size={15} />} onClick={() => redistribute(checkedIds)} disabled={checkedIds.length === 0}>
           Répartir équitablement
         </Button>
         <div style={{ flex: 1 }} />
-        {natureBtn("debt", isCredit ? "À rendre" : "Dette", HandCoins)}
-        {natureBtn("gift", "Cadeau", Gift)}
+        {segBtn("Dette", HandCoins, nature === "debt", () => setNature("debt"))}
+        {segBtn("Cadeau", Gift, nature === "gift", () => setNature("gift"))}
       </div>
 
-      {isCredit && nature === "debt" && (
-        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
-          Transaction reçue partagée en « à rendre » : le montant réparti aux
-          autres personnes compte comme de l&apos;argent que tu leur dois (ex.
-          virement pro à rembourser).
-        </p>
-      )}
-
-      {/* Résumé */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-1)",
-          padding: "var(--space-3)",
-          background: "var(--color-bg-subtle)",
-          borderRadius: "var(--radius-md)",
-          fontSize: "var(--text-sm)",
-        }}
-      >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", padding: "var(--space-3)", background: "var(--color-bg-subtle)", borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)" }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-text-muted)" }}>Ma part</span>
           <span style={{ fontFamily: "var(--font-mono)" }}>{formatCurrency(myShare, currency)}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-text-muted)" }}>
-            {nature === "gift"
-              ? "Cadeaux offerts"
-              : isCredit
-                ? "À rendre (tu dois)"
-                : "Créances (à te rembourser)"}
+            {nature === "gift" ? "Cadeaux offerts" : "Créances (à te rembourser)"}
           </span>
           <span style={{ fontFamily: "var(--font-mono)" }}>{formatCurrency(othersSum, currency)}</span>
         </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            color: mismatch ? "var(--color-warning-dark)" : "var(--color-text-muted)",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", color: mismatch ? "var(--color-warning-dark)" : "var(--color-text-muted)" }}>
           <span>Total réparti / transaction</span>
           <span style={{ fontFamily: "var(--font-mono)" }}>
             {formatCurrency(sumShares, currency)} / {formatCurrency(total, currency)}
@@ -400,149 +358,108 @@ export function PersonSharePicker({
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-2)" }}>
         {initial.shares.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            leftIcon={<RotateCcw size={15} />}
-            onClick={() => {
-              setChecked(new Set());
-              setAmounts({});
-            }}
-          >
+          <Button type="button" variant="ghost" size="sm" leftIcon={<RotateCcw size={15} />} onClick={() => { setChecked(new Set()); setAmounts({}); }}>
             Ne pas partager
           </Button>
         ) : (
           <span />
         )}
-        <Button
-          type="button"
-          size="sm"
-          leftIcon={<Users size={15} />}
-          loading={saving}
-          onClick={save}
-        >
+        <Button type="button" size="sm" leftIcon={<Users size={15} />} loading={saving} onClick={saveSplit}>
           Enregistrer le partage
         </Button>
       </div>
     </>
   );
 
-  const repaymentPanel = (
-    <>
-      {others.length === 0 ? (
-        <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
-          Aucune autre personne. Crée-en une dans « Personnes » pour enregistrer
-          un remboursement.
+  // Crédit « À rembourser » : une seule personne, sans partage.
+  const owePanel =
+    others.length === 0 ? (
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
+        Aucune autre personne. Crée-en une dans « Personnes ».
+      </p>
+    ) : (
+      <>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
+          À qui dois-tu rembourser cet argent reçu&nbsp;?
         </p>
-      ) : (
-        <>
-          <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
-            Qui te rembourse avec ce crédit&nbsp;?
-          </p>
-          {/* Personnes (choix unique) */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-            {others.map((p) => {
-              const active = repayPerson === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setRepayPerson(p.id)}
-                  data-active={active}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "var(--space-2)",
-                    height: 36,
-                    padding: "0 var(--space-3)",
-                    borderRadius: "var(--radius-md)",
-                    border: `1px solid ${active ? "var(--color-brand-primary)" : "var(--color-border)"}`,
-                    background: active
-                      ? "var(--color-brand-primary-50)"
-                      : "var(--color-bg-surface)",
-                    color: active
-                      ? "var(--color-brand-primary-700)"
-                      : "var(--color-text-secondary)",
-                    fontSize: "var(--text-sm)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <Dot color={p.color} />
-                  {p.name}
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
-            <div style={{ width: 120 }}>
-              <Input
-                value={repayAmount}
-                inputMode="decimal"
-                onChange={(e) => setRepayAmount(e.target.value)}
-                placeholder="Montant"
-                style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}
-              />
-            </div>
-            <Input
-              value={repayNote}
-              onChange={(e) => setRepayNote(e.target.value)}
-              placeholder="Note (optionnel)"
-              style={{ flex: "1 1 160px", minWidth: 0 }}
-            />
-          </div>
-
-          <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
-            Ce crédit sera marqué comme remboursement&nbsp;: il éteint la dette de
-            la personne et sort de tes revenus du mois.
-          </p>
-
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-2)" }}>
-            {repayCtx?.repayment ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                leftIcon={<RotateCcw size={15} />}
-                loading={savingRepay}
-                onClick={removeRepayment}
-              >
-                Retirer le remboursement
-              </Button>
-            ) : (
-              <span />
-            )}
-            <Button
-              type="button"
-              size="sm"
-              leftIcon={<ArrowDownLeft size={15} />}
-              loading={savingRepay}
-              onClick={saveRepayment}
-            >
-              {repayCtx?.repayment ? "Enregistrer" : "Marquer comme remboursement"}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          {others.map((p) => personBtn(p.id, p.name, p.color, owePerson === p.id, () => setOwePerson(p.id)))}
+        </div>
+        <div style={{ width: 140 }}>
+          <Input
+            value={oweAmount}
+            inputMode="decimal"
+            onChange={(e) => setOweAmount(e.target.value)}
+            placeholder="Montant"
+            style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}
+          />
+        </div>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
+          Ce montant compte comme de l&apos;argent que tu dois à la personne (impacte
+          son solde en négatif — ex. virement reçu à lui reverser).
+        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-2)" }}>
+          {initial.shares.length > 0 ? (
+            <Button type="button" variant="ghost" size="sm" leftIcon={<RotateCcw size={15} />} loading={saving} onClick={() => saveShares([], nature)}>
+              Retirer
             </Button>
+          ) : (
+            <span />
+          )}
+          <Button type="button" size="sm" leftIcon={<HandCoins size={15} />} loading={saving} onClick={saveOwe}>
+            Enregistrer
+          </Button>
+        </div>
+      </>
+    );
+
+  const repaymentPanel =
+    others.length === 0 ? (
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>
+        Aucune autre personne. Crée-en une dans « Personnes » pour enregistrer un remboursement.
+      </p>
+    ) : (
+      <>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
+          Qui te rembourse avec ce crédit&nbsp;?
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          {others.map((p) => personBtn(p.id, p.name, p.color, repayPerson === p.id, () => setRepayPerson(p.id)))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
+          <div style={{ width: 120 }}>
+            <Input value={repayAmount} inputMode="decimal" onChange={(e) => setRepayAmount(e.target.value)} placeholder="Montant" style={{ textAlign: "right", fontFamily: "var(--font-mono)" }} />
           </div>
-        </>
-      )}
-    </>
-  );
+          <Input value={repayNote} onChange={(e) => setRepayNote(e.target.value)} placeholder="Note (optionnel)" style={{ flex: "1 1 160px", minWidth: 0 }} />
+        </div>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", margin: 0 }}>
+          Ce crédit sera marqué comme remboursement&nbsp;: il éteint la dette de la
+          personne et sort de tes revenus du mois.
+        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-2)" }}>
+          {repayCtx?.repayment ? (
+            <Button type="button" variant="ghost" size="sm" leftIcon={<RotateCcw size={15} />} loading={savingRepay} onClick={removeRepayment}>
+              Retirer le remboursement
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button type="button" size="sm" leftIcon={<ArrowDownLeft size={15} />} loading={savingRepay} onClick={saveRepayment}>
+            {repayCtx?.repayment ? "Enregistrer" : "Marquer comme remboursement"}
+          </Button>
+        </div>
+      </>
+    );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
       {isCredit && (
         <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-          {segBtn("Partager", Users, mode === "share", () => setMode("share"))}
-          {segBtn(
-            "Remboursement",
-            ArrowDownLeft,
-            mode === "repayment",
-            () => setMode("repayment"),
-          )}
+          {segBtn("À rembourser", HandCoins, mode === "share", () => setMode("share"))}
+          {segBtn("Remboursement", ArrowDownLeft, mode === "repayment", () => setMode("repayment"))}
         </div>
       )}
-      {mode === "repayment" && isCredit ? repaymentPanel : sharePanel}
+      {!isCredit ? splitPanel : mode === "repayment" ? repaymentPanel : owePanel}
     </div>
   );
 }

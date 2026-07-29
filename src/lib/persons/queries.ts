@@ -203,7 +203,7 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
       supabase
         .from("transaction_persons")
         .select(
-          "person_id, share_amount, transactions!inner(id, label, operation_date, amount, split_nature)",
+          "person_id, share_amount, transactions!inner(id, label, operation_date, amount, currency, split_nature)",
         ),
       supabase
         .from("person_repayments")
@@ -222,6 +222,7 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
       label: string;
       operation_date: string;
       amount: number;
+      currency: string;
       split_nature: SplitNature | null;
     } | null;
     if (!tx || !tx.split_nature) continue; // parts sans nature = non ventilées
@@ -231,6 +232,7 @@ export async function getPersonsLedger(): Promise<PersonLedger[]> {
       label: tx.label,
       operationDate: tx.operation_date,
       amount: Number(tx.amount),
+      currency: tx.currency,
       shareAmount: Number(r.share_amount),
       nature: tx.split_nature,
     });

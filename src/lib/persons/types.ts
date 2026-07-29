@@ -36,6 +36,7 @@ export interface PersonShareRow {
   label: string;
   operationDate: string;
   amount: number; // montant de la transaction (signé)
+  currency: string;
   shareAmount: number; // part de la personne (positif)
   nature: SplitNature;
 }

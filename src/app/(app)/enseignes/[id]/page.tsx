@@ -7,13 +7,18 @@ export const dynamic = "force-dynamic";
 
 export default async function EnseigneDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ zoom?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const now = new Date();
   const refMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const stats = await getMerchantStats(id, refMonth);
+  // Zoom mensuel : accepté seulement s'il tombe dans la fenêtre 12 mois affichée.
+  const zoom = sp.zoom && /^\d{4}-\d{2}$/.test(sp.zoom) ? sp.zoom : null;
+  const stats = await getMerchantStats(id, refMonth, zoom);
 
   if (!stats) notFound();
 

@@ -55,6 +55,11 @@ export const MerchantSpendChart = dynamic(
   { ssr: false, loading: chartFallback(200) },
 );
 
+export const MerchantTimelineChart = dynamic(
+  () => import("./MerchantTimelineChart").then((m) => m.MerchantTimelineChart),
+  { ssr: false, loading: chartFallback(300) },
+);
+
 export const PurchaseTimelineChart = dynamic(
   () => import("./PurchaseTimelineChart").then((m) => m.PurchaseTimelineChart),
   { ssr: false, loading: chartFallback(200) },

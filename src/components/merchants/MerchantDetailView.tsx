@@ -1,66 +1,274 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Store, Globe, ArrowRight, Pencil } from "lucide-react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import {
+  Store,
+  Globe,
+  MapPin,
+  ArrowRight,
+  Settings2,
+  Receipt,
+  TrendingUp,
+  Wallet,
+  ShoppingBag,
+  CalendarClock,
+  PieChart,
+  Sparkles,
+  ChevronLeft,
+} from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { MonthZoomSelector } from "@/components/dashboard/MonthZoomSelector";
+import { MerchantTimelineChart } from "@/components/ui/charts/lazy";
+import type { TimelinePoint } from "@/components/ui/charts/MerchantTimelineChart";
 import { formatCurrency } from "@/lib/format/currency";
 import type { MerchantStats } from "@/lib/merchants/stats";
 
-const MONTH_LABELS = [
-  "J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D",
+const MONTHS_LONG = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
-function monthInitial(ym: string): string {
-  const m = Number(ym.split("-")[1]);
-  return MONTH_LABELS[m - 1] ?? "";
-}
-function monthFull(ym: string): string {
+function monthYearLong(ym: string): string {
   const [y, m] = ym.split("-");
-  const names = [
-    "janv.", "févr.", "mars", "avr.", "mai", "juin",
-    "juil.", "août", "sept.", "oct.", "nov.", "déc.",
-  ];
-  return `${names[Number(m) - 1]} ${y}`;
+  return `${MONTHS_LONG[Number(m) - 1] ?? m} ${y}`;
+}
+function dmy(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function signedPct(v: number): string {
+  return `${v > 0 ? "+" : ""}${Math.round(v)} %`;
 }
 
-/** Fiche détail (lecture) d'une enseigne : stats, 12 mois, catégories, lien liste. */
+function KpiTile({
+  icon,
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: string;
+}) {
+  return (
+    <div className="mdx-kpi">
+      <span className="mdx-kpi__icon" style={accent ? { color: accent } : undefined}>
+        {icon}
+      </span>
+      <div className="mdx-kpi__body">
+        <span className="mdx-kpi__label">{label}</span>
+        <span className="mdx-kpi__value">{value}</span>
+        {hint && <span className="mdx-kpi__hint">{hint}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Fiche détail interactive d'une enseigne : KPIs, fun facts, projections, poids
+ * dans la catégorie, timeline année glissante avec zoom mensuel et look-through
+ * (clic sur une barre → détail des opérations). Reflète le zoom via `?zoom=` de
+ * l'URL, comme le reste des dashboards.
+ */
 export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
-  const maxMonth = Math.max(1, ...stats.monthly.map((m) => m.amount));
-  const maxCat = Math.max(1, ...stats.categories.map((c) => c.amount));
-  const flowKind = stats.isIncome ? "revenus" : "depenses";
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  // Jour sélectionné dans la vue zoomée (look-through au 2ᵉ niveau).
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  const {
+    id,
+    name,
+    categoryLabel,
+    categoryColor,
+    isOnline,
+    country,
+    isIncome,
+    total,
+    counterTotal,
+    transactionCount,
+    purchaseCount,
+    firstDate,
+    maxFlow,
+    avgMonthly,
+    basket,
+    frequency,
+    months,
+    monthLabels,
+    zoomMonth,
+    scopeFrom,
+    scopeTo,
+    monthly,
+    scopeTotal,
+    scopeCount,
+    daily,
+    scopeTransactions,
+    scopeCategories,
+    categoryWeightPct,
+    projection,
+  } = stats;
+
+  const accent = isIncome ? "var(--color-finance-revenus)" : "var(--color-finance-depenses)";
+  const flowNoun = isIncome ? "perçu" : "dépensé";
+  const flowLabel = isIncome ? "Revenus" : "Dépenses";
+  const scopeLabel = zoomMonth ? monthYearLong(zoomMonth) : "12 derniers mois";
+
+  // Données de la timeline : mensuelle (année) ou journalière (mois zoomé).
+  const timelineData: TimelinePoint[] = useMemo(() => {
+    if (zoomMonth && daily) {
+      return daily.map((d) => ({
+        key: d.date,
+        label: String(d.day),
+        sub: monthYearLong(zoomMonth),
+        amount: d.amount,
+        count: d.count,
+      }));
+    }
+    return monthly.map((m) => ({
+      key: m.month,
+      label: m.label,
+      sub: String(m.year),
+      amount: m.amount,
+      count: m.count,
+    }));
+  }, [zoomMonth, daily, monthly]);
+
+  // Moyenne repère de la timeline.
+  const timelineAvg = useMemo(() => {
+    const active = timelineData.filter((d) => d.amount > 0);
+    if (active.length === 0) return 0;
+    return active.reduce((s, d) => s + d.amount, 0) / active.length;
+  }, [timelineData]);
+
+  function setZoom(next: string | null) {
+    const sp = new URLSearchParams(params.toString());
+    if (next) sp.set("zoom", next);
+    else sp.delete("zoom");
+    setSelectedDay(null);
+    const qs = sp.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function onBarSelect(point: TimelinePoint) {
+    if (zoomMonth) {
+      // Vue journalière : bascule la sélection du jour (look-through).
+      setSelectedDay((prev) => (prev === point.key ? null : point.key));
+    } else {
+      // Vue année : zoome sur le mois cliqué.
+      setZoom(point.key);
+    }
+  }
+
+  // Liste look-through : opérations de la portée, filtrées au jour si sélectionné.
+  const listedTxns = useMemo(
+    () =>
+      selectedDay
+        ? scopeTransactions.filter((t) => t.date === selectedDay)
+        : scopeTransactions,
+    [scopeTransactions, selectedDay],
+  );
+
+  // Fun facts candidats (les plus parlants d'abord).
+  const funFacts = useMemo(() => {
+    const out: { emoji: string; text: string }[] = [];
+    if (maxFlow) {
+      out.push({
+        emoji: "💥",
+        text: `${isIncome ? "Plus gros revenu" : "Plus grosse dépense"} : ${formatCurrency(maxFlow.amount)} le ${dmy(maxFlow.date)}.`,
+      });
+    }
+    const record = monthly.reduce<(typeof monthly)[number] | null>(
+      (best, m) => (m.amount > (best?.amount ?? 0) ? m : best),
+      null,
+    );
+    if (record && record.amount > 0) {
+      out.push({
+        emoji: "🗓️",
+        text: `Mois record : ${monthYearLong(record.month)} (${formatCurrency(record.amount)}).`,
+      });
+    }
+    if (categoryWeightPct != null && categoryLabel) {
+      out.push({
+        emoji: "🏆",
+        text: `Pèse ${Math.round(categoryWeightPct)} % de « ${categoryLabel} » sur l'année.`,
+      });
+    }
+    if (frequency >= 1) {
+      out.push({
+        emoji: "🔁",
+        text: `Environ ${frequency.toFixed(1)} opération${frequency >= 2 ? "s" : ""} par mois actif.`,
+      });
+    }
+    if (projection?.trendPct != null && Math.abs(projection.trendPct) >= 10) {
+      const up = projection.trendPct > 0;
+      out.push({
+        emoji: up ? "📈" : "📉",
+        text: `Tendance ${up ? "en hausse" : "en baisse"} : ${signedPct(projection.trendPct)} sur le dernier trimestre.`,
+      });
+    }
+    if (firstDate) {
+      out.push({
+        emoji: "🤝",
+        text: `Première opération le ${dmy(firstDate)} — déjà ${transactionCount} au total.`,
+      });
+    }
+    if (!isIncome && counterTotal > 0.01) {
+      out.push({
+        emoji: "↩️",
+        text: `${formatCurrency(counterTotal)} te sont revenus (remboursements / avoirs).`,
+      });
+    }
+    return out;
+  }, [
+    maxFlow, isIncome, monthly, categoryWeightPct, categoryLabel, frequency,
+    projection, firstDate, transactionCount, counterTotal,
+  ]);
+
+  const maxCat = Math.max(1, ...scopeCategories.map((c) => c.amount));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+      {/* En-tête identité */}
       <Card>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-4)", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
+        <div className="mdx-header">
+          <div className="mdx-header__id">
             <span className="merchant-detail__icon"><Store size={22} aria-hidden /></span>
             <div style={{ minWidth: 0 }}>
-              <h1 style={{ fontSize: "var(--text-2xl)", margin: 0 }}>{stats.name}</h1>
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: 2, fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-                {stats.categoryLabel && (
+              <h1 style={{ fontSize: "var(--text-2xl)", margin: 0 }}>{name}</h1>
+              <div className="mdx-header__meta">
+                {categoryLabel && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    <span className="badge-dot" style={{ ["--dot-color" as string]: stats.categoryColor ?? undefined }} />
-                    {stats.categoryLabel}
+                    <span className="badge-dot" style={{ ["--dot-color" as string]: categoryColor ?? undefined }} />
+                    {categoryLabel}
                   </span>
                 )}
-                {stats.isOnline ? (
+                {isOnline ? (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     <Globe size={13} aria-hidden /> En ligne
                   </span>
-                ) : stats.country ? (
-                  <span>{stats.country}</span>
+                ) : country ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <MapPin size={13} aria-hidden /> {country}
+                  </span>
                 ) : null}
               </div>
             </div>
           </div>
           <Link href="/enseignes" className="btn-secondary-md" style={{ textDecoration: "none" }}>
-            <Pencil size={14} aria-hidden />
+            <Settings2 size={14} aria-hidden />
             Gérer les enseignes
           </Link>
         </div>
       </Card>
 
-      {stats.transactionCount === 0 ? (
+      {transactionCount === 0 ? (
         <Card>
           <EmptyState
             icon={Store}
@@ -70,58 +278,216 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
         </Card>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "var(--space-4)" }}>
-            <KpiCard kind={flowKind} label={stats.isIncome ? "Total perçu" : "Total dépensé"} value={formatCurrency(stats.total)} />
-            <KpiCard kind="solde" label="Transactions" value={String(stats.transactionCount)} />
-            <KpiCard kind={flowKind} label={stats.isIncome ? "Revenu moyen / mois" : "Dépense moyenne / mois"} value={formatCurrency(stats.avgMonthly)} />
-            <KpiCard kind="epargne" label="Achats rattachés" value={String(stats.purchaseCount)} />
+          {/* Zoom (année glissante / mois) */}
+          <div className="mdx-zoombar">
+            <span className="mdx-zoombar__label">
+              <CalendarClock size={14} aria-hidden /> Période
+            </span>
+            <MonthZoomSelector months={months} labels={monthLabels} zoom={zoomMonth} />
           </div>
 
-          <Card>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-              <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>{stats.isIncome ? "Revenus" : "Dépenses"} des 12 derniers mois</h2>
-              <div className="mq-bars mq-bars--lg">
-                {stats.monthly.map((m) => (
-                  <div key={m.month} className="mq-bars__col" title={`${monthFull(m.month)} : ${formatCurrency(m.amount)}`}>
-                    <div className="mq-bars__track">
-                      <div className="mq-bars__fill" style={{ height: `${Math.round((m.amount / maxMonth) * 100)}%` }} />
-                    </div>
-                    <span className="mq-bars__label">{monthInitial(m.month)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
+          {/* KPIs de la portée */}
+          <div className="mdx-kpis">
+            <KpiTile
+              icon={<Wallet size={16} />}
+              label={`Total ${flowNoun} · ${scopeLabel}`}
+              value={formatCurrency(scopeTotal)}
+              hint={`${scopeCount} opération${scopeCount > 1 ? "s" : ""}`}
+              accent={accent}
+            />
+            <KpiTile
+              icon={<Receipt size={16} />}
+              label={isIncome ? "Montant moyen" : "Panier moyen"}
+              value={formatCurrency(basket)}
+            />
+            <KpiTile
+              icon={<TrendingUp size={16} />}
+              label="Moyenne / mois"
+              value={formatCurrency(avgMonthly)}
+              hint={`≈ ${frequency.toFixed(1)} op./mois`}
+            />
+            {categoryWeightPct != null && (
+              <KpiTile
+                icon={<PieChart size={16} />}
+                label="Poids catégorie"
+                value={`${Math.round(categoryWeightPct)} %`}
+                hint={categoryLabel ?? undefined}
+              />
+            )}
+            <KpiTile
+              icon={<ShoppingBag size={16} />}
+              label="Achats liés"
+              value={String(purchaseCount)}
+            />
+          </div>
 
-          {stats.categories.length > 0 && (
+          {/* Fun facts */}
+          {funFacts.length > 0 && (
+            <div className="mdx-funfacts">
+              {funFacts.slice(0, 4).map((f, i) => (
+                <div key={i} className="mdx-funfact">
+                  <span className="mdx-funfact__emoji" aria-hidden>{f.emoji}</span>
+                  <span>{f.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Projection */}
+          {projection && (
             <Card>
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-                <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>Répartition par catégorie</h2>
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-                  {stats.categories.map((c) => (
-                    <div key={c.key} className="md-cat">
-                      <div className="md-cat__head">
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0 }}>
-                          <span className="badge-dot" style={{ ["--dot-color" as string]: c.color ?? undefined }} />
-                          <span className="md-cat__name">{c.label}</span>
-                          <span className="mq-cat__count">{c.count}</span>
-                        </span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>{formatCurrency(c.amount)}</span>
-                      </div>
-                      <div className="md-cat__track">
-                        <div className="md-cat__fill" style={{ width: `${Math.round((c.amount / maxCat) * 100)}%`, background: c.color ?? "var(--color-brand-primary)" }} />
-                      </div>
-                    </div>
-                  ))}
+              <div className="mdx-proj">
+                <div className="mdx-proj__head">
+                  <Sparkles size={16} aria-hidden style={{ color: accent }} />
+                  <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>Projection</h2>
+                  <span className="mdx-proj__caption">au rythme de l&apos;année glissante</span>
+                </div>
+                <div className="mdx-proj__grid">
+                  <div className="mdx-proj__item">
+                    <span className="mdx-proj__label">Rythme mensuel</span>
+                    <span className="mdx-proj__value">{formatCurrency(projection.runRate)}</span>
+                  </div>
+                  <div className="mdx-proj__item">
+                    <span className="mdx-proj__label">Estimation mois prochain</span>
+                    <span className="mdx-proj__value">{formatCurrency(projection.nextMonth)}</span>
+                  </div>
+                  <div className="mdx-proj__item">
+                    <span className="mdx-proj__label">Projeté sur 12 mois</span>
+                    <span className="mdx-proj__value">{formatCurrency(projection.year)}</span>
+                  </div>
+                  <div className="mdx-proj__item">
+                    <span className="mdx-proj__label">Tendance (trimestre)</span>
+                    <span
+                      className="mdx-proj__value"
+                      style={{
+                        color:
+                          projection.trendPct == null
+                            ? undefined
+                            : projection.trendPct > 0
+                              ? (isIncome ? "var(--color-finance-revenus)" : "var(--color-finance-depenses)")
+                              : (isIncome ? "var(--color-finance-depenses)" : "var(--color-finance-revenus)"),
+                      }}
+                    >
+                      {projection.trendPct == null ? "—" : signedPct(projection.trendPct)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </Card>
           )}
 
-          <Link href={`/transactions?merchant=${stats.id}`} className="btn-secondary-md" style={{ textDecoration: "none", alignSelf: "flex-start" }}>
-            Voir les {stats.transactionCount} transaction{stats.transactionCount > 1 ? "s" : ""}
-            <ArrowRight size={16} aria-hidden />
-          </Link>
+          {/* Timeline avec look-through */}
+          <Card>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              <div className="mdx-section__head">
+                <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>
+                  {flowLabel} · {zoomMonth ? `jour par jour — ${monthYearLong(zoomMonth)}` : "année glissante"}
+                </h2>
+                {zoomMonth && (
+                  <button type="button" className="mdx-linkbtn" onClick={() => setZoom(null)}>
+                    <ChevronLeft size={14} aria-hidden /> Revenir à l&apos;année
+                  </button>
+                )}
+              </div>
+              <p className="mdx-hint">
+                {zoomMonth
+                  ? "Clique un jour pour filtrer les opérations ci-dessous."
+                  : "Clique un mois pour zoomer et voir le détail des opérations."}
+              </p>
+              <MerchantTimelineChart
+                data={timelineData}
+                average={timelineAvg}
+                valueLabel={flowLabel}
+                accent={accent}
+                selectedKey={selectedDay}
+                onSelect={onBarSelect}
+              />
+            </div>
+          </Card>
+
+          {/* Répartition par catégorie (portée) */}
+          {scopeCategories.length > 1 && (
+            <Card>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>
+                  Répartition par catégorie · {scopeLabel}
+                </h2>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                  {scopeCategories.map((c) => {
+                    const pctScope = scopeTotal > 0 ? Math.round((c.amount / scopeTotal) * 100) : 0;
+                    return (
+                      <div key={c.key} className="md-cat">
+                        <div className="md-cat__head">
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0 }}>
+                            <span className="badge-dot" style={{ ["--dot-color" as string]: c.color ?? undefined }} />
+                            <span className="md-cat__name">{c.label}</span>
+                            <span className="mq-cat__count">{c.count}</span>
+                          </span>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>
+                            {formatCurrency(c.amount)} · {pctScope} %
+                          </span>
+                        </div>
+                        <div className="md-cat__track">
+                          <div className="md-cat__fill" style={{ width: `${Math.round((c.amount / maxCat) * 100)}%`, background: c.color ?? "var(--color-brand-primary)" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Look-through : opérations de la portée */}
+          <Card>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+              <div className="mdx-section__head">
+                <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>
+                  Opérations · {selectedDay ? dmy(selectedDay) : scopeLabel}
+                </h2>
+                {selectedDay && (
+                  <button type="button" className="mdx-linkbtn" onClick={() => setSelectedDay(null)}>
+                    Tout le mois
+                  </button>
+                )}
+              </div>
+              {listedTxns.length === 0 ? (
+                <p className="mdx-hint">Aucune opération sur cette période.</p>
+              ) : (
+                <div className="mdx-txns">
+                  {listedTxns.map((t) => (
+                    <div key={t.id} className="mdx-txn">
+                      <span className="mdx-txn__date">{dmy(t.date)}</span>
+                      <span className="mdx-txn__label" title={t.label}>{t.label}</span>
+                      {t.categoryLabel && (
+                        <span className="mdx-txn__cat">
+                          <span className="badge-dot" style={{ ["--dot-color" as string]: t.categoryColor ?? undefined }} />
+                          {t.categoryLabel}
+                        </span>
+                      )}
+                      <span className={`mdx-txn__amount ${t.amount >= 0 ? "amount-positive" : "amount-negative"}`}>
+                        {formatCurrency(t.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Link
+                href={`/transactions?merchant=${id}&from=${scopeFrom}&to=${scopeTo}`}
+                className="btn-secondary-md"
+                style={{ textDecoration: "none", alignSelf: "flex-start" }}
+              >
+                Voir dans le listing complet
+                <ArrowRight size={16} aria-hidden />
+              </Link>
+            </div>
+          </Card>
+
+          {/* Total cumulé (toute la période) en pied */}
+          <p className="mdx-alltime">
+            Depuis le début : <strong>{formatCurrency(total)}</strong> {flowNoun} sur{" "}
+            {transactionCount} opération{transactionCount > 1 ? "s" : ""}.
+          </p>
         </>
       )}
     </div>

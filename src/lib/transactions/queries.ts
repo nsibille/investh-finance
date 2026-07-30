@@ -146,8 +146,8 @@ function summaryTypeOf(
   if (!display) return null;
   if (display.isIncome) return "revenus";
   switch (display.typeSlug) {
+    // Les prélèvements sont comptés comme des frais fixes (postes subis récurrents).
     case TYPE_SLUG.prelevements:
-      return "prelevements";
     case TYPE_SLUG.fraisFixes:
       return "fraisFixes";
     case INVESTMENT_TYPE_SLUG:
@@ -279,7 +279,6 @@ export async function getTransactionsSummary(
   let count = 0;
   const totals: Record<SummaryType, number> = {
     revenus: 0,
-    prelevements: 0,
     fraisFixes: 0,
     fraisVariables: 0,
     investissements: 0,
@@ -322,7 +321,6 @@ export async function getTransactionsSummary(
     totals,
     net:
       totals.revenus -
-      totals.prelevements -
       totals.fraisFixes -
       totals.fraisVariables -
       totals.investissements,

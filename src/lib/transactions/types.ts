@@ -113,12 +113,12 @@ export type TransactionFlow = "income" | "expense" | "investment";
 
 /**
  * Types de catégorie agrégés par le bandeau KPI (les virements internes,
- * neutres, et les non catégorisées sont exclus). Les prélèvements et frais fixes
- * sont distingués (mêmes segment « fixes » côté dashboard, mais deux cartes ici).
+ * neutres, et les non catégorisées sont exclus). Les prélèvements sont fondus
+ * dans les frais fixes (un seul poste « Frais fixes », comme le segment
+ * « fixes » du dashboard).
  */
 export type SummaryType =
   | "revenus"
-  | "prelevements"
   | "fraisFixes"
   | "fraisVariables"
   | "investissements";
@@ -136,8 +136,8 @@ export interface TransactionsSummary {
   /** Montants agrégés par type de catégorie (valeur absolue, hors ignorées). */
   totals: Record<SummaryType, number>;
   /**
-   * Solde net budgétaire = revenus − prélèvements − frais fixes − frais
-   * variables − investissements.
+   * Solde net budgétaire = revenus − frais fixes − frais variables −
+   * investissements (les prélèvements sont inclus dans les frais fixes).
    */
   net: number;
 }

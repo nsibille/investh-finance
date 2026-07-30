@@ -6,13 +6,14 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { formatCurrency } from "@/lib/format/currency";
 import type { TransactionsSummary, SummaryType } from "@/lib/transactions/types";
 
-type Kind = "revenus" | "prelevements" | "frais-fixes" | "depenses" | "epargne";
+type Kind = "revenus" | "frais-fixes" | "depenses" | "epargne";
 
 /**
  * Cartes agrégées par TYPE de catégorie. `slug` = valeur du param `types`
  * (filtre de la liste au clic) ; `totalKey` = clé de `summary.totals` ; `kind`
  * = variante couleur de la `KpiCard`. Les virements internes (neutres) et les
- * non catégorisées n'ont pas de carte.
+ * non catégorisées n'ont pas de carte. Les prélèvements sont fondus dans les
+ * frais fixes (une seule carte, qui filtre les deux types).
  */
 const TYPE_CARDS: {
   slug: string;
@@ -21,8 +22,7 @@ const TYPE_CARDS: {
   label: string;
 }[] = [
   { slug: "revenus", totalKey: "revenus", kind: "revenus", label: "Revenus" },
-  { slug: "prelevements", totalKey: "prelevements", kind: "prelevements", label: "Prélèvements" },
-  { slug: "frais-fixes", totalKey: "fraisFixes", kind: "frais-fixes", label: "Frais fixes" },
+  { slug: "frais-fixes,prelevements", totalKey: "fraisFixes", kind: "frais-fixes", label: "Frais fixes" },
   { slug: "frais-variables", totalKey: "fraisVariables", kind: "depenses", label: "Frais variables" },
   { slug: "investissements", totalKey: "investissements", kind: "epargne", label: "Investi" },
 ];

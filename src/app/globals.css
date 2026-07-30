@@ -845,7 +845,6 @@ body {
 .card-kpi__delta[data-direction="down"] { color: var(--color-danger); }
 .card-kpi__delta[data-direction="flat"] { color: var(--color-text-muted); }
 .card-kpi-revenus { border-top: 3px solid var(--color-finance-revenus); }
-.card-kpi-prelevements { border-top: 3px solid var(--color-finance-prelevement); }
 .card-kpi-frais-fixes { border-top: 3px solid var(--color-finance-frais-fixe); }
 .card-kpi-depenses { border-top: 3px solid var(--color-finance-depenses); }
 .card-kpi-solde { border-top: 3px solid var(--color-brand-primary); }

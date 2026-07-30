@@ -184,8 +184,7 @@ export default function DesignSystemPage() {
 
       <Section title="KPI">
         <div style={{ width: 220 }}><KpiCard kind="revenus" label="Revenus" value="4 200,00 €" deltaPercent={5.2} /></div>
-        <div style={{ width: 220 }}><KpiCard kind="prelevements" label="Prélèvements" value="1 120,00 €" /></div>
-        <div style={{ width: 220 }}><KpiCard kind="frais-fixes" label="Frais fixes" value="860,12 €" /></div>
+        <div style={{ width: 220 }}><KpiCard kind="frais-fixes" label="Frais fixes" value="1 980,12 €" /></div>
         <div style={{ width: 220 }}><KpiCard kind="depenses" label="Frais variables" value="1 000,00 €" deltaPercent={-3.1} /></div>
         <div style={{ width: 220 }}><KpiCard kind="solde" label="Solde" value="1 219,88 €" deltaPercent={0} /></div>
         <div style={{ width: 220 }}><KpiCard kind="epargne" label="Épargne" value="29 %" /></div>

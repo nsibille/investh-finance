@@ -2,7 +2,6 @@ import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 
 type Kind =
   | "revenus"
-  | "prelevements"
   | "frais-fixes"
   | "depenses"
   | "solde"

@@ -179,12 +179,42 @@ export async function getMerchantStats(
   const scopeRows = rows.filter((t) => inScope(t.operation_date));
   const scopeTotal = scopeRows.reduce((s, t) => s + flowOf(Number(t.amount)), 0);
 
-  // Répartition par catégorie sur la portée (flux principal).
-  const byCatScope = new Map<string, EntitySlice>();
+  // Opération condensée + top 10 par magnitude (aperçus).
+  type Row = (typeof rows)[number];
+  const toTxn = (t: Row): EntityTxn => {
+    const disp = t.subcategory_id ? categories.get(t.subcategory_id) : null;
+    return {
+      id: t.id,
+      date: t.operation_date,
+      label: (t.label && t.label.trim()) || t.raw_label || "—",
+      amount: Number(t.amount),
+      categoryLabel: disp?.categoryName ?? null,
+      categoryColor: disp?.color ?? null,
+    };
+  };
+  const top10 = (txs: EntityTxn[]) =>
+    [...txs].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 10);
+
+  // Répartition par catégorie sur la portée (enfant = catégorie) : id + top 10.
+  const scopeAcc = new Map<string, { slice: EntitySlice; txs: EntityTxn[] }>();
   for (const t of scopeRows) {
     const flow = flowOf(Number(t.amount));
-    if (flow > 0) catSlice(byCatScope, t.subcategory_id, flow);
+    if (flow <= 0) continue;
+    const disp = t.subcategory_id ? categories.get(t.subcategory_id) : null;
+    const id = disp?.categoryId ?? null;
+    const key = id ?? "__none__";
+    const acc = scopeAcc.get(key) ?? {
+      slice: { key, id, label: disp?.categoryName ?? "Sans catégorie", color: disp?.color ?? null, amount: 0, count: 0 },
+      txs: [],
+    };
+    acc.slice.amount += flow;
+    acc.slice.count += 1;
+    acc.txs.push(toTxn(t));
+    scopeAcc.set(key, acc);
   }
+  const scopeCategories: EntitySlice[] = [...scopeAcc.values()]
+    .map((a) => ({ ...a.slice, top: top10(a.txs) }))
+    .sort((a, b) => b.amount - a.amount);
 
   // Série journalière (mois zoomé uniquement) : un point par jour du mois.
   let daily: EntityDailyPoint[] | null = null;
@@ -217,17 +247,7 @@ export async function getMerchantStats(
   const scopeTransactions: EntityTxn[] = [...scopeRows]
     .sort((a, b) => (a.operation_date < b.operation_date ? 1 : -1))
     .slice(0, 100)
-    .map((t) => {
-      const disp = t.subcategory_id ? categories.get(t.subcategory_id) : null;
-      return {
-        id: t.id,
-        date: t.operation_date,
-        label: (t.label && t.label.trim()) || t.raw_label || "—",
-        amount: Number(t.amount),
-        categoryLabel: disp?.categoryName ?? null,
-        categoryColor: disp?.color ?? null,
-      };
-    });
+    .map(toTxn);
 
   // ── Poids relatif dans chaque parent (catégorie directe → type), fenêtre 12 mois ──
   // Une seule requête sur les sous-catégories du TYPE (le plus large des parents) :
@@ -344,7 +364,7 @@ export async function getMerchantStats(
     daily,
     scopeTransactions,
     categories: [...byCatAll.values()].sort((a, b) => b.amount - a.amount),
-    scopeCategories: [...byCatScope.values()].sort((a, b) => b.amount - a.amount),
+    scopeCategories,
     breakdownTitle: "catégorie",
     weights,
     parents,

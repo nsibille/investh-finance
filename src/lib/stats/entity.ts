@@ -32,13 +32,17 @@ export interface EntityTxn {
   categoryColor: string | null;
 }
 
-/** Tranche de répartition (par catégorie pour une enseigne, par sous-cat. pour une catégorie). */
+/** Tranche de répartition (enfant direct de l'entité). */
 export interface EntitySlice {
   key: string;
   label: string;
   color: string | null;
   amount: number; // flux principal cumulé (positif)
   count: number;
+  /** Id de l'entité enfant (pour la fiche stats + le drill), `null` si « aucune ». */
+  id?: string | null;
+  /** 10 plus grosses opérations de la portée (aperçu / look-through). */
+  top?: EntityTxn[];
 }
 
 /** Poids de l'entité dans un de ses parents (catégorie, type…) sur la fenêtre. */
@@ -66,8 +70,8 @@ export interface EntityProjection {
 }
 
 export interface EntityStats {
-  /** Nature de l'entité : pilote l'icône et quelques libellés du composant. */
-  kind: "merchant" | "category";
+  /** Nature de l'entité : pilote l'icône, les libellés et le drill enfant. */
+  kind: "merchant" | "category" | "subcategory";
   id: string;
   name: string;
   /** Sous-titre (catégorie par défaut d'une enseigne, ou type d'une catégorie). */

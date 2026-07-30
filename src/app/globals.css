@@ -1634,6 +1634,11 @@ button.tx-meta--persons:hover { text-decoration: underline; }
 }
 .mdx-linkbtn:hover { text-decoration: underline; }
 
+.mdx-rowdrill {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  margin-top: var(--space-2); padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+}
 .mdx-txns { display: flex; flex-direction: column; }
 .mdx-txn {
   display: grid; grid-template-columns: 84px 1fr auto auto; align-items: center;

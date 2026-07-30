@@ -18,8 +18,10 @@ import {
   PieChart,
   Sparkles,
   ChevronLeft,
+  Receipt as ReceiptIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { IconButton } from "@/components/ui/IconButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MonthZoomSelector } from "@/components/dashboard/MonthZoomSelector";
 import { EntityTimelineChart } from "@/components/ui/charts/lazy";
@@ -85,6 +87,8 @@ export function EntityStatsView({ stats }: { stats: EntityStats }) {
 
   // Jour sélectionné dans la vue zoomée (look-through au 2ᵉ niveau).
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // Ligne de répartition dont l'aperçu des 10 opérations est déplié.
+  const [openRow, setOpenRow] = useState<string | null>(null);
 
   const {
     kind,
@@ -127,6 +131,15 @@ export function EntityStatsView({ stats }: { stats: EntityStats }) {
   const flowNoun = isIncome ? "perçu" : "dépensé";
   const flowLabel = isIncome ? "Revenus" : "Dépenses";
   const scopeLabel = zoomMonth ? monthYearLong(zoomMonth) : "12 derniers mois";
+
+  // Cible de drill d'un enfant de la répartition : sa fiche stats + sa query de
+  // listing filtré. Dépend du niveau courant (enseigne→catégorie, catégorie→
+  // sous-catégorie, sous-catégorie→enseigne).
+  function childLink(childId: string): { stats: string; list: string } {
+    if (kind === "merchant") return { stats: `/categories/${childId}`, list: `category=${childId}` };
+    if (kind === "category") return { stats: `/categories/sub/${childId}`, list: `subcategory=${childId}` };
+    return { stats: `/enseignes/${childId}`, list: `merchant=${childId}` };
+  }
 
   // Timeline : mensuelle (année) ou journalière (mois zoomé). En vue année, on
   // empile les parents cumulés pour visualiser la ventilation de l'entité.
@@ -461,31 +474,86 @@ export function EntityStatsView({ stats }: { stats: EntityStats }) {
             </div>
           </Card>
 
-          {/* Répartition par enfants (portée) */}
+          {/* Répartition par enfants (portée) — chaque ligne est drillable */}
           {scopeCategories.length > 1 && (
             <Card>
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                 <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>
                   Répartition par {breakdownTitle} · {scopeLabel}
                 </h2>
+                <p className="mdx-hint">
+                  Clique un nom pour ses stats, l&apos;icône pour l&apos;aperçu des 10 opérations.
+                </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                   {scopeCategories.map((c) => {
                     const pctScope = scopeTotal > 0 ? Math.round((c.amount / scopeTotal) * 100) : 0;
+                    const link = c.id ? childLink(c.id) : null;
+                    const open = openRow === c.key;
                     return (
                       <div key={c.key} className="md-cat">
                         <div className="md-cat__head">
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0 }}>
                             <span className="badge-dot" style={{ ["--dot-color" as string]: c.color ?? undefined }} />
-                            <span className="md-cat__name">{c.label}</span>
+                            {link ? (
+                              <Link href={link.stats} className="link-plain md-cat__name" title={`Statistiques · ${c.label}`}>
+                                {c.label}
+                              </Link>
+                            ) : (
+                              <span className="md-cat__name">{c.label}</span>
+                            )}
                             <span className="mq-cat__count">{c.count}</span>
                           </span>
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>
-                            {formatCurrency(c.amount)} · {pctScope} %
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>
+                              {formatCurrency(c.amount)} · {pctScope} %
+                            </span>
+                            <IconButton
+                              label="Aperçu des 10 opérations"
+                              data-on={open || undefined}
+                              onClick={() => setOpenRow(open ? null : c.key)}
+                            >
+                              <ReceiptIcon size={15} />
+                            </IconButton>
                           </span>
                         </div>
                         <div className="md-cat__track">
                           <div className="md-cat__fill" style={{ width: `${Math.round((c.amount / maxCat) * 100)}%`, background: c.color ?? "var(--color-brand-primary)" }} />
                         </div>
+                        {open && (
+                          <div className="mdx-rowdrill">
+                            {(c.top ?? []).length === 0 ? (
+                              <p className="mdx-hint">Aucune opération sur la période.</p>
+                            ) : (
+                              <div className="mdx-txns">
+                                {(c.top ?? []).map((t) => (
+                                  <div key={t.id} className="mdx-txn">
+                                    <span className="mdx-txn__date">{dmy(t.date)}</span>
+                                    <span className="mdx-txn__label" title={t.label}>{t.label}</span>
+                                    {t.categoryLabel && (
+                                      <span className="mdx-txn__cat">
+                                        <span className="badge-dot" style={{ ["--dot-color" as string]: t.categoryColor ?? undefined }} />
+                                        {t.categoryLabel}
+                                      </span>
+                                    )}
+                                    <span className={`mdx-txn__amount ${t.amount >= 0 ? "amount-positive" : "amount-negative"}`}>
+                                      {formatCurrency(t.amount)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {link && (
+                              <Link
+                                href={`/transactions?${link.list}&from=${scopeFrom}&to=${scopeTo}`}
+                                className="btn-ghost-sm"
+                                style={{ alignSelf: "flex-start", textDecoration: "none" }}
+                              >
+                                Tout afficher dans le listing
+                                <ArrowRight size={13} aria-hidden />
+                              </Link>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

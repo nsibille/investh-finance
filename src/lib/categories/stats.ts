@@ -15,6 +15,7 @@ import type {
   EntitySlice,
 } from "@/lib/stats/entity";
 import type { CategoryDisplay } from "@/lib/transactions/types";
+import { computeProjection } from "@/lib/stats/projection";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -160,9 +161,6 @@ function monthSpanC(first: string, last: string): number {
   const [fy, fm] = first.split("-").map(Number);
   const [ly, lm] = last.split("-").map(Number);
   return Math.max(1, (ly - fy) * 12 + (lm - fm) + 1);
-}
-function pctC(cur: number, prev: number): number | null {
-  return prev <= 0.005 ? null : ((cur - prev) / prev) * 100;
 }
 
 /**
@@ -392,13 +390,7 @@ export async function getCategoryDetailStats(
   }
 
   const activeMonths = monthAmount.filter((v) => v > 0.005).length;
-  const runRate = activeMonths > 0 ? merchantWindow / activeMonths : 0;
-  const recent3 = (monthAmount[9] + monthAmount[10] + monthAmount[11]) / 3;
-  const prev3 = (monthAmount[6] + monthAmount[7] + monthAmount[8]) / 3;
-  const projection: EntityStats["projection"] =
-    activeMonths >= 2
-      ? { runRate, nextMonth: recent3, year: runRate * 12, trendPct: pctC(recent3, prev3) }
-      : null;
+  const projection = computeProjection(monthAmount);
 
   const firstM = firstDate?.slice(0, 7) ?? null;
   const lastM = lastDate?.slice(0, 7) ?? null;
@@ -649,11 +641,7 @@ export async function getSubcategoryDetailStats(
   }
 
   const activeMonths = monthAmount.filter((v) => v > 0.005).length;
-  const runRate = activeMonths > 0 ? subWindow / activeMonths : 0;
-  const recent3 = (monthAmount[9] + monthAmount[10] + monthAmount[11]) / 3;
-  const prev3 = (monthAmount[6] + monthAmount[7] + monthAmount[8]) / 3;
-  const projection: EntityStats["projection"] =
-    activeMonths >= 2 ? { runRate, nextMonth: recent3, year: runRate * 12, trendPct: pctC(recent3, prev3) } : null;
+  const projection = computeProjection(monthAmount);
 
   const firstM = firstDate?.slice(0, 7) ?? null;
   const lastM = lastDate?.slice(0, 7) ?? null;

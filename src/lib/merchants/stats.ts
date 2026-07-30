@@ -11,12 +11,11 @@ import type {
   EntitySlice,
   EntityWeight,
   EntityParentSeries,
-  EntityProjection,
 } from "@/lib/stats/entity";
+import { computeProjection } from "@/lib/stats/projection";
 
 /** Alias historique : la fiche enseigne partage le modèle générique `EntityStats`. */
 export type MerchantStats = EntityStats;
-
 
 /** Nombre de mois calendaires entre deux "YYYY-MM" inclus (≥ 1). */
 function monthSpan(first: string, last: string): number {
@@ -32,12 +31,6 @@ function subtractMonths(ym: string, n: number): string {
   const ny = Math.floor(total / 12);
   const nm = (total % 12) + 1;
   return `${ny}-${String(nm).padStart(2, "0")}`;
-}
-
-/** Pourcentage de variation (null si base ~nulle). */
-function pct(cur: number, prev: number): number | null {
-  if (prev <= 0.005) return null;
-  return ((cur - prev) / prev) * 100;
 }
 
 /**
@@ -312,20 +305,9 @@ export async function getMerchantStats(
     }
   }
 
-  // ── Projection (année glissante, mois actifs) ──
+  // ── Projection (mois complets, robuste aux primes) ──
   const activeMonths = monthAmount.filter((v) => v > 0.005).length;
-  const runRate = activeMonths > 0 ? merchantWindow / activeMonths : 0;
-  const recent3 = (monthAmount[9] + monthAmount[10] + monthAmount[11]) / 3;
-  const prev3 = (monthAmount[6] + monthAmount[7] + monthAmount[8]) / 3;
-  const projection: EntityProjection | null =
-    activeMonths >= 2
-      ? {
-          runRate,
-          nextMonth: recent3,
-          year: runRate * 12,
-          trendPct: pct(recent3, prev3),
-        }
-      : null;
+  const projection = computeProjection(monthAmount);
 
   const firstM = firstDate?.slice(0, 7) ?? null;
   const lastM = lastDate?.slice(0, 7) ?? null;

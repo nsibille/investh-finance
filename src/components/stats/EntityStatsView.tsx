@@ -19,6 +19,7 @@ import {
   Sparkles,
   ChevronLeft,
   Receipt as ReceiptIcon,
+  BarChart3,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
@@ -371,15 +372,15 @@ export function EntityStatsView({ stats }: { stats: EntityStats }) {
                 <div className="mdx-proj__head">
                   <Sparkles size={16} aria-hidden style={{ color: accent }} />
                   <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>Projection</h2>
-                  <span className="mdx-proj__caption">au rythme de l&apos;année glissante</span>
+                  <span className="mdx-proj__caption">mois complets (hors mois en cours), médiane</span>
                 </div>
                 <div className="mdx-proj__grid">
                   <div className="mdx-proj__item">
-                    <span className="mdx-proj__label">Rythme mensuel</span>
+                    <span className="mdx-proj__label">Rythme mensuel moyen</span>
                     <span className="mdx-proj__value">{formatCurrency(projection.runRate)}</span>
                   </div>
                   <div className="mdx-proj__item">
-                    <span className="mdx-proj__label">Estimation mois prochain</span>
+                    <span className="mdx-proj__label">Mois typique (médiane)</span>
                     <span className="mdx-proj__value">{formatCurrency(projection.nextMonth)}</span>
                   </div>
                   <div className="mdx-proj__item">
@@ -482,7 +483,7 @@ export function EntityStatsView({ stats }: { stats: EntityStats }) {
                   Répartition par {breakdownTitle} · {scopeLabel}
                 </h2>
                 <p className="mdx-hint">
-                  Clique un nom pour ses stats, l&apos;icône pour l&apos;aperçu des 10 opérations.
+                  Nom ou icône graphique → ses stats · icône reçu → aperçu des 10 opérations.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                   {scopeCategories.map((c) => {
@@ -507,6 +508,13 @@ export function EntityStatsView({ stats }: { stats: EntityStats }) {
                             <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>
                               {formatCurrency(c.amount)} · {pctScope} %
                             </span>
+                            {link && (
+                              <Link href={link.stats} aria-label={`Statistiques · ${c.label}`}>
+                                <IconButton label="Statistiques">
+                                  <BarChart3 size={15} />
+                                </IconButton>
+                              </Link>
+                            )}
                             <IconButton
                               label="Aperçu des 10 opérations"
                               data-on={open || undefined}

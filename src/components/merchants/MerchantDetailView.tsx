@@ -111,7 +111,8 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
     daily,
     scopeTransactions,
     scopeCategories,
-    categoryWeightPct,
+    weights,
+    parentMonthly,
     projection,
   } = stats;
 
@@ -120,7 +121,9 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
   const flowLabel = isIncome ? "Revenus" : "Dépenses";
   const scopeLabel = zoomMonth ? monthYearLong(zoomMonth) : "12 derniers mois";
 
-  // Données de la timeline : mensuelle (année) ou journalière (mois zoomé).
+  // Données de la timeline : mensuelle (année) ou journalière (mois zoomé). En
+  // vue année, on empile les parents (reste catégorie, reste type) pour montrer
+  // la ventilation de l'enseigne dans sa catégorie puis son type.
   const timelineData: TimelinePoint[] = useMemo(() => {
     if (zoomMonth && daily) {
       return daily.map((d) => ({
@@ -131,14 +134,31 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
         count: d.count,
       }));
     }
-    return monthly.map((m) => ({
-      key: m.month,
-      label: m.label,
-      sub: String(m.year),
-      amount: m.amount,
-      count: m.count,
-    }));
-  }, [zoomMonth, daily, monthly]);
+    return monthly.map((m, i) => {
+      const catTotal = parentMonthly?.category[i] ?? m.amount;
+      const typeTotal = parentMonthly?.type[i] ?? catTotal;
+      return {
+        key: m.month,
+        label: m.label,
+        sub: String(m.year),
+        amount: m.amount,
+        count: m.count,
+        restCategory: Math.max(0, catTotal - m.amount),
+        restType: Math.max(0, typeTotal - catTotal),
+      };
+    });
+  }, [zoomMonth, daily, monthly, parentMonthly]);
+
+  // Empilement des parents activé en vue année quand il y a un « reste » à montrer.
+  const stack = useMemo(() => {
+    if (zoomMonth || !parentMonthly) return undefined;
+    const hasRest = timelineData.some(
+      (d) => (d.restCategory ?? 0) > 0.005 || (d.restType ?? 0) > 0.005,
+    );
+    return hasRest
+      ? { categoryLabel: parentMonthly.categoryName, typeLabel: parentMonthly.typeName }
+      : undefined;
+  }, [zoomMonth, parentMonthly, timelineData]);
 
   // Moyenne repère de la timeline.
   const timelineAvg = useMemo(() => {
@@ -194,10 +214,10 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
         text: `Mois record : ${monthYearLong(record.month)} (${formatCurrency(record.amount)}).`,
       });
     }
-    if (categoryWeightPct != null && categoryLabel) {
+    for (const w of weights) {
       out.push({
-        emoji: "🏆",
-        text: `Pèse ${Math.round(categoryWeightPct)} % de « ${categoryLabel} » sur l'année.`,
+        emoji: w.scope === "Type" ? "🌐" : "🏆",
+        text: `Pèse ${Math.round(w.pct)} % de « ${w.label} » (${w.scope.toLowerCase()}) sur l'année.`,
       });
     }
     if (frequency >= 1) {
@@ -227,7 +247,7 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
     }
     return out;
   }, [
-    maxFlow, isIncome, monthly, categoryWeightPct, categoryLabel, frequency,
+    maxFlow, isIncome, monthly, weights, frequency,
     projection, firstDate, transactionCount, counterTotal,
   ]);
 
@@ -306,14 +326,6 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
               value={formatCurrency(avgMonthly)}
               hint={`≈ ${frequency.toFixed(1)} op./mois`}
             />
-            {categoryWeightPct != null && (
-              <KpiTile
-                icon={<PieChart size={16} />}
-                label="Poids catégorie"
-                value={`${Math.round(categoryWeightPct)} %`}
-                hint={categoryLabel ?? undefined}
-              />
-            )}
             <KpiTile
               icon={<ShoppingBag size={16} />}
               label="Achats liés"
@@ -376,6 +388,41 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
             </Card>
           )}
 
+          {/* Poids relatif dans les parents (catégorie → type) */}
+          {weights.length > 0 && (
+            <Card>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                <div className="mdx-section__head">
+                  <h2 style={{ fontSize: "var(--text-base)", margin: 0, display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                    <PieChart size={16} aria-hidden style={{ color: accent }} />
+                    Poids relatif · 12 mois
+                  </h2>
+                </div>
+                <p className="mdx-hint">Part de cette enseigne dans chacun de ses parents.</p>
+                <div className="mdx-weights">
+                  {weights.map((w) => (
+                    <div key={w.scope} className="mdx-weight">
+                      <div className="mdx-weight__head">
+                        <span className="mdx-weight__scope">{w.scope}</span>
+                        <span className="mdx-weight__label" title={w.label}>{w.label}</span>
+                        <span className="mdx-weight__pct">{Math.round(w.pct)} %</span>
+                      </div>
+                      <div className="mdx-weight__track">
+                        <div
+                          className="mdx-weight__fill"
+                          style={{ width: `${Math.min(100, Math.round(w.pct))}%`, background: accent }}
+                        />
+                      </div>
+                      <span className="mdx-weight__total">
+                        {formatCurrency(w.total)} au total pour {w.scope === "Type" ? "le type" : "la catégorie"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Timeline avec look-through */}
           <Card>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
@@ -392,14 +439,17 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
               <p className="mdx-hint">
                 {zoomMonth
                   ? "Clique un jour pour filtrer les opérations ci-dessous."
-                  : "Clique un mois pour zoomer et voir le détail des opérations."}
+                  : stack
+                    ? "Part colorée = cette enseigne ; empilé au-dessus, le reste de la catégorie puis du type. Clique un mois pour zoomer."
+                    : "Clique un mois pour zoomer et voir le détail des opérations."}
               </p>
               <MerchantTimelineChart
                 data={timelineData}
-                average={timelineAvg}
+                average={stack ? 0 : timelineAvg}
                 valueLabel={flowLabel}
                 accent={accent}
                 selectedKey={selectedDay}
+                stack={stack}
                 onSelect={onBarSelect}
               />
             </div>

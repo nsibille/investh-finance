@@ -1612,6 +1612,19 @@ button.tx-meta--persons:hover { text-decoration: underline; }
 .mdx-proj__label { font-size: var(--text-xs); color: var(--color-text-muted); }
 .mdx-proj__value { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: var(--fw-semibold); }
 
+.mdx-weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); }
+.mdx-weight { display: flex; flex-direction: column; gap: var(--space-1); }
+.mdx-weight__head { display: flex; align-items: baseline; gap: var(--space-2); }
+.mdx-weight__scope {
+  font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted); font-weight: var(--fw-medium);
+}
+.mdx-weight__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-medium); }
+.mdx-weight__pct { font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.mdx-weight__track { height: 8px; border-radius: var(--radius-full); background: var(--color-bg-subtle); overflow: hidden; }
+.mdx-weight__fill { height: 100%; border-radius: var(--radius-full); min-width: 2px; }
+.mdx-weight__total { font-size: var(--text-xs); color: var(--color-text-muted); }
+
 .mdx-section__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 .mdx-hint { font-size: var(--text-xs); color: var(--color-text-muted); margin: 0; }
 .mdx-linkbtn {
@@ -1648,7 +1661,8 @@ button.tx-meta--persons:hover { text-decoration: underline; }
 }
 .chart-tooltip__title { font-weight: var(--fw-semibold); margin-bottom: 2px; }
 .chart-tooltip__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
-.chart-tooltip__label { color: var(--color-text-muted); }
+.chart-tooltip__label { color: var(--color-text-muted); display: inline-flex; align-items: center; gap: 5px; }
+.chart-tooltip__swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 .chart-tooltip__value { font-family: var(--font-mono); font-weight: var(--fw-medium); }
 .chart-tooltip__hint { margin-top: 2px; color: var(--color-brand-primary); }
 

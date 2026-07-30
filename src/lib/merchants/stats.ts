@@ -38,6 +38,20 @@ export interface MerchantCategorySlice {
   count: number;
 }
 
+/** Poids de l'enseigne dans un de ses parents (catégorie, type…) sur la fenêtre. */
+export interface MerchantWeight {
+  /** Niveau de parenté (« Catégorie », « Type »). */
+  scope: string;
+  /** Nom du parent. */
+  label: string;
+  /** Couleur du parent (pastille), si connue. */
+  color: string | null;
+  /** Poids de l'enseigne dans ce parent (%). */
+  pct: number;
+  /** Total du parent sur la fenêtre (flux principal). */
+  total: number;
+}
+
 /** Projection simple basée sur l'année glissante (mois actifs). */
 export interface MerchantProjection {
   /** Rythme mensuel (moyenne des mois actifs de la fenêtre). */
@@ -116,10 +130,22 @@ export interface MerchantStats {
   categories: MerchantCategorySlice[];
   /** Répartition du flux principal par catégorie sur la portée, décroissante. */
   scopeCategories: MerchantCategorySlice[];
-  /** Poids de l'enseigne dans sa catégorie par défaut (fenêtre 12 mois), %. */
-  categoryWeightPct: number | null;
-  /** Total de la catégorie par défaut sur la fenêtre (flux principal). */
-  categoryTotal: number | null;
+  /**
+   * Poids de l'enseigne dans chacun de ses parents (catégorie directe, puis type)
+   * sur la fenêtre 12 mois — du parent le plus proche au plus large.
+   */
+  weights: MerchantWeight[];
+  /**
+   * Séries mensuelles (12) des parents pour la ventilation sur le graphe : total
+   * de la catégorie directe et du type par mois. `null` si l'enseigne n'a pas de
+   * catégorie par défaut.
+   */
+  parentMonthly: {
+    categoryName: string;
+    typeName: string;
+    category: number[];
+    type: number[];
+  } | null;
 
   // ── Projection ──
   projection: MerchantProjection | null;
@@ -336,36 +362,76 @@ export async function getMerchantStats(
       };
     });
 
-  // ── Poids relatif dans la catégorie par défaut (fenêtre 12 mois) ──
-  let categoryWeightPct: number | null = null;
-  let categoryTotal: number | null = null;
-  if (merchantCategoryId) {
-    const catSubIds = [...categories.values()]
-      .filter((d) => d.categoryId === merchantCategoryId)
-      .map((d) => d.subcategory_id);
-    if (catSubIds.length > 0) {
-      const { data: catTxs } = await supabase
+  // ── Poids relatif dans chaque parent (catégorie directe → type), fenêtre 12 mois ──
+  // Une seule requête sur les sous-catégories du TYPE (le plus large des parents) :
+  // la catégorie en étant un sous-ensemble, on en déduit les deux totaux en JS.
+  const merchantWindow = monthAmount.reduce((s, v) => s + v, 0);
+  const weights: MerchantWeight[] = [];
+  // Séries mensuelles des parents (fenêtre 12 mois) : total de la catégorie et du
+  // type par mois, pour montrer la ventilation de l'enseigne dans son parent.
+  let parentMonthly: { categoryName: string; typeName: string; category: number[]; type: number[] } | null = null;
+  if (merchantCategoryId && merchantDisplay) {
+    const typeSubIds: string[] = [];
+    const catSubIdSet = new Set<string>();
+    for (const d of categories.values()) {
+      if (d.typeSlug === merchantDisplay.typeSlug) typeSubIds.push(d.subcategory_id);
+      if (d.categoryId === merchantCategoryId) catSubIdSet.add(d.subcategory_id);
+    }
+    if (typeSubIds.length > 0) {
+      const { data: parentTxs } = await supabase
         .from("transactions")
-        .select("amount")
-        .in("subcategory_id", catSubIds)
+        .select("amount, subcategory_id, operation_date")
+        .in("subcategory_id", typeSubIds)
         .neq("status", "ignored")
         .gte("operation_date", windowStartIso)
         .lte("operation_date", windowEndIso);
-      const catFlow = (catTxs ?? []).reduce(
-        (s, t) => s + flowOf(Number(t.amount)),
-        0,
-      );
-      categoryTotal = catFlow;
-      // Total enseigne sur la même fenêtre (somme des 12 mois).
-      const merchantWindow = monthAmount.reduce((s, v) => s + v, 0);
-      categoryWeightPct = catFlow > 0.005 ? (merchantWindow / catFlow) * 100 : null;
+      let catTotal = 0;
+      let typeTotal = 0;
+      const catMonthly = new Array(12).fill(0) as number[];
+      const typeMonthly = new Array(12).fill(0) as number[];
+      for (const t of parentTxs ?? []) {
+        const f = flowOf(Number(t.amount));
+        if (f <= 0) continue;
+        typeTotal += f;
+        const idx = monthIndex.get(t.operation_date.slice(0, 7));
+        if (idx != null) typeMonthly[idx] += f;
+        if (t.subcategory_id && catSubIdSet.has(t.subcategory_id)) {
+          catTotal += f;
+          if (idx != null) catMonthly[idx] += f;
+        }
+      }
+      parentMonthly = {
+        categoryName: merchantDisplay.categoryName,
+        typeName: merchantDisplay.typeName,
+        category: catMonthly,
+        type: typeMonthly,
+      };
+      if (catTotal > 0.005) {
+        weights.push({
+          scope: "Catégorie",
+          label: merchantDisplay.categoryName,
+          color: merchantDisplay.color,
+          pct: (merchantWindow / catTotal) * 100,
+          total: catTotal,
+        });
+      }
+      // Type : ajouté seulement s'il apporte une info distincte de la catégorie
+      // (sinon la catégorie est la seule du type → poids identique).
+      if (typeTotal > 0.005 && Math.abs(typeTotal - catTotal) > 0.005) {
+        weights.push({
+          scope: "Type",
+          label: merchantDisplay.typeName,
+          color: null,
+          pct: (merchantWindow / typeTotal) * 100,
+          total: typeTotal,
+        });
+      }
     }
   }
 
   // ── Projection (année glissante, mois actifs) ──
   const activeMonths = monthAmount.filter((v) => v > 0.005).length;
-  const windowTotal = monthAmount.reduce((s, v) => s + v, 0);
-  const runRate = activeMonths > 0 ? windowTotal / activeMonths : 0;
+  const runRate = activeMonths > 0 ? merchantWindow / activeMonths : 0;
   const recent3 = (monthAmount[9] + monthAmount[10] + monthAmount[11]) / 3;
   const prev3 = (monthAmount[6] + monthAmount[7] + monthAmount[8]) / 3;
   const projection: MerchantProjection | null =
@@ -416,8 +482,8 @@ export async function getMerchantStats(
     scopeTransactions,
     categories: [...byCatAll.values()].sort((a, b) => b.amount - a.amount),
     scopeCategories: [...byCatScope.values()].sort((a, b) => b.amount - a.amount),
-    categoryWeightPct,
-    categoryTotal,
+    weights,
+    parentMonthly,
     projection,
   };
 }

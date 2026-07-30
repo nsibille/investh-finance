@@ -3,153 +3,20 @@ import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { getCategoryDisplayMap } from "@/lib/transactions/queries";
 
-export interface MerchantMonthlyPoint {
-  month: string; // "YYYY-MM"
-  /** Libellé court du mois (« janv. »). */
-  label: string;
-  year: number;
-  amount: number; // flux principal du mois (positif)
-  count: number; // nb d'opérations du flux principal ce mois
-}
+import type {
+  EntityStats,
+  EntityMonthlyPoint,
+  EntityDailyPoint,
+  EntityTxn,
+  EntitySlice,
+  EntityWeight,
+  EntityParentSeries,
+  EntityProjection,
+} from "@/lib/stats/entity";
 
-/** Point journalier (vue zoomée sur un mois) pour le look-through. */
-export interface MerchantDailyPoint {
-  date: string; // "YYYY-MM-DD"
-  day: number; // 1..31
-  amount: number; // flux principal du jour (positif)
-  count: number;
-}
+/** Alias historique : la fiche enseigne partage le modèle générique `EntityStats`. */
+export type MerchantStats = EntityStats;
 
-/** Transaction condensée pour la liste look-through de la portée. */
-export interface MerchantTxn {
-  id: string;
-  date: string; // "YYYY-MM-DD"
-  label: string;
-  amount: number; // signé
-  categoryLabel: string | null;
-  categoryColor: string | null;
-}
-
-export interface MerchantCategorySlice {
-  key: string;
-  label: string;
-  color: string | null;
-  amount: number; // flux principal cumulé (positif) sur la portée
-  count: number;
-}
-
-/** Poids de l'enseigne dans un de ses parents (catégorie, type…) sur la fenêtre. */
-export interface MerchantWeight {
-  /** Niveau de parenté (« Catégorie », « Type »). */
-  scope: string;
-  /** Nom du parent. */
-  label: string;
-  /** Couleur du parent (pastille), si connue. */
-  color: string | null;
-  /** Poids de l'enseigne dans ce parent (%). */
-  pct: number;
-  /** Total du parent sur la fenêtre (flux principal). */
-  total: number;
-}
-
-/** Projection simple basée sur l'année glissante (mois actifs). */
-export interface MerchantProjection {
-  /** Rythme mensuel (moyenne des mois actifs de la fenêtre). */
-  runRate: number;
-  /** Estimation du mois prochain (moyenne des 3 derniers mois). */
-  nextMonth: number;
-  /** Projection annualisée (rythme × 12). */
-  year: number;
-  /** Tendance : 3 derniers mois vs 3 précédents (%). */
-  trendPct: number | null;
-}
-
-export interface MerchantStats {
-  id: string;
-  name: string;
-  categoryId: string | null;
-  categoryLabel: string | null;
-  categoryColor: string | null;
-  isOnline: boolean;
-  country: string | null;
-  /**
-   * Enseigne de revenu : sa catégorie par défaut est d'un type « revenu » (ou, à
-   * défaut de catégorie, son solde net est positif). Détermine le sens du flux
-   * principal (crédits pour un revenu, débits pour une dépense) et les libellés.
-   */
-  isIncome: boolean;
-  /**
-   * Flux principal cumulé (valeur absolue, positif) — TOUTE la période d'activité :
-   * dépenses pour une enseigne de dépense, revenus perçus pour un revenu.
-   */
-  total: number;
-  /**
-   * Flux inverse cumulé (positif) : remboursements/avoirs pour une enseigne de
-   * dépense, sorties pour une enseigne de revenu.
-   */
-  counterTotal: number;
-  /** Solde net (crédits − débits, signé). */
-  netAmount: number;
-  transactionCount: number;
-  purchaseCount: number;
-  firstDate: string | null;
-  lastDate: string | null;
-  /** Plus grosse opération unique du flux principal et sa date. */
-  maxFlow: { amount: number; date: string } | null;
-  /** Moyenne mensuelle du flux principal sur la période d'activité. */
-  avgMonthly: number;
-  /** Panier moyen (flux principal / nb d'opérations du flux principal). */
-  basket: number;
-  /** Cadence : nombre moyen d'opérations par mois actif. */
-  frequency: number;
-
-  // ── Fenêtre / zoom (année glissante, comme le dashboard) ──
-  /** 12 clés "YYYY-MM" (chronologique). */
-  months: string[];
-  /** Libellés courts alignés. */
-  monthLabels: string[];
-  /** Mois zoomé ("YYYY-MM") ou null = année glissante. */
-  zoomMonth: string | null;
-  scopeFrom: string; // ISO
-  scopeTo: string; // ISO
-  /** Série chronologique des 12 derniers mois (mois vides inclus). */
-  monthly: MerchantMonthlyPoint[];
-
-  // ── Portée (mois zoomé, sinon fenêtre 12 mois) ──
-  /** Flux principal cumulé sur la portée. */
-  scopeTotal: number;
-  /** Nb total d'opérations (tous flux) sur la portée. */
-  scopeCount: number;
-  /** Série journalière du mois zoomé (null en vue année). */
-  daily: MerchantDailyPoint[] | null;
-  /** Opérations de la portée (signées), les plus récentes d'abord (cap 100). */
-  scopeTransactions: MerchantTxn[];
-
-  // ── Catégorie ──
-  /** Répartition du flux principal par catégorie — TOUTE la période, décroissante. */
-  categories: MerchantCategorySlice[];
-  /** Répartition du flux principal par catégorie sur la portée, décroissante. */
-  scopeCategories: MerchantCategorySlice[];
-  /**
-   * Poids de l'enseigne dans chacun de ses parents (catégorie directe, puis type)
-   * sur la fenêtre 12 mois — du parent le plus proche au plus large.
-   */
-  weights: MerchantWeight[];
-  /**
-   * Séries mensuelles (12) des parents pour la ventilation sur le graphe : total
-   * de la catégorie directe et du type par mois. `null` si l'enseigne n'a pas de
-   * catégorie par défaut.
-   */
-  parentMonthly: {
-    categoryName: string;
-    typeName: string;
-    category: number[];
-    type: number[];
-  } | null;
-
-  // ── Projection ──
-  projection: MerchantProjection | null;
-}
 
 /** Nombre de mois calendaires entre deux "YYYY-MM" inclus (≥ 1). */
 function monthSpan(first: string, last: string): number {
@@ -254,10 +121,10 @@ export async function getMerchantStats(
   let maxFlow: { amount: number; date: string } | null = null;
   const monthAmount = new Array(12).fill(0) as number[];
   const monthCount = new Array(12).fill(0) as number[];
-  const byCatAll = new Map<string, MerchantCategorySlice>();
+  const byCatAll = new Map<string, EntitySlice>();
 
   const catSlice = (
-    map: Map<string, MerchantCategorySlice>,
+    map: Map<string, EntitySlice>,
     subId: string | null,
     flow: number,
   ) => {
@@ -298,7 +165,7 @@ export async function getMerchantStats(
     }
   }
 
-  const monthly: MerchantMonthlyPoint[] = months.map((m, i) => ({
+  const monthly: EntityMonthlyPoint[] = months.map((m, i) => ({
     month: m,
     label: monthLabels[i],
     year: Number(m.slice(0, 4)),
@@ -313,14 +180,14 @@ export async function getMerchantStats(
   const scopeTotal = scopeRows.reduce((s, t) => s + flowOf(Number(t.amount)), 0);
 
   // Répartition par catégorie sur la portée (flux principal).
-  const byCatScope = new Map<string, MerchantCategorySlice>();
+  const byCatScope = new Map<string, EntitySlice>();
   for (const t of scopeRows) {
     const flow = flowOf(Number(t.amount));
     if (flow > 0) catSlice(byCatScope, t.subcategory_id, flow);
   }
 
   // Série journalière (mois zoomé uniquement) : un point par jour du mois.
-  let daily: MerchantDailyPoint[] | null = null;
+  let daily: EntityDailyPoint[] | null = null;
   if (zoomMonth) {
     const zDate = new Date(`${zoomMonth}-01T00:00:00`);
     const days = endOfMonth(zDate).getDate();
@@ -347,7 +214,7 @@ export async function getMerchantStats(
   }
 
   // Liste look-through de la portée (signée), plus récentes d'abord.
-  const scopeTransactions: MerchantTxn[] = [...scopeRows]
+  const scopeTransactions: EntityTxn[] = [...scopeRows]
     .sort((a, b) => (a.operation_date < b.operation_date ? 1 : -1))
     .slice(0, 100)
     .map((t) => {
@@ -366,10 +233,10 @@ export async function getMerchantStats(
   // Une seule requête sur les sous-catégories du TYPE (le plus large des parents) :
   // la catégorie en étant un sous-ensemble, on en déduit les deux totaux en JS.
   const merchantWindow = monthAmount.reduce((s, v) => s + v, 0);
-  const weights: MerchantWeight[] = [];
-  // Séries mensuelles des parents (fenêtre 12 mois) : total de la catégorie et du
-  // type par mois, pour montrer la ventilation de l'enseigne dans son parent.
-  let parentMonthly: { categoryName: string; typeName: string; category: number[]; type: number[] } | null = null;
+  const weights: EntityWeight[] = [];
+  // Séries mensuelles CUMULÉES des parents (fenêtre 12 mois) : catégorie puis type,
+  // pour la ventilation de l'enseigne dans ses parents.
+  const parents: EntityParentSeries[] = [];
   if (merchantCategoryId && merchantDisplay) {
     const typeSubIds: string[] = [];
     const catSubIdSet = new Set<string>();
@@ -400,13 +267,8 @@ export async function getMerchantStats(
           if (idx != null) catMonthly[idx] += f;
         }
       }
-      parentMonthly = {
-        categoryName: merchantDisplay.categoryName,
-        typeName: merchantDisplay.typeName,
-        category: catMonthly,
-        type: typeMonthly,
-      };
       if (catTotal > 0.005) {
+        parents.push({ scope: "Catégorie", label: merchantDisplay.categoryName, monthly: catMonthly });
         weights.push({
           scope: "Catégorie",
           label: merchantDisplay.categoryName,
@@ -418,6 +280,7 @@ export async function getMerchantStats(
       // Type : ajouté seulement s'il apporte une info distincte de la catégorie
       // (sinon la catégorie est la seule du type → poids identique).
       if (typeTotal > 0.005 && Math.abs(typeTotal - catTotal) > 0.005) {
+        parents.push({ scope: "Type", label: merchantDisplay.typeName, monthly: typeMonthly });
         weights.push({
           scope: "Type",
           label: merchantDisplay.typeName,
@@ -434,7 +297,7 @@ export async function getMerchantStats(
   const runRate = activeMonths > 0 ? merchantWindow / activeMonths : 0;
   const recent3 = (monthAmount[9] + monthAmount[10] + monthAmount[11]) / 3;
   const prev3 = (monthAmount[6] + monthAmount[7] + monthAmount[8]) / 3;
-  const projection: MerchantProjection | null =
+  const projection: EntityProjection | null =
     activeMonths >= 2
       ? {
           runRate,
@@ -449,9 +312,9 @@ export async function getMerchantStats(
   const span = firstM && lastM ? monthSpan(firstM, lastM) : 1;
 
   return {
+    kind: "merchant",
     id: merchant.id,
     name: merchant.name ?? "",
-    categoryId: merchantCategoryId,
     categoryLabel: merchantDisplay?.categoryName ?? null,
     categoryColor: merchantDisplay?.color ?? null,
     isOnline: merchant.is_online ?? false,
@@ -482,8 +345,14 @@ export async function getMerchantStats(
     scopeTransactions,
     categories: [...byCatAll.values()].sort((a, b) => b.amount - a.amount),
     scopeCategories: [...byCatScope.values()].sort((a, b) => b.amount - a.amount),
+    breakdownTitle: "catégorie",
     weights,
-    parentMonthly,
+    parents,
     projection,
+    nav: {
+      manageHref: "/enseignes",
+      manageLabel: "Gérer les enseignes",
+      listQuery: `merchant=${merchant.id}`,
+    },
   };
 }

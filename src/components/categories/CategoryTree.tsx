@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight,
@@ -12,6 +13,7 @@ import {
   GripVertical,
   Trash2,
   Receipt,
+  BarChart3,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -442,9 +444,14 @@ export function CategoryTree({
                           {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </IconButton>
                         <Dot color={cat.color ?? type.color} />
-                        <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--fw-medium)", flex: 1 }}>
+                        <Link
+                          href={`/categories/${cat.id}`}
+                          className="link-plain"
+                          style={{ fontSize: "var(--text-sm)", fontWeight: "var(--fw-medium)", flex: 1 }}
+                          title={`Statistiques de « ${cat.name} »`}
+                        >
                           {cat.name}
-                        </span>
+                        </Link>
                         <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
                           {subs.length} sous-cat.
                         </span>
@@ -453,6 +460,11 @@ export function CategoryTree({
                           isOpen={openTop === `cat-${cat.id}`}
                           onToggle={() => toggleTop(`cat-${cat.id}`)}
                         />
+                        <Link href={`/categories/${cat.id}`} aria-label={`Statistiques de « ${cat.name} »`}>
+                          <IconButton label="Statistiques">
+                            <BarChart3 size={16} />
+                          </IconButton>
+                        </Link>
                         <IconButton
                           label="Ajouter une sous-catégorie"
                           onClick={() => setSubModal({ mode: "create", categoryId: cat.id })}

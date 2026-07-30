@@ -7,6 +7,14 @@ import {
   isLinkedInternalTransfer,
 } from "@/lib/transactions/internalTransfers";
 import type { DashTx } from "@/lib/dashboard/analysis";
+import type {
+  EntityStats,
+  EntityMonthlyPoint,
+  EntityDailyPoint,
+  EntityTxn,
+  EntitySlice,
+} from "@/lib/stats/entity";
+import type { CategoryDisplay } from "@/lib/transactions/types";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -139,4 +147,277 @@ export async function getCategoryStats(
     byCat[catId] = { total: c.total, count: c.count, top: topTen(c.txs) };
 
   return { bySub, byCat, months: monthKeys, monthLabels, zoom, from, to };
+}
+
+/** Décrémente un "YYYY-MM" de `n` mois. */
+function subtractMonths(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const total = y * 12 + (m - 1) - n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+/** Nb de mois entre deux "YYYY-MM" inclus (≥ 1). */
+function monthSpanC(first: string, last: string): number {
+  const [fy, fm] = first.split("-").map(Number);
+  const [ly, lm] = last.split("-").map(Number);
+  return Math.max(1, (ly - fy) * 12 + (lm - fm) + 1);
+}
+function pctC(cur: number, prev: number): number | null {
+  return prev <= 0.005 ? null : ((cur - prev) / prev) * 100;
+}
+
+/**
+ * Statistiques DÉTAILLÉES d'une catégorie, au format générique `EntityStats` —
+ * strictement le même modèle que `getMerchantStats`, pour être rendu par le même
+ * composant. L'entité est la catégorie ; son parent est le TYPE ; ses enfants
+ * sont ses sous-catégories. Le sens du flux suit le type (revenu vs dépense).
+ */
+export async function getCategoryDetailStats(
+  categoryId: string,
+  refMonth: string,
+  zoomMonth: string | null = null,
+): Promise<EntityStats | null> {
+  const supabase = await createClient();
+  const categories = await getCategoryDisplayMap();
+
+  // Sous-catégories de la catégorie + un display représentatif (nom, couleur,
+  // type). Sous-catégories du type pour le parent.
+  const subIds: string[] = [];
+  const typeSubIds: string[] = [];
+  let rep: CategoryDisplay | null = null;
+  for (const d of categories.values()) {
+    if (d.categoryId === categoryId) {
+      subIds.push(d.subcategory_id);
+      if (!rep) rep = d;
+    }
+  }
+  if (!rep || subIds.length === 0) return null;
+  const repDisplay = rep;
+  for (const d of categories.values())
+    if (d.typeSlug === repDisplay.typeSlug) typeSubIds.push(d.subcategory_id);
+
+  const isIncome = repDisplay.isIncome;
+  const flowOf = (amount: number): number =>
+    isIncome ? Math.max(0, amount) : Math.max(0, -amount);
+
+  const firstMonthKey = subtractMonths(refMonth, 11);
+  const windowStartIso = `${firstMonthKey}-01`;
+  const windowEndIso = format(endOfMonth(new Date(`${refMonth}-01T00:00:00`)), "yyyy-MM-dd");
+
+  const [{ data: txs }, { count: purchaseCount }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("id, amount, operation_date, subcategory_id, label, raw_label, status")
+      .in("subcategory_id", subIds)
+      .neq("status", "ignored"),
+    supabase
+      .from("purchases")
+      .select("id", { count: "exact", head: true })
+      .in("subcategory_id", subIds),
+  ]);
+
+  const rows = (txs ?? []) as {
+    id: string;
+    amount: number;
+    operation_date: string;
+    subcategory_id: string | null;
+    label: string | null;
+    raw_label: string | null;
+  }[];
+
+  const months: string[] = [];
+  for (let i = 11; i >= 0; i--) months.push(subtractMonths(refMonth, i));
+  const monthLabels = months.map((k) => format(new Date(`${k}-01`), "LLL", { locale: fr }));
+  const monthIndex = new Map(months.map((m, i) => [m, i]));
+  if (zoomMonth && !monthIndex.has(zoomMonth)) zoomMonth = null;
+
+  // Répartition enfants = par SOUS-catégorie (nom précis, couleur de la catégorie).
+  const subSlice = (map: Map<string, EntitySlice>, subId: string | null, flow: number) => {
+    const disp = subId ? categories.get(subId) : null;
+    const raw = disp?.subcategoryName;
+    const label = raw && raw !== "—" ? raw : "(défaut)";
+    const key = subId ?? "__none__";
+    const slice = map.get(key) ?? { key, label, color: disp?.color ?? repDisplay.color, amount: 0, count: 0 };
+    slice.amount += flow;
+    slice.count += 1;
+    map.set(key, slice);
+  };
+
+  let total = 0;
+  let counterTotal = 0;
+  let mainCount = 0;
+  let firstDate: string | null = null;
+  let lastDate: string | null = null;
+  let maxFlow: { amount: number; date: string } | null = null;
+  const monthAmount = new Array(12).fill(0) as number[];
+  const monthCount = new Array(12).fill(0) as number[];
+  const byAll = new Map<string, EntitySlice>();
+
+  for (const t of rows) {
+    const amount = Number(t.amount);
+    const flow = flowOf(amount);
+    total += flow;
+    counterTotal += Math.abs(amount) - flow;
+    if (flow > 0) mainCount += 1;
+    if (!firstDate || t.operation_date < firstDate) firstDate = t.operation_date;
+    if (!lastDate || t.operation_date > lastDate) lastDate = t.operation_date;
+    if (flow > 0 && (!maxFlow || flow > maxFlow.amount)) maxFlow = { amount: flow, date: t.operation_date };
+    if (flow > 0) {
+      subSlice(byAll, t.subcategory_id, flow);
+      const idx = monthIndex.get(t.operation_date.slice(0, 7));
+      if (idx != null) {
+        monthAmount[idx] += flow;
+        monthCount[idx] += 1;
+      }
+    }
+  }
+
+  const monthly: EntityMonthlyPoint[] = months.map((m, i) => ({
+    month: m,
+    label: monthLabels[i],
+    year: Number(m.slice(0, 4)),
+    amount: monthAmount[i],
+    count: monthCount[i],
+  }));
+
+  const inScope = (d: string) => (zoomMonth ? d.slice(0, 7) === zoomMonth : d >= windowStartIso);
+  const scopeRows = rows.filter((t) => inScope(t.operation_date));
+  const scopeTotal = scopeRows.reduce((s, t) => s + flowOf(Number(t.amount)), 0);
+
+  const byScope = new Map<string, EntitySlice>();
+  for (const t of scopeRows) {
+    const flow = flowOf(Number(t.amount));
+    if (flow > 0) subSlice(byScope, t.subcategory_id, flow);
+  }
+
+  let daily: EntityDailyPoint[] | null = null;
+  if (zoomMonth) {
+    const days = endOfMonth(new Date(`${zoomMonth}-01T00:00:00`)).getDate();
+    const byDay = new Map<number, { amount: number; count: number }>();
+    for (const t of scopeRows) {
+      const flow = flowOf(Number(t.amount));
+      if (flow <= 0) continue;
+      const day = Number(t.operation_date.slice(8, 10));
+      const cur = byDay.get(day) ?? { amount: 0, count: 0 };
+      cur.amount += flow;
+      cur.count += 1;
+      byDay.set(day, cur);
+    }
+    daily = [];
+    for (let d = 1; d <= days; d++) {
+      const cur = byDay.get(d);
+      daily.push({
+        date: `${zoomMonth}-${String(d).padStart(2, "0")}`,
+        day: d,
+        amount: cur?.amount ?? 0,
+        count: cur?.count ?? 0,
+      });
+    }
+  }
+
+  const scopeTransactions: EntityTxn[] = [...scopeRows]
+    .sort((a, b) => (a.operation_date < b.operation_date ? 1 : -1))
+    .slice(0, 100)
+    .map((t) => {
+      const disp = t.subcategory_id ? categories.get(t.subcategory_id) : null;
+      const raw = disp?.subcategoryName;
+      return {
+        id: t.id,
+        date: t.operation_date,
+        label: (t.label && t.label.trim()) || t.raw_label || "—",
+        amount: Number(t.amount),
+        categoryLabel: raw && raw !== "—" ? raw : disp?.categoryName ?? null,
+        categoryColor: disp?.color ?? null,
+      };
+    });
+
+  // Parent = TYPE : total + série mensuelle cumulée (fenêtre 12 mois).
+  const merchantWindow = monthAmount.reduce((s, v) => s + v, 0);
+  const weights: EntityStats["weights"] = [];
+  const parents: EntityStats["parents"] = [];
+  if (typeSubIds.length > 0) {
+    const { data: typeTxs } = await supabase
+      .from("transactions")
+      .select("amount, operation_date")
+      .in("subcategory_id", typeSubIds)
+      .neq("status", "ignored")
+      .gte("operation_date", windowStartIso)
+      .lte("operation_date", windowEndIso);
+    let typeTotal = 0;
+    const typeMonthly = new Array(12).fill(0) as number[];
+    for (const t of typeTxs ?? []) {
+      const f = flowOf(Number(t.amount));
+      if (f <= 0) continue;
+      typeTotal += f;
+      const idx = monthIndex.get(t.operation_date.slice(0, 7));
+      if (idx != null) typeMonthly[idx] += f;
+    }
+    if (typeTotal > 0.005 && Math.abs(typeTotal - merchantWindow) > 0.005) {
+      parents.push({ scope: "Type", label: repDisplay.typeName, monthly: typeMonthly });
+      weights.push({
+        scope: "Type",
+        label: repDisplay.typeName,
+        color: null,
+        pct: (merchantWindow / typeTotal) * 100,
+        total: typeTotal,
+      });
+    }
+  }
+
+  const activeMonths = monthAmount.filter((v) => v > 0.005).length;
+  const runRate = activeMonths > 0 ? merchantWindow / activeMonths : 0;
+  const recent3 = (monthAmount[9] + monthAmount[10] + monthAmount[11]) / 3;
+  const prev3 = (monthAmount[6] + monthAmount[7] + monthAmount[8]) / 3;
+  const projection: EntityStats["projection"] =
+    activeMonths >= 2
+      ? { runRate, nextMonth: recent3, year: runRate * 12, trendPct: pctC(recent3, prev3) }
+      : null;
+
+  const firstM = firstDate?.slice(0, 7) ?? null;
+  const lastM = lastDate?.slice(0, 7) ?? null;
+  const span = firstM && lastM ? monthSpanC(firstM, lastM) : 1;
+
+  return {
+    kind: "category",
+    id: categoryId,
+    name: repDisplay.categoryName,
+    categoryLabel: repDisplay.typeName, // sous-titre = le type parent
+    categoryColor: repDisplay.color,
+    isOnline: false,
+    country: null,
+    isIncome,
+    total,
+    counterTotal,
+    netAmount: rows.reduce((s, t) => s + Number(t.amount), 0),
+    transactionCount: rows.length,
+    purchaseCount: purchaseCount ?? 0,
+    firstDate,
+    lastDate,
+    maxFlow,
+    avgMonthly: total / span,
+    basket: mainCount > 0 ? total / mainCount : 0,
+    frequency: activeMonths > 0 ? mainCount / activeMonths : 0,
+    months,
+    monthLabels,
+    zoomMonth,
+    scopeFrom: zoomMonth ? `${zoomMonth}-01` : windowStartIso,
+    scopeTo: zoomMonth
+      ? format(endOfMonth(new Date(`${zoomMonth}-01T00:00:00`)), "yyyy-MM-dd")
+      : windowEndIso,
+    monthly,
+    scopeTotal,
+    scopeCount: scopeRows.length,
+    daily,
+    scopeTransactions,
+    categories: [...byAll.values()].sort((a, b) => b.amount - a.amount),
+    scopeCategories: [...byScope.values()].sort((a, b) => b.amount - a.amount),
+    breakdownTitle: "sous-catégorie",
+    weights,
+    parents,
+    projection,
+    nav: {
+      manageHref: "/categories",
+      manageLabel: "Gérer les catégories",
+      listQuery: `category=${categoryId}`,
+    },
+  };
 }

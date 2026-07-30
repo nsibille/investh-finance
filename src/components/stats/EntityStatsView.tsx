@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Store,
+  Tags,
   Globe,
   MapPin,
   ArrowRight,
@@ -21,10 +22,10 @@ import {
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MonthZoomSelector } from "@/components/dashboard/MonthZoomSelector";
-import { MerchantTimelineChart } from "@/components/ui/charts/lazy";
-import type { TimelinePoint } from "@/components/ui/charts/MerchantTimelineChart";
+import { EntityTimelineChart } from "@/components/ui/charts/lazy";
+import type { TimelinePoint } from "@/components/ui/charts/EntityTimelineChart";
 import { formatCurrency } from "@/lib/format/currency";
-import type { MerchantStats } from "@/lib/merchants/stats";
+import type { EntityStats } from "@/lib/stats/entity";
 
 const MONTHS_LONG = [
   "janvier", "février", "mars", "avril", "mai", "juin",
@@ -70,12 +71,14 @@ function KpiTile({
 }
 
 /**
- * Fiche détail interactive d'une enseigne : KPIs, fun facts, projections, poids
- * dans la catégorie, timeline année glissante avec zoom mensuel et look-through
- * (clic sur une barre → détail des opérations). Reflète le zoom via `?zoom=` de
- * l'URL, comme le reste des dashboards.
+ * Écran de statistiques d'une ENTITÉ (enseigne ou catégorie) — composant unique
+ * et identique pour les deux : KPIs, fun facts, projections, poids dans les
+ * parents, timeline année glissante avec zoom mensuel et look-through (clic sur
+ * une barre → détail des opérations), ventilation empilée. Tout ce qui distingue
+ * une enseigne d'une catégorie vient de la donnée (`EntityStats`) : libellés,
+ * parents, icône (`kind`), navigation. Reflète le zoom via `?zoom=` de l'URL.
  */
-export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
+export function EntityStatsView({ stats }: { stats: EntityStats }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -84,7 +87,7 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const {
-    id,
+    kind,
     name,
     categoryLabel,
     categoryColor,
@@ -111,19 +114,22 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
     daily,
     scopeTransactions,
     scopeCategories,
+    breakdownTitle,
     weights,
-    parentMonthly,
+    parents,
     projection,
+    nav,
   } = stats;
 
+  const EntityIcon = kind === "category" ? Tags : Store;
+  const entityNoun = kind === "category" ? "catégorie" : "enseigne";
   const accent = isIncome ? "var(--color-finance-revenus)" : "var(--color-finance-depenses)";
   const flowNoun = isIncome ? "perçu" : "dépensé";
   const flowLabel = isIncome ? "Revenus" : "Dépenses";
   const scopeLabel = zoomMonth ? monthYearLong(zoomMonth) : "12 derniers mois";
 
-  // Données de la timeline : mensuelle (année) ou journalière (mois zoomé). En
-  // vue année, on empile les parents (reste catégorie, reste type) pour montrer
-  // la ventilation de l'enseigne dans sa catégorie puis son type.
+  // Timeline : mensuelle (année) ou journalière (mois zoomé). En vue année, on
+  // empile les parents cumulés pour visualiser la ventilation de l'entité.
   const timelineData: TimelinePoint[] = useMemo(() => {
     if (zoomMonth && daily) {
       return daily.map((d) => ({
@@ -135,30 +141,30 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
       }));
     }
     return monthly.map((m, i) => {
-      const catTotal = parentMonthly?.category[i] ?? m.amount;
-      const typeTotal = parentMonthly?.type[i] ?? catTotal;
+      let prev = m.amount;
+      const rests: number[] = [];
+      for (const p of parents) {
+        const val = p.monthly[i] ?? prev;
+        rests.push(Math.max(0, val - prev));
+        prev = val;
+      }
       return {
         key: m.month,
         label: m.label,
         sub: String(m.year),
         amount: m.amount,
         count: m.count,
-        restCategory: Math.max(0, catTotal - m.amount),
-        restType: Math.max(0, typeTotal - catTotal),
+        rests,
       };
     });
-  }, [zoomMonth, daily, monthly, parentMonthly]);
+  }, [zoomMonth, daily, monthly, parents]);
 
   // Empilement des parents activé en vue année quand il y a un « reste » à montrer.
   const stack = useMemo(() => {
-    if (zoomMonth || !parentMonthly) return undefined;
-    const hasRest = timelineData.some(
-      (d) => (d.restCategory ?? 0) > 0.005 || (d.restType ?? 0) > 0.005,
-    );
-    return hasRest
-      ? { categoryLabel: parentMonthly.categoryName, typeLabel: parentMonthly.typeName }
-      : undefined;
-  }, [zoomMonth, parentMonthly, timelineData]);
+    if (zoomMonth || parents.length === 0) return undefined;
+    const hasRest = timelineData.some((d) => (d.rests ?? []).some((r) => r > 0.005));
+    return hasRest ? { levels: parents.map((p) => ({ label: `Reste ${p.label}` })) } : undefined;
+  }, [zoomMonth, parents, timelineData]);
 
   // Moyenne repère de la timeline.
   const timelineAvg = useMemo(() => {
@@ -259,7 +265,7 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
       <Card>
         <div className="mdx-header">
           <div className="mdx-header__id">
-            <span className="merchant-detail__icon"><Store size={22} aria-hidden /></span>
+            <span className="merchant-detail__icon"><EntityIcon size={22} aria-hidden /></span>
             <div style={{ minWidth: 0 }}>
               <h1 style={{ fontSize: "var(--text-2xl)", margin: 0 }}>{name}</h1>
               <div className="mdx-header__meta">
@@ -281,9 +287,9 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
               </div>
             </div>
           </div>
-          <Link href="/enseignes" className="btn-secondary-md" style={{ textDecoration: "none" }}>
+          <Link href={nav.manageHref} className="btn-secondary-md" style={{ textDecoration: "none" }}>
             <Settings2 size={14} aria-hidden />
-            Gérer les enseignes
+            {nav.manageLabel}
           </Link>
         </div>
       </Card>
@@ -291,9 +297,9 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
       {transactionCount === 0 ? (
         <Card>
           <EmptyState
-            icon={Store}
+            icon={EntityIcon}
             title="Aucune transaction"
-            description="Aucune transaction n'est encore rattachée à cette enseigne."
+            description={`Aucune transaction n'est encore rattachée à cette ${entityNoun}.`}
           />
         </Card>
       ) : (
@@ -388,7 +394,7 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
             </Card>
           )}
 
-          {/* Poids relatif dans les parents (catégorie → type) */}
+          {/* Poids relatif dans les parents */}
           {weights.length > 0 && (
             <Card>
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
@@ -398,7 +404,7 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
                     Poids relatif · 12 mois
                   </h2>
                 </div>
-                <p className="mdx-hint">Part de cette enseigne dans chacun de ses parents.</p>
+                <p className="mdx-hint">Part de cette {entityNoun} dans chacun de ses parents.</p>
                 <div className="mdx-weights">
                   {weights.map((w) => (
                     <div key={w.scope} className="mdx-weight">
@@ -440,10 +446,10 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
                 {zoomMonth
                   ? "Clique un jour pour filtrer les opérations ci-dessous."
                   : stack
-                    ? "Part colorée = cette enseigne ; empilé au-dessus, le reste de la catégorie puis du type. Clique un mois pour zoomer."
+                    ? `Part colorée = cette ${entityNoun} ; empilé au-dessus, le reste de ses parents. Clique un mois pour zoomer.`
                     : "Clique un mois pour zoomer et voir le détail des opérations."}
               </p>
-              <MerchantTimelineChart
+              <EntityTimelineChart
                 data={timelineData}
                 average={stack ? 0 : timelineAvg}
                 valueLabel={flowLabel}
@@ -455,12 +461,12 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
             </div>
           </Card>
 
-          {/* Répartition par catégorie (portée) */}
+          {/* Répartition par enfants (portée) */}
           {scopeCategories.length > 1 && (
             <Card>
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                 <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}>
-                  Répartition par catégorie · {scopeLabel}
+                  Répartition par {breakdownTitle} · {scopeLabel}
                 </h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                   {scopeCategories.map((c) => {
@@ -523,7 +529,7 @@ export function MerchantDetailView({ stats }: { stats: MerchantStats }) {
                 </div>
               )}
               <Link
-                href={`/transactions?merchant=${id}&from=${scopeFrom}&to=${scopeTo}`}
+                href={`/transactions?${nav.listQuery}&from=${scopeFrom}&to=${scopeTo}`}
                 className="btn-secondary-md"
                 style={{ textDecoration: "none", alignSelf: "flex-start" }}
               >

@@ -28,9 +28,9 @@ const TYPE_CARDS: {
 ];
 
 /**
- * Bandeau de KPIs en tête du listing des transactions : un total par type de
- * catégorie (revenus, prélèvements, frais fixes, frais variables, investi),
- * plus le solde net budgétaire et le nombre d'opérations. Chaque carte de type
+ * Bandeau de KPIs en tête du listing des transactions : un total par poste
+ * (revenus, frais fixes — prélèvements inclus, frais variables, investi), plus
+ * le solde net budgétaire. Chaque carte de type
  * est cliquable : elle filtre la liste sur ce type (bascule ; les autres filtres
  * sont conservés). La vue d'ensemble, elle, reste stable quel que soit le type
  * sélectionné.
@@ -75,11 +75,6 @@ export function TransactionsSummaryBar({ summary }: { summary: TransactionsSumma
         );
       })}
       <KpiCard kind="solde" label="Solde net" value={formatCurrency(summary.net)} />
-      <KpiCard
-        kind="solde"
-        label={summary.count > 1 ? "Transactions" : "Transaction"}
-        value={String(summary.count)}
-      />
     </div>
   );
 }

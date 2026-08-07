@@ -40,6 +40,8 @@ export const accountSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, "Couleur hexadécimale invalide")
     .default("#5B5BD6"),
+  // Carte à débit différé : dédup au mois (dates provisoires en fin de mois).
+  is_deferred_card: z.preprocess((v) => v === "on" || v === true, z.boolean()).default(false),
 });
 
 export type AccountInput = z.input<typeof accountSchema>;

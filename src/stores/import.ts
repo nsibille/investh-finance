@@ -1,10 +1,13 @@
 import { create } from "zustand";
 import type { ParsedTransaction } from "@/lib/import/types";
 import type { DuplicateReason, ConnectionSummary } from "@/lib/import/preview";
+import type { DuplicateMatch } from "@/lib/import/dedup";
 
 export interface ImportPreviewRow extends ParsedTransaction {
   duplicate: boolean;
   duplicateReason: DuplicateReason;
+  /** Détail de la similitude (opération rapprochée + raison), si doublon. */
+  duplicateMatch?: DuplicateMatch | null;
   connectionLabel?: string;
   targetAccountExists?: boolean;
   /** Catégorie proposée par les règles (référence pour décider d'un override). */

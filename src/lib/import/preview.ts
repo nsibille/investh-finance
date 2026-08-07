@@ -3,7 +3,9 @@ import {
   assignOccurrences,
   baseKey,
   contentKey,
-  flagContentDuplicates,
+  matchContentDuplicates,
+  type DuplicateMatch,
+  type ExistingEntry,
 } from "./dedup";
 import { connectionLabel, normalizeConnection } from "./connection";
 import type { ParsedTransaction } from "./types";
@@ -14,6 +16,8 @@ export type DuplicateReason = "existing" | null;
 export interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
   duplicateReason: DuplicateReason;
+  /** Détail de la similitude quand la ligne est un doublon (pour l'aperçu). */
+  duplicateMatch: DuplicateMatch | null;
 }
 
 /** Hash de dédup (indexé par occurrence) pour chaque transaction d'un compte. */
@@ -40,21 +44,29 @@ export function buildPreviewRows(
   accountId: string,
   transactions: ParsedTransaction[],
   existingHashes: Set<string>,
-  existingContent: Map<string, string[]> = new Map(),
+  existingContent: Map<string, ExistingEntry[]> = new Map(),
+  monthly = false,
 ): { rows: PreviewRow[]; hashes: string[] } {
   const occ = assignOccurrences(transactions, (t) => baseKey(t));
   const hashes = transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
 
   const candidates = transactions.map((t, i) => ({
-    key: contentKey(accountId, t.operation_date, t.amount),
+    key: contentKey(accountId, t.operation_date, t.amount, monthly),
     label: t.raw_label,
     hashDuplicate: existingHashes.has(hashes[i]),
+    monthly,
   }));
-  const dup = flagContentDuplicates(candidates, existingContent);
+  const matches = matchContentDuplicates(candidates, existingContent);
 
   const rows = transactions.map((t, i) => {
-    const reason: DuplicateReason = dup[i] ? "existing" : null;
-    return { ...t, duplicate: reason !== null, duplicateReason: reason };
+    const match = matches[i];
+    const reason: DuplicateReason = match ? "existing" : null;
+    return {
+      ...t,
+      duplicate: reason !== null,
+      duplicateReason: reason,
+      duplicateMatch: match,
+    };
   });
 
   return { rows, hashes };
@@ -137,26 +149,36 @@ export function buildCsvPreview(
   transactions: ParsedTransaction[],
   targets: CsvTarget[],
   existingHashes: Set<string>,
-  existingContent: Map<string, string[]> = new Map(),
+  existingContent: Map<string, ExistingEntry[]> = new Map(),
+  deferredAccountIds: Set<string> = new Set(),
 ): { rows: CsvPreviewRow[]; connections: ConnectionSummary[] } {
   // Candidat « inter-source » par compte cible (les connexions à créer n'ont pas
-  // de compte : clé neutre jamais présente dans `existingContent`).
-  const candidates = transactions.map((t, i) => ({
-    key: targets[i].accountId
-      ? contentKey(targets[i].accountId as string, t.operation_date, t.amount)
-      : "",
-    label: t.raw_label,
-    hashDuplicate: Boolean(targets[i].hash && existingHashes.has(targets[i].hash as string)),
-  }));
-  const dup = flagContentDuplicates(candidates, existingContent);
+  // de compte : clé neutre jamais présente dans `existingContent`). La
+  // granularité passe au mois pour les comptes carte à débit différé.
+  const candidates = transactions.map((t, i) => {
+    const monthly = targets[i].accountId
+      ? deferredAccountIds.has(targets[i].accountId as string)
+      : false;
+    return {
+      key: targets[i].accountId
+        ? contentKey(targets[i].accountId as string, t.operation_date, t.amount, monthly)
+        : "",
+      label: t.raw_label,
+      hashDuplicate: Boolean(targets[i].hash && existingHashes.has(targets[i].hash as string)),
+      monthly,
+    };
+  });
+  const matches = matchContentDuplicates(candidates, existingContent);
 
   const rows = transactions.map((t, i) => {
     const tg = targets[i];
-    const reason: DuplicateReason = dup[i] ? "existing" : null;
+    const match = matches[i];
+    const reason: DuplicateReason = match ? "existing" : null;
     return {
       ...t,
       duplicate: reason !== null,
       duplicateReason: reason,
+      duplicateMatch: match,
       connectionLabel: tg.label,
       targetAccountExists: tg.accountId !== null,
     };

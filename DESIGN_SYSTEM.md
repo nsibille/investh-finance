@@ -755,6 +755,9 @@ Variante pour configurer un export CSV/Excel.
 ### `modal-confirm-danger`
 Variante pour confirmer une action destructive (avec `btn-danger-md`).
 
+### `modal-duplicate-detail`
+**Détail de la similitude d'un doublon détecté à l'import.** Ouverte depuis le badge de statut cliquable (`dup-badge-btn`, badge `badge-status-duplicate` / `badge-status-forced` suffixé d'une icône `Info`) d'une ligne de l'aperçu d'import détectée comme doublon. Corps (`dup-detail`) : chapô (`dup-detail__lede`, granularité au **jour** ou au **mois**) → grille 2 colonnes (`dup-detail__grid`) de deux cartes opération (`dup-detail__op` variantes `--candidate` bord indigo / `--existing`) affichant date (mono), `amount`, libellé + libellé brut → bloc raison (`dup-detail__reason`) : texte explicatif selon `kind` (`hash` empreinte exacte / `content` rapprochement inter-source / `content-weak` sans terme commun), liste de faits (`dup-detail__facts` : Montant · Date/Mois · Libellé) et chips des tokens partagés (`dup-detail__token`). Implémentation : `src/components/import/DuplicateDetailModal.tsx`.
+
 ---
 
 ## Tables
@@ -1222,6 +1225,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |
 | `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
 | `badge-status-forced` | Status | Badge import row doublon déflagué (ré-inclus, sera importé) | auto |
+| `dup-badge-btn` | Status | Badge doublon cliquable (aperçu import) → `modal-duplicate-detail` | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |
 | `badge-status-new` | Status | Badge import row nouvelle | auto |
 | `badge-status-pending` | Status | Badge transaction à valider | auto |
@@ -1295,6 +1299,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `merchant-stats-panel` | Métier | Panneau stats (KPIs, fun facts, graphe, listes) — famille `ms-*`, partagé enseigne/achat | auto |
 | `multi-select-combobox` | Form | Filtre multi-sélection avec recherche (sélectionnés en tête) | auto |
 | `modal-confirm-danger` | Modal | Variante confirmation destructive | auto |
+| `modal-duplicate-detail` | Modal | Détail de la similitude d'un doublon d'import (importée vs base) | auto |
 | `modal-export-options` | Modal | Variante options export | auto |
 | `modal-surface` | Modal | Modale standard | auto |
 | `nav-breadcrumb` | Nav | Fil d'Ariane | auto |

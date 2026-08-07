@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, RefreshCw } from "lucide-react";
+import { FileText, RefreshCw, Info } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
 import { ImportRowBadge } from "@/components/ui/Badge";
+import { DuplicateDetailModal } from "@/components/import/DuplicateDetailModal";
 import { Toggle, Checkbox } from "@/components/ui/Checkbox";
 import {
   TransactionEditorTable,
@@ -73,6 +74,8 @@ export function StatementImport({
   const [extraMerchants, setExtraMerchants] = useState<MerchantOption[]>([]);
   // Recalcul des rattachements d'achats (achats créés après le parse).
   const [rematching, setRematching] = useState(false);
+  // Ligne dont on affiche le détail du doublon (modale), ou null.
+  const [dupDetail, setDupDetail] = useState<number | null>(null);
 
   const allPurchases = useMemo(() => {
     const seen = new Set(purchaseOptions.map((p) => p.id));
@@ -762,10 +765,23 @@ export function StatementImport({
                 // détection était un faux positif, la ligne sera bien importée.
                 const isDup = src.duplicateReason === "existing";
                 const kind = !isDup ? "new" : src.include ? "forced" : "duplicate";
+                const hasDetail = isDup && Boolean(src.duplicateMatch);
                 return (
                   <>
                     <td>
-                      <ImportRowBadge kind={kind} />
+                      {hasDetail ? (
+                        <button
+                          type="button"
+                          className="dup-badge-btn"
+                          onClick={() => setDupDetail(i)}
+                          title="Voir le détail de la similitude"
+                        >
+                          <ImportRowBadge kind={kind} />
+                          <Info size={13} aria-hidden />
+                        </button>
+                      ) : (
+                        <ImportRowBadge kind={kind} />
+                      )}
                     </td>
                     <td>
                       <Toggle
@@ -786,6 +802,22 @@ export function StatementImport({
           </>
         )}
       </div>
+
+      {dupDetail !== null && preview?.rows[dupDetail] && (
+        <DuplicateDetailModal
+          open
+          onClose={() => setDupDetail(null)}
+          candidate={{
+            operation_date: preview.rows[dupDetail].operation_date,
+            amount: preview.rows[dupDetail].amount,
+            currency: preview.rows[dupDetail].currency,
+            label: preview.rows[dupDetail].label,
+            raw_label: preview.rows[dupDetail].raw_label,
+          }}
+          match={preview.rows[dupDetail].duplicateMatch ?? null}
+          forced={preview.rows[dupDetail].include}
+        />
+      )}
     </Card>
   );
 }

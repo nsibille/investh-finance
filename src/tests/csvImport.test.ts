@@ -183,12 +183,23 @@ describe("buildPreviewRows", () => {
     const existingContent = new Map([
       [
         contentKey("acc", "2026-07-28", 550),
-        ["VIR INSTANTANE RECU DE MLLE KAMINSKI CELIA MOTIF VIREMENT"],
+        [
+          {
+            label: "VIR INSTANTANE RECU DE MLLE KAMINSKI CELIA MOTIF VIREMENT",
+            operation_date: "2026-07-28",
+            amount: 550,
+          },
+        ],
       ],
     ]);
     const { rows } = buildPreviewRows("acc", [csvRow], existingHashes, existingContent);
     expect(rows[0].duplicate).toBe(true);
     expect(rows[0].duplicateReason).toBe("existing");
+    // Détail de la similitude : contrepartie partagée mise en avant.
+    expect(rows[0].duplicateMatch?.kind).toBe("content");
+    expect(rows[0].duplicateMatch?.sharedTokens).toEqual(
+      expect.arrayContaining(["KAMINSKI", "CELIA"]),
+    );
   });
 
   it("ne rapproche pas une collision date+montant sans contrepartie commune", () => {
@@ -200,10 +211,41 @@ describe("buildPreviewRows", () => {
       currency: "EUR",
     };
     const existingContent = new Map([
-      [contentKey("acc", "2026-07-28", -20), ["PAIEMENT CB CARREFOUR"]],
+      [
+        contentKey("acc", "2026-07-28", -20),
+        [{ label: "PAIEMENT CB CARREFOUR", operation_date: "2026-07-28", amount: -20 }],
+      ],
     ]);
     const { rows } = buildPreviewRows("acc", [csvRow], new Set(), existingContent);
     expect(rows[0].duplicate).toBe(false);
     expect(rows[0].duplicateReason).toBeNull();
+  });
+
+  it("carte à débit différé : rattrape un doublon décalé dans le même mois", () => {
+    // En base : opération réelle au 11/07. Import : même opération affichée
+    // provisoirement au 31/07 (fin de mois). Au jour, hash et date diffèrent ;
+    // au mois, on la reconnaît comme doublon.
+    const shifted = {
+      operation_date: "2026-07-31",
+      label: "PAIEMENT CB FNAC",
+      raw_label: "PAIEMENT CB FNAC",
+      amount: -30,
+      currency: "EUR",
+    };
+    const existingContent = new Map([
+      [
+        contentKey("acc", "2026-07-11", -30, true),
+        [{ label: "PAIEMENT CB FNAC", operation_date: "2026-07-11", amount: -30 }],
+      ],
+    ]);
+    // Sans le mode mensuel : non détecté (dates différentes).
+    const daily = buildPreviewRows("acc", [shifted], new Set(), existingContent, false);
+    expect(daily.rows[0].duplicate).toBe(false);
+    // En mode mensuel (compte carte différée) : détecté.
+    const monthly = buildPreviewRows("acc", [shifted], new Set(), existingContent, true);
+    expect(monthly.rows[0].duplicate).toBe(true);
+    expect(monthly.rows[0].duplicateReason).toBe("existing");
+    expect(monthly.rows[0].duplicateMatch?.monthly).toBe(true);
+    expect(monthly.rows[0].duplicateMatch?.existing?.operation_date).toBe("2026-07-11");
   });
 });

@@ -30,13 +30,20 @@ export function baseKey(tx: DedupInput): string {
  * `dedup_hash` — distincts ; cette clé, indépendante de la source, sert de
  * premier crible pour rapprocher les doublons à l'aperçu (le libellé départage
  * ensuite, cf. `labelsSimilar`).
+ *
+ * `monthly` élargit la granularité de la date au MOIS : sur un compte carte à
+ * débit différé, une même opération peut s'afficher provisoirement en fin de
+ * mois puis se recaler à sa date réelle (même mois). On compare alors
+ * compte + mois + montant pour rattraper ce décalage (cf. `is_deferred_card`).
  */
 export function contentKey(
   accountId: string,
   operationDate: string,
   amount: number,
+  monthly = false,
 ): string {
-  return `${accountId}|${operationDate}|${amount.toFixed(2)}`;
+  const datePart = monthly ? operationDate.slice(0, 7) : operationDate;
+  return `${accountId}|${datePart}|${amount.toFixed(2)}`;
 }
 
 /**
@@ -86,11 +93,121 @@ export function labelsSimilar(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * Tokens discriminants communs à deux libellés (intersection), ce qui a
+ * réellement rapproché les deux opérations. Vide si l'un des libellés est
+ * purement structurel (rapprochement « faible » sur compte+date+montant seuls).
+ */
+export function sharedSignificantTokens(a: string, b: string): string[] {
+  const A = significantTokens(a);
+  const B = significantTokens(b);
+  const out: string[] = [];
+  for (const t of A) if (B.has(t)) out.push(t);
+  return out;
+}
+
 /** Une ligne candidate à rapprocher (clé contenu + libellé + doublon par hash). */
 export interface ContentCandidate {
   key: string;
   label: string;
   hashDuplicate: boolean;
+  /** Vrai si la clé contenu a été construite au mois (compte carte différée). */
+  monthly?: boolean;
+}
+
+/** Une opération déjà en base rapprochée d'une ligne candidate. */
+export interface ExistingEntry {
+  label: string;
+  operation_date: string;
+  amount: number;
+}
+
+/** Comment une ligne d'aperçu a été détectée comme doublon (détail affichable). */
+export interface DuplicateMatch {
+  /**
+   * - `hash` : ré-import exact (même source) — hash identique.
+   * - `content` : rapprochement inter-source (même compte + date/mois + montant,
+   *   libellé compatible via au moins un token commun).
+   * - `content-weak` : même compte + date/mois + montant, mais aucun token
+   *   discriminant commun (libellé structurel) — rapproché « au forceps ».
+   */
+  kind: "hash" | "content" | "content-weak";
+  /** L'opération déjà en base rapprochée (null si hors fenêtre de contenu). */
+  existing: ExistingEntry | null;
+  /** Tokens discriminants partagés entre les deux libellés. */
+  sharedTokens: string[];
+  /** Rapprochement effectué à la granularité du mois (compte carte différée). */
+  monthly: boolean;
+}
+
+/** Copie consommable de `existingContent` par clé contenu. */
+function cloneExistingContent(
+  existingContent: Map<string, ExistingEntry[]>,
+): Map<string, ExistingEntry[]> {
+  const remaining = new Map<string, ExistingEntry[]>();
+  for (const [k, entries] of existingContent) remaining.set(k, [...entries]);
+  return remaining;
+}
+
+/**
+ * Rapproche chaque ligne candidate d'une opération déjà en base et décrit le
+ * détail de la similitude (pour l'affichage), ou `null` si la ligne n'est pas
+ * un doublon. Même logique de consommation d'emplacements que
+ * `flagContentDuplicates` : chaque opération en base n'est rapprochée qu'une
+ * fois, les doublons par hash servant en priorité (1ʳᵉ passe).
+ *
+ * `existingContent` mappe chaque clé contenu vers les opérations déjà en base
+ * (libellé + date + montant), ce qui permet de restituer l'opération rapprochée.
+ */
+export function matchContentDuplicates(
+  candidates: ContentCandidate[],
+  existingContent: Map<string, ExistingEntry[]>,
+): (DuplicateMatch | null)[] {
+  const remaining = cloneExistingContent(existingContent);
+  const result = new Array<DuplicateMatch | null>(candidates.length).fill(null);
+
+  // 1ʳᵉ passe : un doublon par hash consomme un emplacement de son contenu.
+  // On privilégie l'emplacement au libellé identique (le ré-import exact).
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (!c.hashDuplicate) continue;
+    const slots = remaining.get(c.key);
+    let existing: ExistingEntry | null = null;
+    if (slots && slots.length > 0) {
+      const nl = normalizeLabel(c.label);
+      let idx = slots.findIndex((e) => normalizeLabel(e.label) === nl);
+      if (idx === -1) idx = 0;
+      existing = slots[idx];
+      slots.splice(idx, 1);
+    }
+    result[i] = {
+      kind: "hash",
+      existing,
+      sharedTokens: existing ? sharedSignificantTokens(c.label, existing.label) : [],
+      monthly: Boolean(c.monthly),
+    };
+  }
+
+  // 2ᵉ passe : rapprochement inter-source (contenu identique + libellé compatible).
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (c.hashDuplicate) continue;
+    const slots = remaining.get(c.key);
+    if (!slots || slots.length === 0) continue;
+    const idx = slots.findIndex((e) => labelsSimilar(e.label, c.label));
+    if (idx === -1) continue;
+    const existing = slots[idx];
+    slots.splice(idx, 1);
+    const sharedTokens = sharedSignificantTokens(c.label, existing.label);
+    result[i] = {
+      kind: sharedTokens.length > 0 ? "content" : "content-weak",
+      existing,
+      sharedTokens,
+      monthly: Boolean(c.monthly),
+    };
+  }
+
+  return result;
 }
 
 /**
@@ -99,41 +216,20 @@ export interface ContentCandidate {
  * si une opération de même compte + date + montant ET au libellé compatible
  * (`labelsSimilar`) existe déjà en base, même si son `dedup_hash` diffère.
  *
- * `existingContent` mappe chaque clé contenu vers les libellés des opérations
- * déjà en base. Chaque emplacement n'est consommé qu'une fois : N lignes
- * candidates ne se rapprochent que des M opérations réellement présentes. Les
- * lignes déjà doublon par hash consomment en priorité un emplacement de leur
- * contenu (1ʳᵉ passe), pour ne pas priver un vrai rapprochement inter-source.
+ * Enveloppe booléenne de `matchContentDuplicates`, conservée pour les appels qui
+ * n'ont besoin que de l'indicateur (les libellés seuls suffisent).
  */
 export function flagContentDuplicates(
   candidates: ContentCandidate[],
   existingContent: Map<string, string[]>,
 ): boolean[] {
-  // Copie consommable des libellés existants par clé contenu.
-  const remaining = new Map<string, string[]>();
-  for (const [k, labels] of existingContent) remaining.set(k, [...labels]);
-
-  const result = new Array<boolean>(candidates.length).fill(false);
-
-  // 1ʳᵉ passe : un doublon par hash consomme un emplacement de son contenu.
-  for (let i = 0; i < candidates.length; i++) {
-    if (!candidates[i].hashDuplicate) continue;
-    result[i] = true;
-    const slots = remaining.get(candidates[i].key);
-    if (slots && slots.length > 0) slots.shift();
-  }
-
-  // 2ᵉ passe : rapprochement inter-source (contenu identique + libellé compatible).
-  for (let i = 0; i < candidates.length; i++) {
-    if (candidates[i].hashDuplicate) continue;
-    const slots = remaining.get(candidates[i].key);
-    if (!slots || slots.length === 0) continue;
-    const idx = slots.findIndex((lbl) => labelsSimilar(lbl, candidates[i].label));
-    if (idx === -1) continue;
-    slots.splice(idx, 1);
-    result[i] = true;
-  }
-  return result;
+  const entries = new Map<string, ExistingEntry[]>(
+    [...existingContent].map(([k, labels]) => [
+      k,
+      labels.map((label) => ({ label, operation_date: "", amount: 0 })),
+    ]),
+  );
+  return matchContentDuplicates(candidates, entries).map((m) => m !== null);
 }
 
 /**

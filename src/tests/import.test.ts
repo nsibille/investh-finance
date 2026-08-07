@@ -8,8 +8,11 @@ import {
   resolveDedupHashes,
   contentKey,
   flagContentDuplicates,
+  matchContentDuplicates,
+  sharedSignificantTokens,
   significantTokens,
   labelsSimilar,
+  type ExistingEntry,
 } from "@/lib/import/dedup";
 import { merchantCompatible } from "@/lib/import/merchantGate";
 import { parseAmountInput } from "@/lib/format/amount";
@@ -155,6 +158,23 @@ describe("contentKey (signature inter-source)", () => {
     expect(a).toBe(b);
   });
 
+  it("granularité mensuelle : deux jours du même mois → même clé", () => {
+    // Carte à débit différé : date provisoire (fin de mois) vs date réelle.
+    const shifted = contentKey("acc", "2026-07-31", -30, true);
+    const real = contentKey("acc", "2026-07-11", -30, true);
+    expect(shifted).toBe(real);
+    // Au jour, ces deux clés diffèrent (comportement par défaut).
+    expect(contentKey("acc", "2026-07-31", -30)).not.toBe(
+      contentKey("acc", "2026-07-11", -30),
+    );
+  });
+
+  it("granularité mensuelle : deux mois différents → clés distinctes", () => {
+    expect(contentKey("acc", "2026-07-31", -30, true)).not.toBe(
+      contentKey("acc", "2026-08-01", -30, true),
+    );
+  });
+
   it("distingue compte, date et montant", () => {
     expect(contentKey("a", "2026-07-28", 550)).not.toBe(
       contentKey("b", "2026-07-28", 550),
@@ -244,6 +264,74 @@ describe("flagContentDuplicates (doublon inter-source)", () => {
   it("sans emplacement en base : rien n'est marqué", () => {
     const candidates = [cand("VIR KAMINSKI CELIA")];
     expect(flagContentDuplicates(candidates, new Map())).toEqual([false]);
+  });
+});
+
+describe("sharedSignificantTokens", () => {
+  it("renvoie les tokens discriminants communs", () => {
+    expect(
+      sharedSignificantTokens(
+        "VIR INST RE DE MLLE KAMINSKI CELIA",
+        "VIR INSTANTANE RECU DE MLLE KAMINSKI CELIA",
+      ),
+    ).toEqual(expect.arrayContaining(["KAMINSKI", "CELIA"]));
+  });
+
+  it("renvoie [] sans contrepartie commune", () => {
+    expect(sharedSignificantTokens("PAIEMENT CB CARREFOUR", "PAIEMENT CB MONOPRIX")).toEqual([]);
+  });
+});
+
+describe("matchContentDuplicates (détail de la similitude)", () => {
+  const KEY = contentKey("acc", "2026-07-28", 550);
+  const entry = (label: string, date = "2026-07-28", amount = 550): ExistingEntry => ({
+    label,
+    operation_date: date,
+    amount,
+  });
+
+  it("décrit un rapprochement inter-source avec les tokens partagés", () => {
+    const existing = new Map([[KEY, [entry("VIR INSTANTANE RECU DE MLLE KAMINSKI CELIA")]]]);
+    const candidates = [
+      { key: KEY, label: "VIR INST RE 670 DE MLLE KAMINSKI CELIA", hashDuplicate: false },
+    ];
+    const [m] = matchContentDuplicates(candidates, existing);
+    expect(m).not.toBeNull();
+    expect(m?.kind).toBe("content");
+    expect(m?.sharedTokens).toEqual(expect.arrayContaining(["KAMINSKI", "CELIA"]));
+    expect(m?.existing?.label).toContain("KAMINSKI");
+  });
+
+  it("un doublon par hash est décrit comme « hash » et rapproché au libellé exact", () => {
+    const existing = new Map([[KEY, [entry("VIR RECU KAMINSKI CELIA")]]]);
+    const candidates = [{ key: KEY, label: "VIR RECU KAMINSKI CELIA", hashDuplicate: true }];
+    const [m] = matchContentDuplicates(candidates, existing);
+    expect(m?.kind).toBe("hash");
+    expect(m?.existing?.label).toBe("VIR RECU KAMINSKI CELIA");
+  });
+
+  it("rapprochement faible (aucun token commun) → « content-weak »", () => {
+    const existing = new Map([[KEY, [entry("VIREMENT RECU")]]]);
+    const candidates = [{ key: KEY, label: "SALAIRE ACME CORP", hashDuplicate: false }];
+    const [m] = matchContentDuplicates(candidates, existing);
+    expect(m?.kind).toBe("content-weak");
+    expect(m?.sharedTokens).toEqual([]);
+  });
+
+  it("propage le drapeau mensuel (carte à débit différé)", () => {
+    const existing = new Map([[KEY, [entry("PAIEMENT CB FNAC", "2026-07-11")]]]);
+    const candidates = [
+      { key: KEY, label: "PAIEMENT CB FNAC", hashDuplicate: false, monthly: true },
+    ];
+    const [m] = matchContentDuplicates(candidates, existing);
+    expect(m?.monthly).toBe(true);
+    expect(m?.existing?.operation_date).toBe("2026-07-11");
+  });
+
+  it("aucune correspondance → null", () => {
+    const existing = new Map([[KEY, [entry("PAIEMENT CB CARREFOUR")]]]);
+    const candidates = [{ key: KEY, label: "PAIEMENT CB MONOPRIX", hashDuplicate: false }];
+    expect(matchContentDuplicates(candidates, existing)).toEqual([null]);
   });
 });
 

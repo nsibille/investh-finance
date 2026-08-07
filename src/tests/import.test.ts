@@ -6,6 +6,8 @@ import {
   assignOccurrences,
   baseKey,
   resolveDedupHashes,
+  contentKey,
+  flagContentDuplicates,
 } from "@/lib/import/dedup";
 import { merchantCompatible } from "@/lib/import/merchantGate";
 import { parseAmountInput } from "@/lib/format/amount";
@@ -141,6 +143,68 @@ describe("resolveDedupHashes (déflaggage de doublon)", () => {
       existing,
     );
     expect(new Set(out).size).toBe(2);
+  });
+});
+
+describe("contentKey (signature inter-source)", () => {
+  it("ignore le libellé : même compte + date + montant → même clé", () => {
+    const a = contentKey("acc", "2026-07-28", 550);
+    const b = contentKey("acc", "2026-07-28", 550);
+    expect(a).toBe(b);
+  });
+
+  it("distingue compte, date et montant", () => {
+    expect(contentKey("a", "2026-07-28", 550)).not.toBe(
+      contentKey("b", "2026-07-28", 550),
+    );
+    expect(contentKey("acc", "2026-07-28", 550)).not.toBe(
+      contentKey("acc", "2026-07-29", 550),
+    );
+    expect(contentKey("acc", "2026-07-28", 550)).not.toBe(
+      contentKey("acc", "2026-07-28", 551),
+    );
+  });
+});
+
+describe("flagContentDuplicates (doublon inter-source)", () => {
+  it("marque une ligne dont le contenu existe en base malgré un hash différent", () => {
+    // 1 opération en base (compte+date+montant) importée par un autre canal.
+    const existing = new Map([[contentKey("acc", "2026-07-28", 550), 1]]);
+    const keys = [contentKey("acc", "2026-07-28", 550)];
+    // Le hash exact ne matche pas (libellé différent) → hashDup false.
+    expect(flagContentDuplicates(keys, [false], existing)).toEqual([true]);
+  });
+
+  it("ne sur-marque pas : N candidats identiques ne consomment que M emplacements", () => {
+    const existing = new Map([[contentKey("acc", "2026-07-28", 550), 1]]);
+    const keys = [
+      contentKey("acc", "2026-07-28", 550),
+      contentKey("acc", "2026-07-28", 550),
+    ];
+    // 2 candidats, 1 seul en base → 1 doublon, 1 nouvelle.
+    expect(flagContentDuplicates(keys, [false, false], existing)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it("les doublons par hash consomment leur emplacement en priorité", () => {
+    const existing = new Map([[contentKey("acc", "2026-07-28", 550), 1]]);
+    const keys = [
+      contentKey("acc", "2026-07-28", 550),
+      contentKey("acc", "2026-07-28", 550),
+    ];
+    // Ligne 0 déjà doublon par hash (même source) : elle prend l'emplacement,
+    // la ligne 1 (autre source, même contenu) reste nouvelle.
+    expect(flagContentDuplicates(keys, [true, false], existing)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it("sans emplacement en base : rien n'est marqué", () => {
+    const keys = [contentKey("acc", "2026-07-28", 550)];
+    expect(flagContentDuplicates(keys, [false], new Map())).toEqual([false]);
   });
 });
 

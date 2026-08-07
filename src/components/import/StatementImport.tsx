@@ -712,8 +712,9 @@ export function StatementImport({
             {preview.dupExisting > 0 && (
               <Alert variant="warning">
                 {preview.dupExisting} transaction{preview.dupExisting > 1 ? "s" : ""} déjà
-                présente{preview.dupExisting > 1 ? "s" : ""} en base (clé date · libellé · montant)
-                — décochée{preview.dupExisting > 1 ? "s" : ""}, elles ne seront pas ré-importées.
+                présente{preview.dupExisting > 1 ? "s" : ""} en base (même compte · date · montant,
+                libellé éventuellement différent) — décochée{preview.dupExisting > 1 ? "s" : ""},
+                elles ne seront pas ré-importées.
               </Alert>
             )}
 

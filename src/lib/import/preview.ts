@@ -1,4 +1,10 @@
-import { computeDedupHash, assignOccurrences, baseKey } from "./dedup";
+import {
+  computeDedupHash,
+  assignOccurrences,
+  baseKey,
+  contentKey,
+  flagContentDuplicates,
+} from "./dedup";
 import { connectionLabel, normalizeConnection } from "./connection";
 import type { ParsedTransaction } from "./types";
 
@@ -21,20 +27,32 @@ export function occurrenceHashes(
 
 /**
  * Marque une transaction comme doublon UNIQUEMENT si elle est déjà présente en
- * base pour ce compte (protection contre le ré-import). Les répétitions au sein
- * du même fichier sont des opérations distinctes (occurrence indexée) et restent
- * « nouvelles ». Un `existing` est décoché par défaut et non ré-importable.
+ * base pour ce compte (protection contre le ré-import). La détection combine :
+ *   1. le hash exact (idempotence d'un ré-import de même source) ;
+ *   2. la signature « inter-source » compte + date + montant (`existingContent`),
+ *      qui rattrape une opération déjà importée par un autre canal, dont le
+ *      libellé — donc le hash — diffère.
+ * Les répétitions au sein du même fichier sont des opérations distinctes
+ * (occurrence indexée) et ne consomment que les emplacements réellement en base.
+ * Un `existing` est décoché par défaut et non ré-importable.
  */
 export function buildPreviewRows(
   accountId: string,
   transactions: ParsedTransaction[],
   existingHashes: Set<string>,
+  existingContent: Map<string, number> = new Map(),
 ): { rows: PreviewRow[]; hashes: string[] } {
   const occ = assignOccurrences(transactions, (t) => baseKey(t));
   const hashes = transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
 
+  const hashDup = hashes.map((h) => existingHashes.has(h));
+  const keys = transactions.map((t) =>
+    contentKey(accountId, t.operation_date, t.amount),
+  );
+  const dup = flagContentDuplicates(keys, hashDup, existingContent);
+
   const rows = transactions.map((t, i) => {
-    const reason: DuplicateReason = existingHashes.has(hashes[i]) ? "existing" : null;
+    const reason: DuplicateReason = dup[i] ? "existing" : null;
     return { ...t, duplicate: reason !== null, duplicateReason: reason };
   });
 
@@ -118,11 +136,21 @@ export function buildCsvPreview(
   transactions: ParsedTransaction[],
   targets: CsvTarget[],
   existingHashes: Set<string>,
+  existingContent: Map<string, number> = new Map(),
 ): { rows: CsvPreviewRow[]; connections: ConnectionSummary[] } {
+  const hashDup = targets.map((tg) => Boolean(tg.hash && existingHashes.has(tg.hash)));
+  // Clé « inter-source » par compte cible (les connexions à créer n'ont pas de
+  // compte : clé neutre jamais présente dans `existingContent`).
+  const keys = transactions.map((t, i) =>
+    targets[i].accountId
+      ? contentKey(targets[i].accountId as string, t.operation_date, t.amount)
+      : "",
+  );
+  const dup = flagContentDuplicates(keys, hashDup, existingContent);
+
   const rows = transactions.map((t, i) => {
     const tg = targets[i];
-    const reason: DuplicateReason =
-      tg.hash && existingHashes.has(tg.hash) ? "existing" : null;
+    const reason: DuplicateReason = dup[i] ? "existing" : null;
     return {
       ...t,
       duplicate: reason !== null,

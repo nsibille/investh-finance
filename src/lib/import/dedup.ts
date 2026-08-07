@@ -24,6 +24,54 @@ export function baseKey(tx: DedupInput): string {
 }
 
 /**
+ * Signature « inter-source » d'une opération : compte + date + montant, SANS le
+ * libellé ni l'external_id. Deux imports d'une même opération par des canaux
+ * différents (sync bancaire vs export CSV) produisent des libellés — donc des
+ * `dedup_hash` — distincts ; cette clé, indépendante de la source, permet de les
+ * rapprocher pour la détection de doublon à l'aperçu.
+ */
+export function contentKey(
+  accountId: string,
+  operationDate: string,
+  amount: number,
+): string {
+  return `${accountId}|${operationDate}|${amount.toFixed(2)}`;
+}
+
+/**
+ * Marque les doublons « inter-source » d'un lot : au-delà du hash exact (qui
+ * assure l'idempotence d'un ré-import de même source), une ligne est un doublon
+ * si une opération de même compte + date + montant existe déjà en base, même si
+ * son libellé (donc son hash) diffère.
+ *
+ * `existingContent` est le multiset (clé contenu → nombre) des opérations déjà
+ * en base. Le comptage évite de sur-marquer : N lignes candidates de même
+ * contenu ne consomment que les M emplacements réellement présents. Les lignes
+ * déjà doublon par hash consomment en priorité leur emplacement (1ʳᵉ passe).
+ */
+export function flagContentDuplicates(
+  keys: string[],
+  hashDuplicate: boolean[],
+  existingContent: Map<string, number>,
+): boolean[] {
+  const remaining = new Map(existingContent);
+  // 1ʳᵉ passe : les doublons par hash consomment d'abord leur emplacement.
+  for (let i = 0; i < keys.length; i++) {
+    if (!hashDuplicate[i]) continue;
+    const n = remaining.get(keys[i]) ?? 0;
+    if (n > 0) remaining.set(keys[i], n - 1);
+  }
+  // 2ᵉ passe : les lignes restantes consomment les emplacements encore libres.
+  return keys.map((k, i) => {
+    if (hashDuplicate[i]) return true;
+    const n = remaining.get(k) ?? 0;
+    if (n <= 0) return false;
+    remaining.set(k, n - 1);
+    return true;
+  });
+}
+
+/**
  * Deterministic dedup hash for a transaction within an account.
  * Prefers the bank's stable external id; falls back to the
  * date|amount|normalized-label composite from the spec.

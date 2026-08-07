@@ -112,21 +112,32 @@ export interface TransactionsPage {
 export type TransactionFlow = "income" | "expense" | "investment";
 
 /**
+ * Types de catégorie agrégés par le bandeau KPI (les virements internes,
+ * neutres, et les non catégorisées sont exclus). Les prélèvements sont fondus
+ * dans les frais fixes (un seul poste « Frais fixes », comme le segment
+ * « fixes » du dashboard).
+ */
+export type SummaryType =
+  | "revenus"
+  | "fraisFixes"
+  | "fraisVariables"
+  | "investissements";
+
+/**
  * Agrégats du jeu filtré complet (toutes pages), pour l'en-tête du listing.
- * Les montants sont classés par TYPE de catégorie (pas par signe) afin que
- * chaque KPI corresponde exactement au filtre déclenché au clic. Les opérations
- * ignorées, les virements internes et les non catégorisées ne comptent dans
- * aucun des trois flux. `count` reflète l'ensemble affiché (aligné pagination).
+ * Les montants sont classés par TYPE de catégorie (pas par signe), en valeur
+ * absolue, afin que chaque KPI corresponde à son type. Les opérations ignorées,
+ * les virements internes et les non catégorisées ne comptent dans aucun total.
+ * `count` reflète l'ensemble affiché (aligné pagination).
  */
 export interface TransactionsSummary {
   /** Nombre total d'opérations du set filtré (ignorées incluses). */
   count: number;
-  /** Revenus : catégories de type « revenu » (hors ignorées). */
-  totalIncome: number;
-  /** Dépensé : catégories de dépense hors investissements et virements. */
-  totalExpense: number;
-  /** Investi : catégories du type « Investissements ». */
-  totalInvested: number;
-  /** Solde net budgétaire = revenus − dépensé − investi. */
+  /** Montants agrégés par type de catégorie (valeur absolue, hors ignorées). */
+  totals: Record<SummaryType, number>;
+  /**
+   * Solde net budgétaire = revenus − frais fixes − frais variables −
+   * investissements (les prélèvements sont inclus dans les frais fixes).
+   */
   net: number;
 }

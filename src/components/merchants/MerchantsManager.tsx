@@ -1,11 +1,13 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus,
   Pencil,
   Trash2,
+  BarChart3,
   Store,
   X,
   Wand2,
@@ -330,7 +332,7 @@ export function MerchantsManager({
           <col style={{ width: 110 }} />
           <col style={{ width: 90 }} />
           <col style={{ width: 90 }} />
-          <col style={{ width: 96 }} />
+          <col style={{ width: 128 }} />
         </colgroup>
         <thead>
           <tr>
@@ -389,16 +391,23 @@ export function MerchantsManager({
                     </IconButton>
                   </td>
                   <td data-wrap="true" style={{ fontWeight: "var(--fw-medium)" }}>
-                    {label ??
-                      (summary ? (
-                        <span style={{ fontWeight: "var(--fw-regular)", color: "var(--color-text-secondary)" }}>
-                          {summary}
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
-                          Sans enseigne
-                        </span>
-                      ))}
+                    {label !== null ? (
+                      <Link
+                        href={`/enseignes/${m.id}`}
+                        className="link-plain"
+                        title={`Voir la fiche « ${label} »`}
+                      >
+                        {label}
+                      </Link>
+                    ) : summary ? (
+                      <span style={{ fontWeight: "var(--fw-regular)", color: "var(--color-text-secondary)" }}>
+                        {summary}
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--color-text-muted)", fontStyle: "italic", fontWeight: "var(--fw-regular)" }}>
+                        Sans enseigne
+                      </span>
+                    )}
                   </td>
                   <td>
                     {m.subcategory_id ? (
@@ -430,6 +439,13 @@ export function MerchantsManager({
                   <td style={{ fontFamily: "var(--font-mono)" }}>{m.rules.length}</td>
                   <td>
                     <div style={{ display: "flex", gap: "var(--space-1)", justifyContent: "flex-end" }}>
+                      {label !== null && (
+                        <Link href={`/enseignes/${m.id}`} aria-label={`Statistiques de « ${label} »`}>
+                          <IconButton label="Statistiques">
+                            <BarChart3 size={16} />
+                          </IconButton>
+                        </Link>
+                      )}
                       {label !== null && (
                         <IconButton label="Modifier" onClick={() => setModal({ mode: "edit", merchant: m })}>
                           <Pencil size={16} />

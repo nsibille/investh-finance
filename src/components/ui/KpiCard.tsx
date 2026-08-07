@@ -1,6 +1,11 @@
 import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 
-type Kind = "revenus" | "depenses" | "solde" | "epargne";
+type Kind =
+  | "revenus"
+  | "frais-fixes"
+  | "depenses"
+  | "solde"
+  | "epargne";
 
 interface KpiCardProps {
   kind: Kind;

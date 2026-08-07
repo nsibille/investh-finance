@@ -5,6 +5,7 @@ import {
   INVESTMENT_TYPE_SLUG,
   TRANSFER_TYPE_SLUG,
 } from "@/lib/categories/queries";
+import { TYPE_SLUG } from "@/lib/dashboard/segments";
 import { installmentOccurrence } from "@/lib/purchases/installments";
 import type { TransactionShare } from "@/lib/persons/types";
 import type {
@@ -13,6 +14,7 @@ import type {
   TransactionFilters,
   TransactionsPage,
   TransactionsSummary,
+  SummaryType,
   TransactionFlow,
   CategoryDisplay,
   AccountDisplay,
@@ -133,6 +135,30 @@ function flowOf(display: CategoryDisplay | null | undefined): TransactionFlow | 
   return "expense";
 }
 
+/**
+ * Type de catégorie agrégé pour le bandeau KPI, ou null pour les catégories
+ * neutres (virements internes) et les non catégorisées. Distingue prélèvements
+ * et frais fixes ; range toute dépense de type inconnu en « frais variables ».
+ */
+function summaryTypeOf(
+  display: CategoryDisplay | null | undefined,
+): SummaryType | null {
+  if (!display) return null;
+  if (display.isIncome) return "revenus";
+  switch (display.typeSlug) {
+    // Les prélèvements sont comptés comme des frais fixes (postes subis récurrents).
+    case TYPE_SLUG.prelevements:
+    case TYPE_SLUG.fraisFixes:
+      return "fraisFixes";
+    case INVESTMENT_TYPE_SLUG:
+      return "investissements";
+    case TRANSFER_TYPE_SLUG:
+      return null;
+    default:
+      return "fraisVariables";
+  }
+}
+
 /** Sous-catégories appartenant à un flux donné (pour filtrer le listing). */
 async function flowSubcategoryIds(flow: TransactionFlow): Promise<string[]> {
   const map = await getCategoryDisplayMap();
@@ -228,27 +254,35 @@ function filteredTransactionsQuery(
 }
 
 /**
- * Agrège le jeu filtré complet (toutes pages) pour l'en-tête du listing :
- * revenus, dépensé, investi (classés par TYPE de catégorie, pas par signe),
- * solde net budgétaire et nombre d'opérations. Ignore volontairement le filtre
- * `flow` (les KPIs restent une vue d'ensemble stable, cible du clic). Les
- * opérations ignorées ne comptent dans aucun total. Parcouru par tranches pour
- * rester juste quel que soit le nombre de lignes.
+ * Agrège le jeu filtré complet (toutes pages) pour l'en-tête du listing : un
+ * total par TYPE de catégorie (revenus, prélèvements, frais fixes, frais
+ * variables, investi ; classés par type, pas par signe, en valeur absolue),
+ * plus le solde net budgétaire et le nombre d'opérations. Ignore volontairement
+ * la sélection de type/flux pilotée par le bandeau KPI (`flow`, `typeSlugs`) :
+ * les cartes filtrent la liste, l'agrégat reste une vue d'ensemble stable. Le
+ * drill-down par catégorie reste pris en compte. Les opérations ignorées ne
+ * comptent dans aucun total. Parcouru par tranches pour rester juste quel que
+ * soit le nombre de lignes.
  */
 export async function getTransactionsSummary(
   filters: TransactionFilters,
 ): Promise<TransactionsSummary> {
   const supabase = await createClient();
   const categories = await getCategoryDisplayMap();
-  // Le drill-down (catégorie / types) fait partie du set filtré ; le flux, lui,
-  // est ignoré ici pour garder la vue d'ensemble stable (cible du clic).
-  const restrictSubIds = await subcategoryRestriction(filters);
+  // Drill-down par catégorie conservé ; la sélection de type (cartes KPI) est
+  // ignorée pour garder la vue d'ensemble stable quel que soit le type cliqué.
+  const restrictSubIds = await subcategoryRestriction({
+    categoryId: filters.categoryId,
+  });
   const CHUNK = 1000;
   let offset = 0;
   let count = 0;
-  let totalIncome = 0;
-  let totalExpense = 0;
-  let totalInvested = 0;
+  const totals: Record<SummaryType, number> = {
+    revenus: 0,
+    fraisFixes: 0,
+    fraisVariables: 0,
+    investissements: 0,
+  };
 
   for (;;) {
     // Tri stable (id) indispensable pour paginer sans doublon ni saut.
@@ -270,10 +304,13 @@ export async function getTransactionsSummary(
     for (const r of rows) {
       if (r.status === "ignored") continue;
       const amount = Number(r.amount);
-      const flow = flowOf(r.subcategory_id ? categories.get(r.subcategory_id) : null);
-      if (flow === "income") totalIncome += amount;
-      else if (flow === "expense") totalExpense += -amount;
-      else if (flow === "investment") totalInvested += -amount;
+      const type = summaryTypeOf(
+        r.subcategory_id ? categories.get(r.subcategory_id) : null,
+      );
+      if (!type) continue;
+      // Revenus stockés positifs, dépenses/investis négatifs : on agrège en
+      // valeur absolue pour que chaque carte affiche un montant positif.
+      totals[type] += type === "revenus" ? amount : -amount;
     }
     if (rows.length < CHUNK) break;
     offset += CHUNK;
@@ -281,10 +318,12 @@ export async function getTransactionsSummary(
 
   return {
     count,
-    totalIncome,
-    totalExpense,
-    totalInvested,
-    net: totalIncome - totalExpense - totalInvested,
+    totals,
+    net:
+      totals.revenus -
+      totals.fraisFixes -
+      totals.fraisVariables -
+      totals.investissements,
   };
 }
 

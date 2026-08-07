@@ -845,6 +845,7 @@ body {
 .card-kpi__delta[data-direction="down"] { color: var(--color-danger); }
 .card-kpi__delta[data-direction="flat"] { color: var(--color-text-muted); }
 .card-kpi-revenus { border-top: 3px solid var(--color-finance-revenus); }
+.card-kpi-frais-fixes { border-top: 3px solid var(--color-finance-frais-fixe); }
 .card-kpi-depenses { border-top: 3px solid var(--color-finance-depenses); }
 .card-kpi-solde { border-top: 3px solid var(--color-brand-primary); }
 .card-kpi-epargne { border-top: 3px solid var(--color-finance-investissement); }
@@ -867,6 +868,17 @@ body {
 .kpi-link[data-active] .card-kpi {
   box-shadow: inset 0 0 0 1.5px var(--color-brand-primary);
   background: var(--color-brand-primary-50);
+}
+
+/* Lien discret : hérite de la couleur du texte, souligné au survol. Nom
+   cliquable dans une table (ex. enseigne → fiche). */
+.link-plain { color: inherit; text-decoration: none; cursor: pointer; }
+.link-plain:hover { text-decoration: underline; }
+.link-plain:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-sm);
 }
 
 /* Sélecteur de zoom (dashboard) : « Année » + 12 mois cliquables. */
@@ -1557,6 +1569,106 @@ button.tx-meta--persons:hover { text-decoration: underline; }
 .md-cat__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .md-cat__track { height: 6px; border-radius: var(--radius-full); background: var(--color-bg-subtle); overflow: hidden; }
 .md-cat__fill { height: 100%; border-radius: var(--radius-full); min-width: 2px; }
+
+/* ── Fiche détail enseigne enrichie (slug merchant-detail-page) ── */
+.mdx-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.mdx-header__id { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.mdx-header__meta { display: flex; align-items: center; gap: var(--space-3); margin-top: 2px; font-size: var(--text-sm); color: var(--color-text-muted); flex-wrap: wrap; }
+
+.mdx-zoombar { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.mdx-zoombar__label { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); color: var(--color-text-muted); font-weight: var(--fw-medium); }
+
+.mdx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-3); }
+.mdx-kpi {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-4); background: var(--color-bg-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+}
+.mdx-kpi__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: var(--radius-md);
+  background: var(--color-bg-subtle); color: var(--color-text-secondary);
+}
+.mdx-kpi__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mdx-kpi__label { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: var(--fw-medium); }
+.mdx-kpi__value { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-tight); }
+.mdx-kpi__hint { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+.mdx-funfacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-2); }
+.mdx-funfact {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-brand-primary-50); border-radius: var(--radius-md);
+  font-size: var(--text-sm); color: var(--color-text-secondary);
+}
+.mdx-funfact__emoji { flex-shrink: 0; font-size: var(--text-base); line-height: 1.2; }
+
+.mdx-proj { display: flex; flex-direction: column; gap: var(--space-3); }
+.mdx-proj__head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.mdx-proj__caption { font-size: var(--text-xs); color: var(--color-text-muted); }
+.mdx-proj__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4); }
+.mdx-proj__item { display: flex; flex-direction: column; gap: 2px; }
+.mdx-proj__label { font-size: var(--text-xs); color: var(--color-text-muted); }
+.mdx-proj__value { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: var(--fw-semibold); }
+
+.mdx-weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); }
+.mdx-weight { display: flex; flex-direction: column; gap: var(--space-1); }
+.mdx-weight__head { display: flex; align-items: baseline; gap: var(--space-2); }
+.mdx-weight__scope {
+  font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted); font-weight: var(--fw-medium);
+}
+.mdx-weight__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-medium); }
+.mdx-weight__pct { font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.mdx-weight__track { height: 8px; border-radius: var(--radius-full); background: var(--color-bg-subtle); overflow: hidden; }
+.mdx-weight__fill { height: 100%; border-radius: var(--radius-full); min-width: 2px; }
+.mdx-weight__total { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+.mdx-section__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.mdx-hint { font-size: var(--text-xs); color: var(--color-text-muted); margin: 0; }
+.mdx-linkbtn {
+  display: inline-flex; align-items: center; gap: 4px; background: none; border: none;
+  cursor: pointer; font: inherit; font-size: var(--text-sm); color: var(--color-brand-primary);
+  padding: 0;
+}
+.mdx-linkbtn:hover { text-decoration: underline; }
+
+.mdx-rowdrill {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  margin-top: var(--space-2); padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+}
+.mdx-txns { display: flex; flex-direction: column; }
+.mdx-txn {
+  display: grid; grid-template-columns: 84px 1fr auto auto; align-items: center;
+  gap: var(--space-3); padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border); font-size: var(--text-sm);
+}
+.mdx-txn:last-child { border-bottom: none; }
+.mdx-txn__date { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); }
+.mdx-txn__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdx-txn__cat { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; }
+.mdx-txn__amount { font-family: var(--font-mono); font-weight: var(--fw-medium); text-align: right; }
+.mdx-alltime { font-size: var(--text-sm); color: var(--color-text-muted); text-align: center; margin: 0; }
+
+@media (max-width: 640px) {
+  .mdx-txn { grid-template-columns: 72px 1fr auto; }
+  .mdx-txn__cat { display: none; }
+}
+
+/* Tooltip riche partagé par les graphiques (montant + nb d'opérations). */
+.chart-tooltip {
+  display: flex; flex-direction: column; gap: 2px; min-width: 140px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-md); font-size: var(--text-xs);
+}
+.chart-tooltip__title { font-weight: var(--fw-semibold); margin-bottom: 2px; }
+.chart-tooltip__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.chart-tooltip__label { color: var(--color-text-muted); display: inline-flex; align-items: center; gap: 5px; }
+.chart-tooltip__swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.chart-tooltip__value { font-family: var(--font-mono); font-weight: var(--fw-medium); }
+.chart-tooltip__hint { margin-top: 2px; color: var(--color-brand-primary); }
 
 /* Annotation inline (colonne Note) — slug note-cell / note-popover.
    Icône par ligne (pleine si une note existe) → petit éditeur en popover. */

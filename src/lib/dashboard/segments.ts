@@ -53,6 +53,16 @@ export function segmentOf(
   }
 }
 
+/** Libellé d'affichage d'un type de catégorie, par slug (bandeau KPI, chips). */
+export const TYPE_LABEL: Record<string, string> = {
+  [TYPE_SLUG.revenus]: "Revenus",
+  [TYPE_SLUG.prelevements]: "Prélèvements",
+  [TYPE_SLUG.fraisFixes]: "Frais fixes",
+  [TYPE_SLUG.fraisVariables]: "Frais variables",
+  [TYPE_SLUG.investissements]: "Investissements",
+  [TYPE_SLUG.virements]: "Virements",
+};
+
 /** Libellé d'affichage d'un segment. */
 export const SEGMENT_LABEL: Record<Segment, string> = {
   revenus: "Revenus",

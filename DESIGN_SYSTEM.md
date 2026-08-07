@@ -617,7 +617,7 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 
 ### `card-kpi`
 **Card KPI dashboard** (valeur + delta vs mois précédent)
-- Variantes : `card-kpi-revenus`, `card-kpi-depenses`, `card-kpi-solde`, `card-kpi-epargne`
+- Variantes : `card-kpi-revenus`, `card-kpi-frais-fixes`, `card-kpi-depenses`, `card-kpi-solde`, `card-kpi-epargne` (bord haut coloré via `--color-finance-*` : revenus vert, frais fixe orange, dépenses rouge, investissement violet, solde `--color-brand-primary`)
 ```css
 .card-kpi {
   background: var(--color-bg-surface);
@@ -637,7 +637,7 @@ Orange (`--color-warning-light` / `--color-warning-dark`), icône `alert-triangl
 ```
 
 #### `kpi-link` (KPI cliquable)
-Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Hover : `shadow-md` + léger `translateY(-1px)` ; actif (`[data-active]`) : anneau intérieur `--color-brand-primary` + fond `--color-brand-primary-50`. Utilisé par le **bandeau KPI du listing transactions** (`TransactionsSummaryBar`) : cartes Revenus / Dépensé / Investi (classées par type de catégorie, hors virements internes) cliquables → filtre `flow` (bascule, autres filtres conservés) ; Solde net budgétaire (`revenus − dépensé − investi`) et compteur d'opérations non cliquables. La vue d'ensemble reste stable quel que soit le flux sélectionné (drill-down sur la liste seule).
+Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Hover : `shadow-md` + léger `translateY(-1px)` ; actif (`[data-active]`) : anneau intérieur `--color-brand-primary` + fond `--color-brand-primary-50`. Utilisé par le **bandeau KPI du listing transactions** (`TransactionsSummaryBar`) : une carte par **poste** — Revenus / Frais fixes / Frais variables / Investi (les **prélèvements sont fondus dans les frais fixes** ; hors virements internes et non catégorisées) — cliquable → filtre `types` sur ce(s) type(s) (Frais fixes filtre `frais-fixes,prelevements`) (bascule, autres filtres conservés) ; Solde net budgétaire (`revenus − frais fixes − frais variables − investi`) non cliquable. La vue d'ensemble reste stable quel que soit le type sélectionné (drill-down sur la liste seule).
 
 ### `card-account`
 **Card compte bancaire** : `avatar-account-md` + nom + type + solde courant + `badge-count` (pending).
@@ -653,6 +653,9 @@ Enveloppe `<Link>` autour d'une `card-kpi` pour la rendre cliquable (filtre). Ho
 
 ### `card-analytics`
 **Card section analytique** : titre + chart Recharts ou table.
+
+### `link-plain`
+**Lien discret** : hérite de la couleur du texte, sans soulignement, souligné au survol (`cursor: pointer`, focus `shadow-focus`). Pour un **nom cliquable dans une table** menant à une fiche — ex. nom d'enseigne dans le listing `MerchantsManager` → `/enseignes/[id]`. Les lignes « Sans enseigne » (sans nom) ne sont pas des liens.
 
 ---
 
@@ -1039,11 +1042,14 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 > Actions serveur `src/server/actions/transfers.ts` : `pairInternalTransfer` (apparie + catégorise + valide + groupe), `unpairInternalTransfer` (casse le groupe), `removeFromInternalTransfers` (sort des virements). Données : `src/lib/transactions/transfersReconciliation.ts`. Composant : `src/components/transactions/TransferReconciliation.tsx`. Badge de l'onglet = `countTransferOrphans()` (orphelins sans groupe).
 
 ### `merchant-quick-view`
-**Aperçu (lecture seule) d'une enseigne** ouvert au clic sur son nom dans la liste (`tx-merchant`). Popover en portal (`mq-popover`, `position: fixed`, `z-popover`), stats chargées à la demande (`getMerchantQuickStats`) : en-tête (icône `Store` + nom + catégorie par défaut + En ligne/pays) → `mq-kpis` (Total dépensé · Transactions · Moy./mois, mono) → `mq-bars` (12 derniers mois, barres CSS normalisées) → `mq-cats` (top 4 catégories : pastille + nom + compteur + montant) → lien `mq-popover__link` « Voir la fiche de l'enseigne » (→ `merchant-detail-page`). Pas d'édition. Ferme au clic dehors / Échap.
+**Aperçu (lecture seule) d'une enseigne** ouvert au clic sur son nom dans la liste (`tx-merchant`). Popover en portal (`mq-popover`, `position: fixed`, `z-popover`), stats chargées à la demande (`getMerchantQuickStats`) : en-tête (icône `Store` + nom + catégorie par défaut + En ligne/pays) → `mq-kpis` (Total dépensé · Transactions · Moy./mois, mono) → `mq-bars` (12 derniers mois, barres CSS normalisées) → `mq-cats` (top 4 catégories : pastille + nom + compteur + montant) → lien `mq-popover__link` « Voir la fiche de l'enseigne » (→ `entity-stats-page`). Pas d'édition. Ferme au clic dehors / Échap.
 > Implémentation : `src/components/merchants/MerchantQuickView.tsx` + `src/lib/merchants/stats.ts`.
 
-### `merchant-detail-page`
-**Fiche détail d'une enseigne (`/enseignes/[id]`)** — lecture. `card-surface` en-tête (`merchant-detail__icon` + nom `text-2xl` + catégorie/pays + `btn-secondary-md` « Gérer les enseignes ») → grille `card-kpi` (Total dépensé · Transactions · Dépense moyenne/mois · Achats rattachés) → carte « 12 derniers mois » (`mq-bars mq-bars--lg`) → carte « Répartition par catégorie » (`md-cat` : libellé + montant + barre de proportion colorée) → `btn-secondary-md` « Voir les N transactions » (→ `/transactions?merchant=[id]`, réutilise le filtre enseigne). Implémentation : `src/components/merchants/MerchantDetailView.tsx`.
+### `entity-stats-page`
+**Écran de stats d'une ENTITÉ — strictement le même composant (`EntityStatsView`) pour une enseigne (`/enseignes/[id]`), une catégorie (`/categories/[id]`) et une sous-catégorie (`/categories/sub/[id]`)** ; tout ce qui diffère (icône via `kind`, libellés, parents, navigation, titre de répartition, cible de drill des enfants) vient de la donnée `EntityStats` (`getMerchantStats` / `getCategoryDetailStats` / `getSubcategoryDetailStats`). Parents & enfants selon le niveau : enseigne → parents catégorie+type, enfants catégories ; catégorie → parent type, enfants sous-catégories ; sous-catégorie → parents catégorie+type, enfants enseignes. Accès par les mêmes biais (lien sur le nom `link-plain` + bouton `Statistiques` à icône `BarChart3` dans le listing). **Chaque ligne de la répartition est drillable** : le nom (ou le bouton `Statistiques` à icône `BarChart3`) mène à la fiche stats de l'enfant, l'icône `Receipt` déplie l'aperçu des 10 plus grosses opérations (`mdx-rowdrill` + `mdx-txns`) avec un lien `btn-ghost-sm` vers le listing filtré de la portée — d'où une chaîne de drill type→catégorie→sous-catégorie→enseigne. Famille de slugs `mdx-*`. En-tête (`mdx-header` : `merchant-detail__icon` + nom `text-2xl` + sous-titre parent/pays + `btn-secondary-md` « Gérer… ») → **barre de zoom** (`mdx-zoombar` réutilisant `month-zoom` / `MonthZoomSelector`, pilotant `?zoom=YYYY-MM`, défaut année glissante comme les dashboards) → **KPIs de la portée** (`mdx-kpis` / `mdx-kpi` : total `perçu/dépensé`, panier moyen, moyenne/mois + cadence, poids dans la catégorie %, achats liés) → **fun facts** (`mdx-funfact` : record, poids catégorie, cadence, tendance, plus grosse opé, remboursements…) → **projection** (`mdx-proj` : rythme mensuel moyen, mois typique médian, projeté 12 mois, tendance trimestre colorée — calculée sur les **mois complets uniquement**, hors mois en cours, avec des **médianes** robustes aux primes ; cf. `computeProjection`) → **poids relatif** (`mdx-weights` / `mdx-weight` : part de l'enseigne dans chacun de ses parents — catégorie directe puis type — barre + % + total du parent, sur la fenêtre 12 mois) → **timeline** (`chart-entity-timeline` — mensuelle en vue année, journalière en vue zoom) avec **look-through** : cliquer une barre zoome sur le mois (année→mois) ou filtre les opérations au jour (mois→jour) → **répartition par enfant** de la portée (`md-cat` + montant + %, titre « par catégorie » / « par sous-catégorie » selon `breakdownTitle`) → **look-through liste** (`mdx-txns` / `mdx-txn` : date · libellé · catégorie · montant signé `amount-positive/negative`, filtrée au jour sélectionné) + lien `btn-secondary-md` vers le listing complet borné à la portée (`/transactions?{merchant|category}=[id]&from&to`) → pied `mdx-alltime` (cumul depuis le début). Le zoom vit dans l'URL (partageable, comme le dashboard). Implémentation : `src/components/stats/EntityStatsView.tsx` (client).
+
+### `chart-entity-timeline`
+**Histogramme temporel d'une entité** (enseigne ou catégorie ; mensuel ou journalier) — Recharts `BarChart`. Lecture soignée : grille horizontale, axe montants compact, ligne de moyenne repérée + libellée, barre max en teinte pleine, barre sélectionnée en relief (les autres à `0.32`), **tooltip riche** partagé `chart-tooltip` (mois/jour + montant + nb d'opérations + « Cliquer pour le détail → »). Barres cliquables (`onSelect`) pour le look-through. Accent = `--color-finance-revenus` (revenu) / `--color-finance-depenses` (dépense). Avec la prop `stack` (vue année), **ventilation empilée** générique : part colorée = l'entité, au-dessus les *restes* cumulés de ses parents (ordonnés du plus proche au plus large ; palette `--color-text-muted` → `--color-border-strong`), total empilé = le parent le plus large ; légende + tooltip affichent chaque niveau et la part %. Les segments « reste » ne s'affichent que s'ils sont non nuls. Implémentation : `src/components/ui/charts/EntityTimelineChart.tsx` (lazy).
 
 ### `transaction-filters`
 **Toolbar de filtres** : `input-search-md` + `input-select-md` (compte/statut/période) + `input-category-combobox` (filtre catégorie) + `multi-select-combobox` (enseignes, achats) + `filter-amount-range` (2× `input-currency-md` min/max, montant en valeur absolue) + `input-date-md` (du/au) + `btn-secondary-md` (Exporter / Réinitialiser). Layout flex wrap, gap `var(--space-3)`. Le paramètre `showStatus={false}` masque le sélecteur de statut (page « À valider », toujours `pending`). Sous la toolbar, `filter-chips` remonte chaque filtre actif (surtout les multiselect) en chip retirable + bouton « Tout effacer ». État porté par l'URL (`merchant`/`purchase` en CSV, `amin`/`amax`, `from`/`to`, `q`, `account`, `subcategory`, `sort`). Implémentation : `src/components/transactions/TransactionFilters.tsx`.
@@ -1235,8 +1241,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `card-analytics` | Métier | Card section analytique | auto |
 | `card-interactive` | Card | Card cliquable | auto |
 | `card-kpi` | Métier | Card KPI dashboard | auto |
-| `card-kpi-depenses` | Métier | KPI variante dépenses | auto |
+| `card-kpi-depenses` | Métier | KPI variante dépenses (frais variables) | auto |
 | `card-kpi-epargne` | Métier | KPI variante épargne | auto |
+| `card-kpi-frais-fixes` | Métier | KPI variante frais fixes (prélèvements inclus) | auto |
 | `card-kpi-revenus` | Métier | KPI variante revenus | auto |
 | `card-kpi-solde` | Métier | KPI variante solde | auto |
 | `card-pending-validator` | Métier | Card workflow validation | auto |
@@ -1246,6 +1253,8 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `chart-bar-monthly` | Chart | Bar chart 12 mois | auto |
 | `chart-comparison` | Chart | Bar chart groupé comparaison | auto |
 | `chart-merchant-spend` | Chart | Bar chart dépenses enseigne 12 mois (mois record en relief + ligne moyenne) | auto |
+| `chart-entity-timeline` | Chart | Histogramme entité (enseigne/catégorie) mensuel/journalier, cliquable (look-through) | auto |
+| `chart-tooltip` | Chart | Tooltip riche partagé (montant + nb d'opérations) | auto |
 | `chart-purchase-timeline` | Chart | Bar chart paiements d'un achat dans le temps (payé vs à venir) | auto |
 | `chart-net-worth-evolution` | Chart | Line chart évolution patrimoine | auto |
 | `chart-pie-categories` | Chart | Camembert catégories | auto |
@@ -1276,8 +1285,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `input-textarea-md` | Form | Zone texte multilignes | auto |
 | `input-toggle` | Form | Switch on/off | auto |
 | `layout-page-header` | Layout | Header de page avec titre + actions | auto |
+| `link-plain` | Nav | Lien discret (nom cliquable en table → fiche) | auto |
 | `merchant-quick-view` | Métier | Aperçu stats enseigne (popover liste) | auto |
-| `merchant-detail-page` | Métier | Fiche détail d'une enseigne | auto |
+| `entity-stats-page` | Métier | Écran de stats partagé enseigne/catégorie | auto |
 | `modal-bank-selector` | Modal | Variante sélection banque | auto |
 | `modal-entity-detail` | Modal | Variante élargie détail entité — enseigne/achat (form + stats) | auto |
 | `entity-detail-layout` | Layout | Grille 2 colonnes form/stats de la modale de détail | auto |

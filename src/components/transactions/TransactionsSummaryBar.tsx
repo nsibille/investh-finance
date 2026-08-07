@@ -4,39 +4,46 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { formatCurrency } from "@/lib/format/currency";
-import type { TransactionsSummary, TransactionFlow } from "@/lib/transactions/types";
+import type { TransactionsSummary, SummaryType } from "@/lib/transactions/types";
 
-type Kind = "revenus" | "depenses" | "solde" | "epargne";
+type Kind = "revenus" | "frais-fixes" | "depenses" | "epargne";
 
-const FLOW_CARDS: { flow: TransactionFlow; kind: Kind; label: string }[] = [
-  { flow: "income", kind: "revenus", label: "Revenus" },
-  { flow: "expense", kind: "depenses", label: "Dépensé" },
-  { flow: "investment", kind: "epargne", label: "Investi" },
+/**
+ * Cartes agrégées par TYPE de catégorie. `slug` = valeur du param `types`
+ * (filtre de la liste au clic) ; `totalKey` = clé de `summary.totals` ; `kind`
+ * = variante couleur de la `KpiCard`. Les virements internes (neutres) et les
+ * non catégorisées n'ont pas de carte. Les prélèvements sont fondus dans les
+ * frais fixes (une seule carte, qui filtre les deux types).
+ */
+const TYPE_CARDS: {
+  slug: string;
+  totalKey: SummaryType;
+  kind: Kind;
+  label: string;
+}[] = [
+  { slug: "revenus", totalKey: "revenus", kind: "revenus", label: "Revenus" },
+  { slug: "frais-fixes,prelevements", totalKey: "fraisFixes", kind: "frais-fixes", label: "Frais fixes" },
+  { slug: "frais-variables", totalKey: "fraisVariables", kind: "depenses", label: "Frais variables" },
+  { slug: "investissements", totalKey: "investissements", kind: "epargne", label: "Investi" },
 ];
 
 /**
- * Bandeau de KPIs en tête du listing des transactions : reflète le jeu filtré
- * complet (toutes pages), classé par type de catégorie — revenus, dépensé,
- * investi — plus le solde net budgétaire et le nombre d'opérations. Les trois
- * premières cartes sont cliquables : elles filtrent la liste sur leur flux
- * (bascule ; les autres filtres sont conservés). La vue d'ensemble, elle, reste
- * stable quel que soit le flux sélectionné.
+ * Bandeau de KPIs en tête du listing des transactions : un total par poste
+ * (revenus, frais fixes — prélèvements inclus, frais variables, investi), plus
+ * le solde net budgétaire. Chaque carte de type
+ * est cliquable : elle filtre la liste sur ce type (bascule ; les autres filtres
+ * sont conservés). La vue d'ensemble, elle, reste stable quel que soit le type
+ * sélectionné.
  */
 export function TransactionsSummaryBar({ summary }: { summary: TransactionsSummary }) {
   const pathname = usePathname();
   const params = useSearchParams();
-  const active = params.get("flow");
+  const active = params.get("types");
 
-  const value: Record<TransactionFlow, number> = {
-    income: summary.totalIncome,
-    expense: summary.totalExpense,
-    investment: summary.totalInvested,
-  };
-
-  function hrefFor(flow: TransactionFlow): string {
+  function hrefFor(slug: string): string {
     const next = new URLSearchParams(params.toString());
-    if (active === flow) next.delete("flow");
-    else next.set("flow", flow);
+    if (active === slug) next.delete("types");
+    else next.set("types", slug);
     next.delete("page");
     const qs = next.toString();
     return qs ? `${pathname}?${qs}` : pathname;
@@ -51,28 +58,23 @@ export function TransactionsSummaryBar({ summary }: { summary: TransactionsSumma
         marginBottom: "var(--space-5)",
       }}
     >
-      {FLOW_CARDS.map(({ flow, kind, label }) => {
-        const isActive = active === flow;
+      {TYPE_CARDS.map(({ slug, totalKey, kind, label }) => {
+        const isActive = active === slug;
         return (
           <Link
-            key={flow}
-            href={hrefFor(flow)}
+            key={slug}
+            href={hrefFor(slug)}
             scroll={false}
             className="kpi-link"
             data-active={isActive || undefined}
             aria-pressed={isActive}
             title={isActive ? `Retirer le filtre « ${label} »` : `Filtrer sur « ${label} »`}
           >
-            <KpiCard kind={kind} label={label} value={formatCurrency(value[flow])} />
+            <KpiCard kind={kind} label={label} value={formatCurrency(summary.totals[totalKey])} />
           </Link>
         );
       })}
       <KpiCard kind="solde" label="Solde net" value={formatCurrency(summary.net)} />
-      <KpiCard
-        kind="solde"
-        label={summary.count > 1 ? "Transactions" : "Transaction"}
-        value={String(summary.count)}
-      />
     </div>
   );
 }

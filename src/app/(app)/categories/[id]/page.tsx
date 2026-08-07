@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { EntityStatsView } from "@/components/stats/EntityStatsView";
-import { getMerchantStats } from "@/lib/merchants/stats";
+import { getCategoryDetailStats } from "@/lib/categories/stats";
 
 export const dynamic = "force-dynamic";
 
-export default async function EnseigneDetailPage({
+export default async function CategoryDetailPage({
   params,
   searchParams,
 }: {
@@ -18,14 +18,14 @@ export default async function EnseigneDetailPage({
   const refMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   // Zoom mensuel : accepté seulement s'il tombe dans la fenêtre 12 mois affichée.
   const zoom = sp.zoom && /^\d{4}-\d{2}$/.test(sp.zoom) ? sp.zoom : null;
-  const stats = await getMerchantStats(id, refMonth, zoom);
+  const stats = await getCategoryDetailStats(id, refMonth, zoom);
 
   if (!stats) notFound();
 
   return (
     <>
       <Breadcrumb
-        items={[{ label: "Enseignes", href: "/enseignes" }, { label: stats.name }]}
+        items={[{ label: "Catégories", href: "/categories" }, { label: stats.name }]}
       />
       <div style={{ marginTop: "var(--space-5)" }}>
         <EntityStatsView stats={stats} />

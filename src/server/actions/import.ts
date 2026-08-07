@@ -88,6 +88,59 @@ export async function confirmCsvImport(
   }
 }
 
+type RealignResult = { ok: true; count: number } | { ok: false; error: string };
+
+/**
+ * Recale la date d'opérations déjà en base sur les comptes carte à débit
+ * différé : une opération dont la date provisoire (fin de mois) s'est recalée à
+ * sa date réelle est détectée en doublon à l'import ; plutôt que de l'ignorer
+ * silencieusement, on met à jour la date de l'opération existante.
+ *
+ * Garde-fous serveur : on ne déplace que dans le MÊME mois et uniquement vers
+ * une date ANTÉRIEURE (on ne régresse jamais une date réelle vers le provisoire).
+ */
+export async function realignDeferredDates(
+  items: { id: string; toDate: string }[],
+): Promise<RealignResult> {
+  const clean = items.filter(
+    (i) => i.id && /^\d{4}-\d{2}-\d{2}$/.test(i.toDate),
+  );
+  if (clean.length === 0) return { ok: true, count: 0 };
+
+  try {
+    const supabase = await createClient();
+    const ids = [...new Set(clean.map((i) => i.id))];
+    const { data: current } = await supabase
+      .from("transactions")
+      .select("id, operation_date")
+      .in("id", ids);
+    const curById = new Map((current ?? []).map((r) => [r.id, r.operation_date]));
+
+    let count = 0;
+    for (const it of clean) {
+      const cur = curById.get(it.id);
+      if (!cur) continue;
+      // Même mois uniquement, et recalage vers une date strictement antérieure.
+      if (cur.slice(0, 7) !== it.toDate.slice(0, 7)) continue;
+      if (it.toDate >= cur) continue;
+      const { error } = await supabase
+        .from("transactions")
+        .update({ operation_date: it.toDate })
+        .eq("id", it.id);
+      if (!error) count += 1;
+    }
+
+    if (count > 0) {
+      revalidatePath("/transactions");
+      revalidatePath("/accounts");
+      revalidatePath("/dashboard");
+    }
+    return { ok: true, count };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erreur de recalage" };
+  }
+}
+
 type RematchResult =
   | { ok: true; matches: { index: number; match: PreviewPurchaseMatch }[] }
   | { ok: false; error: string };

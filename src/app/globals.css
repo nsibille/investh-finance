@@ -1054,6 +1054,117 @@ body {
   }
 }
 
+/* — Badge de statut « doublon » cliquable (aperçu d'import) : ouvre la modale de
+     détail de la similitude. — */
+.dup-badge-btn {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
+}
+.dup-badge-btn:hover { color: var(--color-brand-primary); }
+.dup-badge-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+/* Cellule statut de l'aperçu : badge + éventuel indice de recalage de date. */
+.dup-status-cell { display: inline-flex; flex-direction: column; gap: var(--space-1); align-items: flex-start; }
+.dup-realign-hint {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  font-size: var(--text-xs); font-weight: var(--fw-medium);
+  color: var(--color-info-dark); cursor: default;
+}
+.dup-realign-hint::before {
+  content: ''; width: 6px; height: 6px; border-radius: var(--radius-full);
+  background: var(--color-info);
+}
+
+/* — Modale « modal-duplicate-detail » : détail de la similitude d'un doublon
+     détecté à l'import (opération importée vs déjà en base + raison). — */
+.dup-detail { display: flex; flex-direction: column; gap: var(--space-5); }
+.dup-detail__lede {
+  font-size: var(--text-sm); color: var(--color-text-secondary);
+  line-height: var(--leading-normal); margin: 0;
+}
+.dup-detail__grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);
+}
+@media (max-width: 560px) { .dup-detail__grid { grid-template-columns: 1fr; } }
+.dup-detail__op {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-4); border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border); background: var(--color-bg-subtle);
+}
+.dup-detail__op--candidate { border-color: var(--color-brand-primary-200); }
+.dup-detail__op--existing { border-color: var(--color-border-strong); }
+.dup-detail__op-title {
+  font-size: var(--text-xs); font-weight: var(--fw-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted);
+}
+.dup-detail__op-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--space-3);
+}
+.dup-detail__op-date {
+  font-family: var(--font-mono); font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+.dup-detail__op-label {
+  font-size: var(--text-sm); font-weight: var(--fw-medium);
+  color: var(--color-text-primary);
+}
+.dup-detail__op-raw {
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  color: var(--color-text-muted); word-break: break-word;
+}
+.dup-detail__realign {
+  display: flex; flex-direction: column; gap: var(--space-1);
+  padding: var(--space-4); border-radius: var(--radius-lg);
+  background: var(--color-info-light);
+  border: 1px solid var(--color-info);
+}
+.dup-detail__realign-title {
+  font-size: var(--text-xs); font-weight: var(--fw-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--color-info-dark);
+}
+.dup-detail__realign-text {
+  margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);
+  color: var(--color-text-secondary);
+}
+.dup-detail__realign-dates {
+  font-family: var(--font-mono); font-weight: var(--fw-medium);
+  color: var(--color-info-dark);
+}
+.dup-detail__reason {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+}
+.dup-detail__reason-title {
+  font-size: var(--text-xs); font-weight: var(--fw-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted);
+}
+.dup-detail__reason-text {
+  margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);
+  color: var(--color-text-secondary);
+}
+.dup-detail__facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.dup-detail__facts li { display: flex; gap: var(--space-3); font-size: var(--text-sm); }
+.dup-detail__fact-key {
+  min-width: 72px; color: var(--color-text-muted); font-weight: var(--fw-medium);
+}
+.dup-detail__fact-val { color: var(--color-text-primary); }
+.dup-detail__fact-note { color: var(--color-text-muted); font-style: italic; }
+.dup-detail__tokens { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.dup-detail__token {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 var(--space-2);
+  border-radius: var(--radius-full); font-family: var(--font-mono);
+  font-size: var(--text-xs); font-weight: var(--fw-medium);
+  background: var(--color-brand-primary-50); color: var(--color-brand-primary-700);
+}
+
 /* Variante « stats à gauche » — modale d'édition d'une récurrence : panneau de
    stats (KPI / fun fact / graphe) à gauche, formulaire à droite. */
 .recurring-detail-layout {

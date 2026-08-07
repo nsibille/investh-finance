@@ -159,6 +159,7 @@ export function AccountsManager({
                     initial_date: modal.account.initial_date,
                     currency: modal.account.currency,
                     color: modal.account.color ?? "#5B5BD6",
+                    is_deferred_card: modal.account.is_deferred_card,
                   }
                 : undefined
             }

@@ -12,6 +12,7 @@ import {
 import { FormField } from "@/components/ui/FormField";
 import { Input, CurrencyInput, DateInput } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { Toggle } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/hooks/useToast";
@@ -52,6 +53,7 @@ export function AccountForm({ mode, id, initial, onDone }: AccountFormProps) {
       initial_date: initial?.initial_date ?? todayISO(),
       currency: initial?.currency ?? "EUR",
       color: initial?.color ?? ACCOUNT_COLORS[0],
+      is_deferred_card: initial?.is_deferred_card ?? false,
     },
   });
 
@@ -169,6 +171,26 @@ export function AccountForm({ mode, id, initial, onDone }: AccountFormProps) {
           )}
         />
       </FormField>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "var(--space-3)",
+          cursor: "pointer",
+        }}
+      >
+        <Toggle {...register("is_deferred_card")} />
+        <span style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+          <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--fw-medium)", color: "var(--color-text-primary)" }}>
+            Carte à débit différé
+          </span>
+          <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+            Les opérations peuvent s&apos;afficher provisoirement en fin de mois avant de se recaler.
+            La détection des doublons à l&apos;import compare alors au mois (et non au jour).
+          </span>
+        </span>
+      </label>
 
       <div
         style={{

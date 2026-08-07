@@ -25,6 +25,7 @@ export type Database = {
           initial_balance: number
           initial_date: string
           is_archived: boolean
+          is_deferred_card: boolean
           name: string
           type: Database["public"]["Enums"]["account_type"]
           updated_at: string
@@ -39,6 +40,7 @@ export type Database = {
           initial_balance?: number
           initial_date?: string
           is_archived?: boolean
+          is_deferred_card?: boolean
           name: string
           type?: Database["public"]["Enums"]["account_type"]
           updated_at?: string
@@ -53,6 +55,7 @@ export type Database = {
           initial_balance?: number
           initial_date?: string
           is_archived?: boolean
+          is_deferred_card?: boolean
           name?: string
           type?: Database["public"]["Enums"]["account_type"]
           updated_at?: string

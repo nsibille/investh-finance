@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, RefreshCw } from "lucide-react";
+import { FileText, RefreshCw, Info } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/ui/FormField";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
 import { ImportRowBadge } from "@/components/ui/Badge";
+import { DuplicateDetailModal } from "@/components/import/DuplicateDetailModal";
 import { Toggle, Checkbox } from "@/components/ui/Checkbox";
 import {
   TransactionEditorTable,
@@ -18,7 +19,12 @@ import {
   type EditorHandlers,
 } from "@/components/transactions/TransactionEditorTable";
 import { useToast } from "@/hooks/useToast";
-import { confirmImport, confirmCsvImport, rematchPreviewPurchases } from "@/server/actions/import";
+import {
+  confirmImport,
+  confirmCsvImport,
+  rematchPreviewPurchases,
+  realignDeferredDates,
+} from "@/server/actions/import";
 import { createRuleFromLabel, deleteRule } from "@/server/actions/rules";
 import { addMerchantRule, createMerchantRuleFromLabel } from "@/server/actions/merchants";
 import {
@@ -73,6 +79,8 @@ export function StatementImport({
   const [extraMerchants, setExtraMerchants] = useState<MerchantOption[]>([]);
   // Recalcul des rattachements d'achats (achats créés après le parse).
   const [rematching, setRematching] = useState(false);
+  // Ligne dont on affiche le détail du doublon (modale), ou null.
+  const [dupDetail, setDupDetail] = useState<number | null>(null);
 
   const allPurchases = useMemo(() => {
     const seen = new Set(purchaseOptions.map((p) => p.id));
@@ -558,11 +566,28 @@ export function StatementImport({
       ? await confirmCsvImport(payload, preview.filename)
       : await confirmImport(accountId, payload, preview.sourceFormat, preview.filename);
 
-    setImporting(false);
     if (!res.ok) {
+      setImporting(false);
       toast.error(res.error);
       return;
     }
+
+    // Recalage des dates des doublons « carte différée » restés doublons (non
+    // ré-inclus manuellement) : la date en base adopte la date réelle importée.
+    const realignments = Array.from(
+      new Map(
+        preview.rows
+          .filter((r) => r.realign && !r.include)
+          .map((r) => [r.realign!.existingId, { id: r.realign!.existingId, toDate: r.realign!.toDate }]),
+      ).values(),
+    );
+    let realignedCount = 0;
+    if (realignments.length > 0) {
+      const rr = await realignDeferredDates(realignments);
+      if (rr.ok) realignedCount = rr.count;
+    }
+
+    setImporting(false);
     const parts = [`${res.summary.rows_imported} importée(s)`];
     if ("accounts_created" in res.summary && res.summary.accounts_created > 0) {
       parts.push(`${res.summary.accounts_created} compte(s) créé(s)`);
@@ -571,12 +596,18 @@ export function StatementImport({
       parts.push(`${res.transfersDetected} virement(s) interne(s)`);
     }
     parts.push(`${res.summary.rows_duplicates} doublon(s)`);
+    if (realignedCount > 0) {
+      parts.push(`${realignedCount} date(s) recalée(s)`);
+    }
     toast.success(parts.join(" · "));
     setPreview(null);
     router.refresh();
   }
 
   const includedCount = preview?.rows.filter((r) => r.include).length ?? 0;
+  // Doublons « carte différée » dont la date en base sera recalée à l'import.
+  const realignCount =
+    preview?.rows.filter((r) => r.realign && !r.include).length ?? 0;
   const totalRows = preview?.rows.length ?? 0;
   const categorizedCount = preview?.rows.filter((r) => r.categoryId).length ?? 0;
   const uncategorizedCount = totalRows - categorizedCount;
@@ -714,7 +745,16 @@ export function StatementImport({
                 {preview.dupExisting} transaction{preview.dupExisting > 1 ? "s" : ""} déjà
                 présente{preview.dupExisting > 1 ? "s" : ""} en base (même compte · date · montant,
                 libellé éventuellement différent) — décochée{preview.dupExisting > 1 ? "s" : ""},
-                elles ne seront pas ré-importées.
+                elles ne seront pas ré-importées. Clique sur un badge « Doublon » pour en voir le
+                détail.
+              </Alert>
+            )}
+
+            {realignCount > 0 && (
+              <Alert variant="info">
+                {realignCount} date{realignCount > 1 ? "s" : ""} de carte à débit différé
+                {realignCount > 1 ? " seront recalées" : " sera recalée"} à l&apos;import
+                (l&apos;opération en base adopte la date réelle importée).
               </Alert>
             )}
 
@@ -762,10 +802,35 @@ export function StatementImport({
                 // détection était un faux positif, la ligne sera bien importée.
                 const isDup = src.duplicateReason === "existing";
                 const kind = !isDup ? "new" : src.include ? "forced" : "duplicate";
+                const hasDetail = isDup && Boolean(src.duplicateMatch);
+                // Recalage de date effectif : doublon carte différée non ré-inclus.
+                const realign = !src.include ? src.realign : null;
                 return (
                   <>
                     <td>
-                      <ImportRowBadge kind={kind} />
+                      <div className="dup-status-cell">
+                        {hasDetail ? (
+                          <button
+                            type="button"
+                            className="dup-badge-btn"
+                            onClick={() => setDupDetail(i)}
+                            title="Voir le détail de la similitude"
+                          >
+                            <ImportRowBadge kind={kind} />
+                            <Info size={13} aria-hidden />
+                          </button>
+                        ) : (
+                          <ImportRowBadge kind={kind} />
+                        )}
+                        {realign && (
+                          <span
+                            className="dup-realign-hint"
+                            title={`Date en base recalée : ${realign.fromDate} → ${realign.toDate}`}
+                          >
+                            date recalée
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <Toggle
@@ -786,6 +851,23 @@ export function StatementImport({
           </>
         )}
       </div>
+
+      {dupDetail !== null && preview?.rows[dupDetail] && (
+        <DuplicateDetailModal
+          open
+          onClose={() => setDupDetail(null)}
+          candidate={{
+            operation_date: preview.rows[dupDetail].operation_date,
+            amount: preview.rows[dupDetail].amount,
+            currency: preview.rows[dupDetail].currency,
+            label: preview.rows[dupDetail].label,
+            raw_label: preview.rows[dupDetail].raw_label,
+          }}
+          match={preview.rows[dupDetail].duplicateMatch ?? null}
+          realign={preview.rows[dupDetail].realign ?? null}
+          forced={preview.rows[dupDetail].include}
+        />
+      )}
     </Card>
   );
 }

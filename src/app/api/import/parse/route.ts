@@ -11,7 +11,7 @@ import {
   buildCsvPreview,
 } from "@/lib/import/preview";
 import { normalizeConnection } from "@/lib/import/connection";
-import { contentKey } from "@/lib/import/dedup";
+import { contentKey, type ExistingEntry } from "@/lib/import/dedup";
 import { getInternalTransferSubcategoryId } from "@/lib/import/transfers";
 import { isDeferredDebit, getDeferredDebitSubcategoryId } from "@/lib/import/deferred";
 import { matchInternalTransfers } from "@/lib/transactions/transferMatch";
@@ -52,34 +52,65 @@ async function fetchExistingHashes(supabase: Supa, hashes: string[]): Promise<Se
   return set;
 }
 
+/** Premier jour du mois d'une date ISO (YYYY-MM-DD). */
+function monthStart(date: string): string {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/** Dernier jour du mois d'une date ISO (YYYY-MM-DD), sans dérive de fuseau. */
+function monthEnd(date: string): string {
+  const y = Number(date.slice(0, 4));
+  const m = Number(date.slice(5, 7));
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${date.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+}
+
 /**
- * Libellés des opérations déjà en base (clé contenu → libellés bruts), pour les
+ * Opérations déjà en base (clé contenu → { libellé, date, montant }), pour les
  * comptes ciblés et la fenêtre de dates du lot. Sert à détecter les doublons
  * « inter-source » (même compte + date + montant, libellé/hash différents) que
  * le rapprochement par hash exact ne voit pas : le libellé départage les vrais
  * doublons des simples collisions date+montant (cf. `labelsSimilar`).
+ *
+ * Pour un compte carte à débit différé (`deferredAccountIds`), la clé est
+ * construite au MOIS et la fenêtre de dates est élargie aux bornes du mois, afin
+ * de rattraper une opération dont la date provisoire (fin de mois) diffère de la
+ * date réelle au sein du même mois.
  */
 async function fetchExistingContent(
   supabase: Supa,
   transactions: ParsedTransaction[],
   accountIds: string[],
-): Promise<Map<string, string[]>> {
-  const byKey = new Map<string, string[]>();
+  deferredAccountIds: Set<string> = new Set(),
+): Promise<Map<string, ExistingEntry[]>> {
+  const byKey = new Map<string, ExistingEntry[]>();
   if (accountIds.length === 0 || transactions.length === 0) return byKey;
   const dates = transactions.map((t) => t.operation_date);
   const minDate = dates.reduce((m, d) => (d < m ? d : m), dates[0]);
   const maxDate = dates.reduce((m, d) => (d > m ? d : m), dates[0]);
+  // Fenêtre élargie aux bornes du mois si un compte carte différée est ciblé
+  // (une opération peut y figurer à une date du même mois hors [min, max]).
+  const anyDeferred = accountIds.some((id) => deferredAccountIds.has(id));
+  const from = anyDeferred ? monthStart(minDate) : minDate;
+  const to = anyDeferred ? monthEnd(maxDate) : maxDate;
   const { data } = await supabase
     .from("transactions")
-    .select("account_id, operation_date, amount, raw_label")
+    .select("id, account_id, operation_date, amount, raw_label")
     .in("account_id", accountIds)
-    .gte("operation_date", minDate)
-    .lte("operation_date", maxDate);
+    .gte("operation_date", from)
+    .lte("operation_date", to);
   for (const r of data ?? []) {
-    const k = contentKey(r.account_id, r.operation_date, Number(r.amount));
+    const monthly = deferredAccountIds.has(r.account_id);
+    const k = contentKey(r.account_id, r.operation_date, Number(r.amount), monthly);
+    const entry: ExistingEntry = {
+      id: r.id,
+      label: r.raw_label,
+      operation_date: r.operation_date,
+      amount: Number(r.amount),
+    };
     const slot = byKey.get(k);
-    if (slot) slot.push(r.raw_label);
-    else byKey.set(k, [r.raw_label]);
+    if (slot) slot.push(entry);
+    else byKey.set(k, [entry]);
   }
   return byKey;
 }
@@ -271,7 +302,7 @@ export async function POST(request: Request) {
 
     const [{ data: accounts }, rules, transferSubId, deferredSubId, merchantNames, patterns] =
       await Promise.all([
-        supabase.from("accounts").select("id, connection_name"),
+        supabase.from("accounts").select("id, connection_name, is_deferred_card"),
         loadRules(supabase),
         getInternalTransferSubcategoryId(supabase),
         getDeferredDebitSubcategoryId(supabase),
@@ -279,10 +310,12 @@ export async function POST(request: Request) {
         loadRecurringPatterns(supabase),
       ]);
     const accountIdByConnection = new Map<string, string>();
+    const deferredAccountIds = new Set<string>();
     for (const a of accounts ?? []) {
       if (a.connection_name) {
         accountIdByConnection.set(normalizeConnection(a.connection_name), a.id);
       }
+      if (a.is_deferred_card) deferredAccountIds.add(a.id);
     }
 
     const targets = resolveCsvTargets(transactions, accountIdByConnection);
@@ -298,13 +331,14 @@ export async function POST(request: Request) {
     ];
     const [existingSet, existingContent] = await Promise.all([
       fetchExistingHashes(supabase, knownHashes),
-      fetchExistingContent(supabase, transactions, targetAccountIds),
+      fetchExistingContent(supabase, transactions, targetAccountIds, deferredAccountIds),
     ]);
     const { rows, connections } = buildCsvPreview(
       transactions,
       targets,
       existingSet,
       existingContent,
+      deferredAccountIds,
     );
 
     // Virements internes : appariés par connexion (2 comptes différents).
@@ -392,16 +426,29 @@ export async function POST(request: Request) {
       : null;
 
   const hashes = occurrenceHashes(accountId, transactions);
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("is_deferred_card")
+    .eq("id", accountId)
+    .maybeSingle();
+  const isDeferredCard = Boolean(account?.is_deferred_card);
+  const deferredAccountIds = isDeferredCard ? new Set([accountId]) : new Set<string>();
   const [existingSet, existingContent, rules, deferredSubId, merchantNames, patterns] =
     await Promise.all([
       fetchExistingHashes(supabase, hashes),
-      fetchExistingContent(supabase, transactions, [accountId]),
+      fetchExistingContent(supabase, transactions, [accountId], deferredAccountIds),
       loadRules(supabase),
       getDeferredDebitSubcategoryId(supabase),
       loadMerchantNames(supabase),
       loadRecurringPatterns(supabase),
     ]);
-  const { rows } = buildPreviewRows(accountId, transactions, existingSet, existingContent);
+  const { rows } = buildPreviewRows(
+    accountId,
+    transactions,
+    existingSet,
+    existingContent,
+    isDeferredCard,
+  );
   const withSuggestion = rows.map((r) => {
     const { subcategory_id, merchant_id } = suggestFromRules(rules, accountId, r);
     const pattern = matchRecurring(patterns, accountId, r, merchant_id);

@@ -3,7 +3,9 @@ import {
   assignOccurrences,
   baseKey,
   contentKey,
-  flagContentDuplicates,
+  matchContentDuplicates,
+  type DuplicateMatch,
+  type ExistingEntry,
 } from "./dedup";
 import { connectionLabel, normalizeConnection } from "./connection";
 import type { ParsedTransaction } from "./types";
@@ -11,9 +13,42 @@ import type { ParsedTransaction } from "./types";
 /** Pourquoi une ligne est marquée comme doublon (seulement si déjà en base). */
 export type DuplicateReason = "existing" | null;
 
+/**
+ * Recalage de date d'une opération déjà en base : sur un compte carte à débit
+ * différé, la date provisoire (fin de mois) se recale à la date réelle (plus
+ * tôt dans le mois). L'import n'insère pas de nouvelle ligne (c'est un doublon)
+ * mais met à jour la date de l'opération existante.
+ */
+export interface DateRealign {
+  existingId: string;
+  fromDate: string;
+  toDate: string;
+}
+
 export interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
   duplicateReason: DuplicateReason;
+  /** Détail de la similitude quand la ligne est un doublon (pour l'aperçu). */
+  duplicateMatch: DuplicateMatch | null;
+  /** Recalage de date à appliquer à l'opération en base (carte différée), sinon null. */
+  realign: DateRealign | null;
+}
+
+/**
+ * Recalage de date pour un doublon mensuel (carte à débit différé) : si la date
+ * importée est ANTÉRIEURE à celle en base (date provisoire fin de mois qui se
+ * recale à la date réelle), on renvoie la cible du recalage. On ne recale jamais
+ * vers une date postérieure (ne pas régresser une date réelle vers le provisoire).
+ */
+function computeRealign(
+  match: DuplicateMatch | null,
+  incomingDate: string,
+): DateRealign | null {
+  if (!match || !match.monthly) return null;
+  const ex = match.existing;
+  if (!ex || !ex.id) return null;
+  if (incomingDate >= ex.operation_date) return null;
+  return { existingId: ex.id, fromDate: ex.operation_date, toDate: incomingDate };
 }
 
 /** Hash de dédup (indexé par occurrence) pour chaque transaction d'un compte. */
@@ -40,21 +75,30 @@ export function buildPreviewRows(
   accountId: string,
   transactions: ParsedTransaction[],
   existingHashes: Set<string>,
-  existingContent: Map<string, string[]> = new Map(),
+  existingContent: Map<string, ExistingEntry[]> = new Map(),
+  monthly = false,
 ): { rows: PreviewRow[]; hashes: string[] } {
   const occ = assignOccurrences(transactions, (t) => baseKey(t));
   const hashes = transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
 
   const candidates = transactions.map((t, i) => ({
-    key: contentKey(accountId, t.operation_date, t.amount),
+    key: contentKey(accountId, t.operation_date, t.amount, monthly),
     label: t.raw_label,
     hashDuplicate: existingHashes.has(hashes[i]),
+    monthly,
   }));
-  const dup = flagContentDuplicates(candidates, existingContent);
+  const matches = matchContentDuplicates(candidates, existingContent);
 
   const rows = transactions.map((t, i) => {
-    const reason: DuplicateReason = dup[i] ? "existing" : null;
-    return { ...t, duplicate: reason !== null, duplicateReason: reason };
+    const match = matches[i];
+    const reason: DuplicateReason = match ? "existing" : null;
+    return {
+      ...t,
+      duplicate: reason !== null,
+      duplicateReason: reason,
+      duplicateMatch: match,
+      realign: computeRealign(match, t.operation_date),
+    };
   });
 
   return { rows, hashes };
@@ -137,26 +181,37 @@ export function buildCsvPreview(
   transactions: ParsedTransaction[],
   targets: CsvTarget[],
   existingHashes: Set<string>,
-  existingContent: Map<string, string[]> = new Map(),
+  existingContent: Map<string, ExistingEntry[]> = new Map(),
+  deferredAccountIds: Set<string> = new Set(),
 ): { rows: CsvPreviewRow[]; connections: ConnectionSummary[] } {
   // Candidat « inter-source » par compte cible (les connexions à créer n'ont pas
-  // de compte : clé neutre jamais présente dans `existingContent`).
-  const candidates = transactions.map((t, i) => ({
-    key: targets[i].accountId
-      ? contentKey(targets[i].accountId as string, t.operation_date, t.amount)
-      : "",
-    label: t.raw_label,
-    hashDuplicate: Boolean(targets[i].hash && existingHashes.has(targets[i].hash as string)),
-  }));
-  const dup = flagContentDuplicates(candidates, existingContent);
+  // de compte : clé neutre jamais présente dans `existingContent`). La
+  // granularité passe au mois pour les comptes carte à débit différé.
+  const candidates = transactions.map((t, i) => {
+    const monthly = targets[i].accountId
+      ? deferredAccountIds.has(targets[i].accountId as string)
+      : false;
+    return {
+      key: targets[i].accountId
+        ? contentKey(targets[i].accountId as string, t.operation_date, t.amount, monthly)
+        : "",
+      label: t.raw_label,
+      hashDuplicate: Boolean(targets[i].hash && existingHashes.has(targets[i].hash as string)),
+      monthly,
+    };
+  });
+  const matches = matchContentDuplicates(candidates, existingContent);
 
   const rows = transactions.map((t, i) => {
     const tg = targets[i];
-    const reason: DuplicateReason = dup[i] ? "existing" : null;
+    const match = matches[i];
+    const reason: DuplicateReason = match ? "existing" : null;
     return {
       ...t,
       duplicate: reason !== null,
       duplicateReason: reason,
+      duplicateMatch: match,
+      realign: computeRealign(match, t.operation_date),
       connectionLabel: tg.label,
       targetAccountExists: tg.accountId !== null,
     };

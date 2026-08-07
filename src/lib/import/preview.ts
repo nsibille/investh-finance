@@ -40,16 +40,17 @@ export function buildPreviewRows(
   accountId: string,
   transactions: ParsedTransaction[],
   existingHashes: Set<string>,
-  existingContent: Map<string, number> = new Map(),
+  existingContent: Map<string, string[]> = new Map(),
 ): { rows: PreviewRow[]; hashes: string[] } {
   const occ = assignOccurrences(transactions, (t) => baseKey(t));
   const hashes = transactions.map((t, i) => computeDedupHash(accountId, t, occ[i]));
 
-  const hashDup = hashes.map((h) => existingHashes.has(h));
-  const keys = transactions.map((t) =>
-    contentKey(accountId, t.operation_date, t.amount),
-  );
-  const dup = flagContentDuplicates(keys, hashDup, existingContent);
+  const candidates = transactions.map((t, i) => ({
+    key: contentKey(accountId, t.operation_date, t.amount),
+    label: t.raw_label,
+    hashDuplicate: existingHashes.has(hashes[i]),
+  }));
+  const dup = flagContentDuplicates(candidates, existingContent);
 
   const rows = transactions.map((t, i) => {
     const reason: DuplicateReason = dup[i] ? "existing" : null;
@@ -136,17 +137,18 @@ export function buildCsvPreview(
   transactions: ParsedTransaction[],
   targets: CsvTarget[],
   existingHashes: Set<string>,
-  existingContent: Map<string, number> = new Map(),
+  existingContent: Map<string, string[]> = new Map(),
 ): { rows: CsvPreviewRow[]; connections: ConnectionSummary[] } {
-  const hashDup = targets.map((tg) => Boolean(tg.hash && existingHashes.has(tg.hash)));
-  // Clé « inter-source » par compte cible (les connexions à créer n'ont pas de
-  // compte : clé neutre jamais présente dans `existingContent`).
-  const keys = transactions.map((t, i) =>
-    targets[i].accountId
+  // Candidat « inter-source » par compte cible (les connexions à créer n'ont pas
+  // de compte : clé neutre jamais présente dans `existingContent`).
+  const candidates = transactions.map((t, i) => ({
+    key: targets[i].accountId
       ? contentKey(targets[i].accountId as string, t.operation_date, t.amount)
       : "",
-  );
-  const dup = flagContentDuplicates(keys, hashDup, existingContent);
+    label: t.raw_label,
+    hashDuplicate: Boolean(targets[i].hash && existingHashes.has(targets[i].hash as string)),
+  }));
+  const dup = flagContentDuplicates(candidates, existingContent);
 
   const rows = transactions.map((t, i) => {
     const tg = targets[i];

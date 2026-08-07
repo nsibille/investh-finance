@@ -53,32 +53,35 @@ async function fetchExistingHashes(supabase: Supa, hashes: string[]): Promise<Se
 }
 
 /**
- * Multiset (clé contenu → nombre) des opérations déjà en base pour les comptes
- * ciblés, dans la fenêtre de dates du lot. Sert à détecter les doublons
- * « inter-source » (même compte + date + montant, libellé/hash différents), que
- * le rapprochement par hash exact ne peut pas voir.
+ * Libellés des opérations déjà en base (clé contenu → libellés bruts), pour les
+ * comptes ciblés et la fenêtre de dates du lot. Sert à détecter les doublons
+ * « inter-source » (même compte + date + montant, libellé/hash différents) que
+ * le rapprochement par hash exact ne voit pas : le libellé départage les vrais
+ * doublons des simples collisions date+montant (cf. `labelsSimilar`).
  */
 async function fetchExistingContent(
   supabase: Supa,
   transactions: ParsedTransaction[],
   accountIds: string[],
-): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
-  if (accountIds.length === 0 || transactions.length === 0) return counts;
+): Promise<Map<string, string[]>> {
+  const byKey = new Map<string, string[]>();
+  if (accountIds.length === 0 || transactions.length === 0) return byKey;
   const dates = transactions.map((t) => t.operation_date);
   const minDate = dates.reduce((m, d) => (d < m ? d : m), dates[0]);
   const maxDate = dates.reduce((m, d) => (d > m ? d : m), dates[0]);
   const { data } = await supabase
     .from("transactions")
-    .select("account_id, operation_date, amount")
+    .select("account_id, operation_date, amount, raw_label")
     .in("account_id", accountIds)
     .gte("operation_date", minDate)
     .lte("operation_date", maxDate);
   for (const r of data ?? []) {
     const k = contentKey(r.account_id, r.operation_date, Number(r.amount));
-    counts.set(k, (counts.get(k) ?? 0) + 1);
+    const slot = byKey.get(k);
+    if (slot) slot.push(r.raw_label);
+    else byKey.set(k, [r.raw_label]);
   }
-  return counts;
+  return byKey;
 }
 
 async function loadRules(supabase: Supa): Promise<EngineRule[]> {

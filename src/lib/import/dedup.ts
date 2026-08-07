@@ -24,6 +24,119 @@ export function baseKey(tx: DedupInput): string {
 }
 
 /**
+ * Signature « inter-source » d'une opération : compte + date + montant, SANS le
+ * libellé ni l'external_id. Deux imports d'une même opération par des canaux
+ * différents (sync bancaire vs export CSV) produisent des libellés — donc des
+ * `dedup_hash` — distincts ; cette clé, indépendante de la source, sert de
+ * premier crible pour rapprocher les doublons à l'aperçu (le libellé départage
+ * ensuite, cf. `labelsSimilar`).
+ */
+export function contentKey(
+  accountId: string,
+  operationDate: string,
+  amount: number,
+): string {
+  return `${accountId}|${operationDate}|${amount.toFixed(2)}`;
+}
+
+/**
+ * Termes structurels des libellés bancaires FR (≥ 3 lettres), non discriminants :
+ * ils décrivent la *nature* de l'opération, jamais la contrepartie. On les
+ * retire avant de comparer deux libellés pour ne garder que ce qui identifie
+ * réellement l'opération (nom du bénéficiaire, enseigne…).
+ */
+const LABEL_STOPWORDS = new Set([
+  "VIR", "VIREMENT", "VIRT", "INST", "INSTANTANE", "INSTANTANEE", "RECU",
+  "RECUE", "EMIS", "EMISE", "PAR", "POUR", "DES", "LES", "UNE", "AUX", "SUR",
+  "AVEC", "SANS", "MOTIF", "REF", "REFERENCE", "DATE", "PRLV", "PRELEVEMENT",
+  "PRELVT", "PRLVT", "CARTE", "PAIEMENT", "PAIMENT", "PAIE", "ACHAT", "RETRAIT",
+  "DAB", "GAB", "MLLE", "MME", "MONSIEUR", "MADAME", "SARL", "SASU", "EURL",
+  "FACT", "FACTURE", "ECH", "ECHEANCE", "MENSUALITE", "NUM", "NUMERO", "COM",
+  "COMMANDE", "WEB", "ONLINE", "EUR", "EUROS",
+]);
+
+/**
+ * Tokens discriminants d'un libellé : normalisé, découpé sur tout ce qui n'est
+ * pas alphanumérique, en écartant les nombres (n° de référence, date, heure),
+ * les tokens < 3 caractères et les termes bancaires structurels (`LABEL_STOPWORDS`).
+ */
+export function significantTokens(label: string): Set<string> {
+  const tokens = normalizeLabel(label)
+    .split(/[^A-Z0-9]+/)
+    .filter(
+      (t) => t.length >= 3 && !/^\d+$/.test(t) && !LABEL_STOPWORDS.has(t),
+    );
+  return new Set(tokens);
+}
+
+/**
+ * Deux libellés désignent-ils la même opération ? Vrai s'ils partagent au moins
+ * un token discriminant (ex. « KAMINSKI », « CELIA »), ce qui reste robuste
+ * quand une source ajoute un n° de référence, une date/heure ou reformule les
+ * termes structurels. Si l'un des deux n'a aucun token discriminant (libellé
+ * purement structurel, ex. « VIREMENT RECU »), on ne peut pas départager : on
+ * s'en remet alors à la seule signature compte+date+montant (biais « attrape le
+ * doublon », décoché par défaut et réversible dans l'aperçu).
+ */
+export function labelsSimilar(a: string, b: string): boolean {
+  const A = significantTokens(a);
+  const B = significantTokens(b);
+  if (A.size === 0 || B.size === 0) return true;
+  for (const t of A) if (B.has(t)) return true;
+  return false;
+}
+
+/** Une ligne candidate à rapprocher (clé contenu + libellé + doublon par hash). */
+export interface ContentCandidate {
+  key: string;
+  label: string;
+  hashDuplicate: boolean;
+}
+
+/**
+ * Marque les doublons « inter-source » d'un lot : au-delà du hash exact (qui
+ * assure l'idempotence d'un ré-import de même source), une ligne est un doublon
+ * si une opération de même compte + date + montant ET au libellé compatible
+ * (`labelsSimilar`) existe déjà en base, même si son `dedup_hash` diffère.
+ *
+ * `existingContent` mappe chaque clé contenu vers les libellés des opérations
+ * déjà en base. Chaque emplacement n'est consommé qu'une fois : N lignes
+ * candidates ne se rapprochent que des M opérations réellement présentes. Les
+ * lignes déjà doublon par hash consomment en priorité un emplacement de leur
+ * contenu (1ʳᵉ passe), pour ne pas priver un vrai rapprochement inter-source.
+ */
+export function flagContentDuplicates(
+  candidates: ContentCandidate[],
+  existingContent: Map<string, string[]>,
+): boolean[] {
+  // Copie consommable des libellés existants par clé contenu.
+  const remaining = new Map<string, string[]>();
+  for (const [k, labels] of existingContent) remaining.set(k, [...labels]);
+
+  const result = new Array<boolean>(candidates.length).fill(false);
+
+  // 1ʳᵉ passe : un doublon par hash consomme un emplacement de son contenu.
+  for (let i = 0; i < candidates.length; i++) {
+    if (!candidates[i].hashDuplicate) continue;
+    result[i] = true;
+    const slots = remaining.get(candidates[i].key);
+    if (slots && slots.length > 0) slots.shift();
+  }
+
+  // 2ᵉ passe : rapprochement inter-source (contenu identique + libellé compatible).
+  for (let i = 0; i < candidates.length; i++) {
+    if (candidates[i].hashDuplicate) continue;
+    const slots = remaining.get(candidates[i].key);
+    if (!slots || slots.length === 0) continue;
+    const idx = slots.findIndex((lbl) => labelsSimilar(lbl, candidates[i].label));
+    if (idx === -1) continue;
+    slots.splice(idx, 1);
+    result[i] = true;
+  }
+  return result;
+}
+
+/**
  * Deterministic dedup hash for a transaction within an account.
  * Prefers the bank's stable external id; falls back to the
  * date|amount|normalized-label composite from the spec.

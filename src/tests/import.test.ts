@@ -6,6 +6,10 @@ import {
   assignOccurrences,
   baseKey,
   resolveDedupHashes,
+  contentKey,
+  flagContentDuplicates,
+  significantTokens,
+  labelsSimilar,
 } from "@/lib/import/dedup";
 import { merchantCompatible } from "@/lib/import/merchantGate";
 import { parseAmountInput } from "@/lib/format/amount";
@@ -141,6 +145,105 @@ describe("resolveDedupHashes (déflaggage de doublon)", () => {
       existing,
     );
     expect(new Set(out).size).toBe(2);
+  });
+});
+
+describe("contentKey (signature inter-source)", () => {
+  it("ignore le libellé : même compte + date + montant → même clé", () => {
+    const a = contentKey("acc", "2026-07-28", 550);
+    const b = contentKey("acc", "2026-07-28", 550);
+    expect(a).toBe(b);
+  });
+
+  it("distingue compte, date et montant", () => {
+    expect(contentKey("a", "2026-07-28", 550)).not.toBe(
+      contentKey("b", "2026-07-28", 550),
+    );
+    expect(contentKey("acc", "2026-07-28", 550)).not.toBe(
+      contentKey("acc", "2026-07-29", 550),
+    );
+    expect(contentKey("acc", "2026-07-28", 550)).not.toBe(
+      contentKey("acc", "2026-07-28", 551),
+    );
+  });
+});
+
+describe("significantTokens / labelsSimilar (départage par libellé)", () => {
+  it("écarte nombres, dates et termes bancaires structurels", () => {
+    const t = significantTokens(
+      "VIR INST RE 670989691262 DE: MLLE KAMINSKI CELIA DATE: 28/07/2026 10:31 MOTIF: VIREMENT",
+    );
+    expect(t.has("KAMINSKI")).toBe(true);
+    expect(t.has("CELIA")).toBe(true);
+    // Termes structurels / nombres écartés.
+    expect(t.has("VIR")).toBe(false);
+    expect(t.has("VIREMENT")).toBe(false);
+    expect(t.has("MOTIF")).toBe(false);
+    expect(t.has("670989691262")).toBe(false);
+  });
+
+  it("rapproche deux libellés inter-source de la même opération", () => {
+    expect(
+      labelsSimilar(
+        "VIR INSTANTANE RECU DE: MLLE KAMINSKI CELIA MOTIF: VIREMENT",
+        "VIR INST RE 670989691262 DE: MLLE KAMINSKI CELIA DATE: 28/07/2026 MOTIF: VIREMENT DE MLLE KAMINSKI CELIA",
+      ),
+    ).toBe(true);
+  });
+
+  it("distingue deux opérations sans contrepartie commune", () => {
+    expect(
+      labelsSimilar("PAIEMENT CB CARREFOUR", "PAIEMENT CB MONOPRIX"),
+    ).toBe(false);
+  });
+
+  it("libellé purement structurel : on s'en remet à date+montant", () => {
+    expect(labelsSimilar("VIREMENT RECU", "SALAIRE ACME CORP")).toBe(true);
+  });
+});
+
+describe("flagContentDuplicates (doublon inter-source)", () => {
+  const KEY = contentKey("acc", "2026-07-28", 550);
+  const cand = (label: string, hashDuplicate = false) => ({ key: KEY, label, hashDuplicate });
+
+  it("marque une ligne dont le contenu existe en base malgré un hash différent", () => {
+    // 1 opération en base (même compte+date+montant, libellé compatible).
+    const existing = new Map([[KEY, ["VIR INSTANTANE RECU DE MLLE KAMINSKI CELIA"]]]);
+    const candidates = [cand("VIR INST RE 670 DE MLLE KAMINSKI CELIA")];
+    expect(flagContentDuplicates(candidates, existing)).toEqual([true]);
+  });
+
+  it("ne marque pas si le libellé ne correspond pas (collision date+montant)", () => {
+    // Même date+montant mais opérations distinctes → PAS un doublon.
+    const existing = new Map([[KEY, ["PAIEMENT CB CARREFOUR"]]]);
+    const candidates = [cand("PAIEMENT CB MONOPRIX")];
+    expect(flagContentDuplicates(candidates, existing)).toEqual([false]);
+  });
+
+  it("ne sur-marque pas : N candidats compatibles ne consomment que M emplacements", () => {
+    const existing = new Map([[KEY, ["VIR RECU KAMINSKI CELIA"]]]);
+    const candidates = [
+      cand("VIR INST KAMINSKI CELIA"),
+      cand("VIR INST KAMINSKI CELIA"),
+    ];
+    // 2 candidats, 1 seul en base → 1 doublon, 1 nouvelle.
+    expect(flagContentDuplicates(candidates, existing)).toEqual([true, false]);
+  });
+
+  it("les doublons par hash consomment leur emplacement en priorité", () => {
+    const existing = new Map([[KEY, ["VIR RECU KAMINSKI CELIA"]]]);
+    const candidates = [
+      cand("VIR RECU KAMINSKI CELIA", true),
+      cand("VIR INST KAMINSKI CELIA", false),
+    ];
+    // Ligne 0 déjà doublon par hash : elle prend l'emplacement, la ligne 1
+    // (autre source, même contenu) reste nouvelle.
+    expect(flagContentDuplicates(candidates, existing)).toEqual([true, false]);
+  });
+
+  it("sans emplacement en base : rien n'est marqué", () => {
+    const candidates = [cand("VIR KAMINSKI CELIA")];
+    expect(flagContentDuplicates(candidates, new Map())).toEqual([false]);
   });
 });
 

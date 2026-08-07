@@ -6,7 +6,7 @@ import {
   buildCsvPreview,
   groupByConnection,
 } from "@/lib/import/preview";
-import { computeDedupHash } from "@/lib/import/dedup";
+import { computeDedupHash, contentKey } from "@/lib/import/dedup";
 import { normalizeConnection } from "@/lib/import/connection";
 import type { ParsedTransaction } from "@/lib/import/types";
 
@@ -164,5 +164,46 @@ describe("buildPreviewRows", () => {
 
     expect(rows[2].duplicate).toBe(true);
     expect(rows[2].duplicateReason).toBe("existing");
+  });
+
+  it("détecte un doublon inter-source (même date+montant, libellé différent)", () => {
+    // En base : opération synchronisée par la banque, libellé « propre » (donc
+    // un dedup_hash qui ne correspond pas au libellé brut de l'export CSV).
+    const csvRow = {
+      operation_date: "2026-07-28",
+      label: "VIR INST RE 670989691262 DE MLLE KAMINSKI CELIA",
+      raw_label: "VIR INST RE 670989691262 DE MLLE KAMINSKI CELIA",
+      amount: 550,
+      currency: "EUR",
+    };
+    // Aucun hash correspondant en base (libellé différent) …
+    const existingHashes = new Set<string>();
+    // … mais l'opération existe (même compte + date + montant, libellé du canal
+    // de synchro, « propre », qui partage la contrepartie KAMINSKI CELIA).
+    const existingContent = new Map([
+      [
+        contentKey("acc", "2026-07-28", 550),
+        ["VIR INSTANTANE RECU DE MLLE KAMINSKI CELIA MOTIF VIREMENT"],
+      ],
+    ]);
+    const { rows } = buildPreviewRows("acc", [csvRow], existingHashes, existingContent);
+    expect(rows[0].duplicate).toBe(true);
+    expect(rows[0].duplicateReason).toBe("existing");
+  });
+
+  it("ne rapproche pas une collision date+montant sans contrepartie commune", () => {
+    const csvRow = {
+      operation_date: "2026-07-28",
+      label: "PAIEMENT CB MONOPRIX",
+      raw_label: "PAIEMENT CB MONOPRIX",
+      amount: -20,
+      currency: "EUR",
+    };
+    const existingContent = new Map([
+      [contentKey("acc", "2026-07-28", -20), ["PAIEMENT CB CARREFOUR"]],
+    ]);
+    const { rows } = buildPreviewRows("acc", [csvRow], new Set(), existingContent);
+    expect(rows[0].duplicate).toBe(false);
+    expect(rows[0].duplicateReason).toBeNull();
   });
 });

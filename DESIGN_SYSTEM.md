@@ -756,7 +756,7 @@ Variante pour configurer un export CSV/Excel.
 Variante pour confirmer une action destructive (avec `btn-danger-md`).
 
 ### `modal-duplicate-detail`
-**Détail de la similitude d'un doublon détecté à l'import.** Ouverte depuis le badge de statut cliquable (`dup-badge-btn`, badge `badge-status-duplicate` / `badge-status-forced` suffixé d'une icône `Info`) d'une ligne de l'aperçu d'import détectée comme doublon. Corps (`dup-detail`) : chapô (`dup-detail__lede`, granularité au **jour** ou au **mois**) → grille 2 colonnes (`dup-detail__grid`) de deux cartes opération (`dup-detail__op` variantes `--candidate` bord indigo / `--existing`) affichant date (mono), `amount`, libellé + libellé brut → bloc raison (`dup-detail__reason`) : texte explicatif selon `kind` (`hash` empreinte exacte / `content` rapprochement inter-source / `content-weak` sans terme commun), liste de faits (`dup-detail__facts` : Montant · Date/Mois · Libellé) et chips des tokens partagés (`dup-detail__token`). Implémentation : `src/components/import/DuplicateDetailModal.tsx`.
+**Détail de la similitude d'un doublon détecté à l'import.** Ouverte depuis le badge de statut cliquable (`dup-badge-btn`, badge `badge-status-duplicate` / `badge-status-forced` suffixé d'une icône `Info`) d'une ligne de l'aperçu d'import détectée comme doublon. Corps (`dup-detail`) : chapô (`dup-detail__lede`, granularité au **jour** ou au **mois**) → grille 2 colonnes (`dup-detail__grid`) de deux cartes opération (`dup-detail__op` variantes `--candidate` bord indigo / `--existing`) affichant date (mono), `amount`, libellé + libellé brut → bloc raison (`dup-detail__reason`) : texte explicatif selon `kind` (`hash` empreinte exacte / `content` rapprochement inter-source / `content-weak` sans terme commun), liste de faits (`dup-detail__facts` : Montant · Date/Mois · Libellé) et chips des tokens partagés (`dup-detail__token`). Encart optionnel **recalage de date** (`dup-detail__realign`, fond `--color-info-light`) pour un doublon de carte à débit différé dont la date en base sera recalée sur la date réelle importée (`fromDate → toDate`). Dans le listing d'aperçu, la cellule de statut (`dup-status-cell`) affiche alors un indice `dup-realign-hint` (« date recalée »). Implémentation : `src/components/import/DuplicateDetailModal.tsx`.
 
 ---
 
@@ -1226,6 +1226,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
 | `badge-status-forced` | Status | Badge import row doublon déflagué (ré-inclus, sera importé) | auto |
 | `dup-badge-btn` | Status | Badge doublon cliquable (aperçu import) → `modal-duplicate-detail` | auto |
+| `dup-realign-hint` | Status | Indice « date recalée » (doublon carte à débit différé) | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |
 | `badge-status-new` | Status | Badge import row nouvelle | auto |
 | `badge-status-pending` | Status | Badge transaction à valider | auto |

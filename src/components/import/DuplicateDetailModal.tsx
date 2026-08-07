@@ -4,6 +4,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Amount } from "@/components/ui/Amount";
 import { formatShortDate, formatMonthLabel } from "@/lib/format/date";
 import type { DuplicateMatch } from "@/lib/import/dedup";
+import type { DateRealign } from "@/lib/import/preview";
 
 interface CandidateInfo {
   operation_date: string;
@@ -57,16 +58,22 @@ export function DuplicateDetailModal({
   onClose,
   candidate,
   match,
+  realign,
   forced,
 }: {
   open: boolean;
   onClose: () => void;
   candidate: CandidateInfo | null;
   match: DuplicateMatch | null;
+  /** Recalage de date à appliquer à l'import (carte différée), sinon null. */
+  realign?: DateRealign | null;
   /** La ligne a été ré-incluse manuellement (faux positif déflagué). */
   forced?: boolean;
 }) {
   if (!candidate || !match) return null;
+
+  // Recalage effectif seulement si la ligne reste un doublon (non ré-incluse).
+  const activeRealign = !forced && realign ? realign : null;
 
   const grain = match.monthly ? "au mois" : "au jour";
   const existing = match.existing;
@@ -127,6 +134,20 @@ export function DuplicateDetailModal({
             </div>
           )}
         </div>
+
+        {activeRealign && (
+          <div className="dup-detail__realign">
+            <span className="dup-detail__realign-title">Recalage de date à l&apos;import</span>
+            <p className="dup-detail__realign-text">
+              La date de l&apos;opération en base sera recalée sur la date réelle
+              importée :{" "}
+              <span className="dup-detail__realign-dates">
+                {formatShortDate(activeRealign.fromDate)} → {formatShortDate(activeRealign.toDate)}
+              </span>
+              . La ligne n&apos;est pas ré-importée (c&apos;est la même opération).
+            </p>
+          </div>
+        )}
 
         <div className="dup-detail__reason">
           <span className="dup-detail__reason-title">Pourquoi ce rapprochement</span>

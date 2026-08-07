@@ -95,7 +95,7 @@ async function fetchExistingContent(
   const to = anyDeferred ? monthEnd(maxDate) : maxDate;
   const { data } = await supabase
     .from("transactions")
-    .select("account_id, operation_date, amount, raw_label")
+    .select("id, account_id, operation_date, amount, raw_label")
     .in("account_id", accountIds)
     .gte("operation_date", from)
     .lte("operation_date", to);
@@ -103,6 +103,7 @@ async function fetchExistingContent(
     const monthly = deferredAccountIds.has(r.account_id);
     const k = contentKey(r.account_id, r.operation_date, Number(r.amount), monthly);
     const entry: ExistingEntry = {
+      id: r.id,
       label: r.raw_label,
       operation_date: r.operation_date,
       amount: Number(r.amount),

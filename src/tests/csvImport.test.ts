@@ -235,7 +235,7 @@ describe("buildPreviewRows", () => {
     const existingContent = new Map([
       [
         contentKey("acc", "2026-07-11", -30, true),
-        [{ label: "PAIEMENT CB FNAC", operation_date: "2026-07-11", amount: -30 }],
+        [{ id: "tx-1", label: "PAIEMENT CB FNAC", operation_date: "2026-07-11", amount: -30 }],
       ],
     ]);
     // Sans le mode mensuel : non détecté (dates différentes).
@@ -247,5 +247,35 @@ describe("buildPreviewRows", () => {
     expect(monthly.rows[0].duplicateReason).toBe("existing");
     expect(monthly.rows[0].duplicateMatch?.monthly).toBe(true);
     expect(monthly.rows[0].duplicateMatch?.existing?.operation_date).toBe("2026-07-11");
+    // La base a déjà la date réelle (11) et l'import la provisoire (31) : pas de
+    // recalage (on ne régresse jamais vers la date provisoire).
+    expect(monthly.rows[0].realign).toBeNull();
+  });
+
+  it("carte à débit différé : recale la date en base (fin de mois → date réelle)", () => {
+    // En base : date provisoire fin de mois (31/07). Import : date réelle (11/07).
+    const real = {
+      operation_date: "2026-07-11",
+      label: "PAIEMENT CB FNAC",
+      raw_label: "PAIEMENT CB FNAC",
+      amount: -30,
+      currency: "EUR",
+    };
+    const existingContent = new Map([
+      [
+        contentKey("acc", "2026-07-31", -30, true),
+        [{ id: "tx-1", label: "PAIEMENT CB FNAC", operation_date: "2026-07-31", amount: -30 }],
+      ],
+    ]);
+    const { rows } = buildPreviewRows("acc", [real], new Set(), existingContent, true);
+    expect(rows[0].duplicate).toBe(true);
+    expect(rows[0].realign).toEqual({
+      existingId: "tx-1",
+      fromDate: "2026-07-31",
+      toDate: "2026-07-11",
+    });
+    // En mode jour : pas de recalage (fonction réservée aux cartes différées).
+    const daily = buildPreviewRows("acc", [real], new Set(), existingContent, false);
+    expect(daily.rows[0].realign).toBeNull();
   });
 });

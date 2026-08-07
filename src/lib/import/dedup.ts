@@ -120,6 +120,8 @@ export interface ExistingEntry {
   label: string;
   operation_date: string;
   amount: number;
+  /** Id de la transaction en base (permet de recaler sa date à l'import). */
+  id?: string;
 }
 
 /** Comment une ligne d'aperçu a été détectée comme doublon (détail affichable). */

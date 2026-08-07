@@ -13,11 +13,42 @@ import type { ParsedTransaction } from "./types";
 /** Pourquoi une ligne est marquée comme doublon (seulement si déjà en base). */
 export type DuplicateReason = "existing" | null;
 
+/**
+ * Recalage de date d'une opération déjà en base : sur un compte carte à débit
+ * différé, la date provisoire (fin de mois) se recale à la date réelle (plus
+ * tôt dans le mois). L'import n'insère pas de nouvelle ligne (c'est un doublon)
+ * mais met à jour la date de l'opération existante.
+ */
+export interface DateRealign {
+  existingId: string;
+  fromDate: string;
+  toDate: string;
+}
+
 export interface PreviewRow extends ParsedTransaction {
   duplicate: boolean;
   duplicateReason: DuplicateReason;
   /** Détail de la similitude quand la ligne est un doublon (pour l'aperçu). */
   duplicateMatch: DuplicateMatch | null;
+  /** Recalage de date à appliquer à l'opération en base (carte différée), sinon null. */
+  realign: DateRealign | null;
+}
+
+/**
+ * Recalage de date pour un doublon mensuel (carte à débit différé) : si la date
+ * importée est ANTÉRIEURE à celle en base (date provisoire fin de mois qui se
+ * recale à la date réelle), on renvoie la cible du recalage. On ne recale jamais
+ * vers une date postérieure (ne pas régresser une date réelle vers le provisoire).
+ */
+function computeRealign(
+  match: DuplicateMatch | null,
+  incomingDate: string,
+): DateRealign | null {
+  if (!match || !match.monthly) return null;
+  const ex = match.existing;
+  if (!ex || !ex.id) return null;
+  if (incomingDate >= ex.operation_date) return null;
+  return { existingId: ex.id, fromDate: ex.operation_date, toDate: incomingDate };
 }
 
 /** Hash de dédup (indexé par occurrence) pour chaque transaction d'un compte. */
@@ -66,6 +97,7 @@ export function buildPreviewRows(
       duplicate: reason !== null,
       duplicateReason: reason,
       duplicateMatch: match,
+      realign: computeRealign(match, t.operation_date),
     };
   });
 
@@ -179,6 +211,7 @@ export function buildCsvPreview(
       duplicate: reason !== null,
       duplicateReason: reason,
       duplicateMatch: match,
+      realign: computeRealign(match, t.operation_date),
       connectionLabel: tg.label,
       targetAccountExists: tg.accountId !== null,
     };

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { applyRuleToTransactions, toApplicableRule } from "@/server/rules/apply";
+import { purgeNamelessLabelDuplicates } from "@/server/rules/reassign";
 import { getMerchantStats, type MerchantStats } from "@/lib/merchants/stats";
 import type { Database } from "@/types/database.types";
 
@@ -260,6 +261,12 @@ export async function createMerchantRuleFromLabel(
       .eq("id", merchantId);
     categorySet = true;
   }
+
+  // Réassignation vers une enseigne nommée : le libellé pointait peut-être vers
+  // une catégorie « Sans enseigne ». On supprime ce(s) ancien(s) motif(s) — le
+  // libellé appartient désormais à cette enseigne (« supprimer l'ancienne règle
+  // et ajouter la nouvelle »).
+  await purgeNamelessLabelDuplicates(supabase, p, null);
 
   // Motif « contient » identique déjà sous cette enseigne → rien à faire.
   const { data: existing } = await supabase

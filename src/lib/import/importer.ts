@@ -114,8 +114,7 @@ export async function importParsedTransactions(
 
         // Récurrentes : une transaction qui correspond à un modèle récurrent
         // (libellé + montant) est marquée récurrente — à condition que
-        // l'enseigne du modèle ne contredise pas celle de la transaction. Si
-        // elle n'a pas encore de catégorie, on applique celle du modèle.
+        // l'enseigne du modèle ne contredise pas celle de la transaction.
         const pattern = patterns.find(
           (pat) =>
             matchesPattern(pat, {
@@ -126,9 +125,17 @@ export async function importParsedTransactions(
             }) &&
             merchantCompatible(authorityMerchant, recurringAcceptableMerchants(pat.merchant_id)),
         );
-        if (pattern && subcategoryId == null && pattern.subcategory_id) {
-          subcategoryId = pattern.subcategory_id;
-          status = "validated";
+        if (pattern) {
+          // Catégorie héritée du modèle si la ligne n'en a pas encore.
+          if (subcategoryId == null && pattern.subcategory_id) {
+            subcategoryId = pattern.subcategory_id;
+          }
+          // Occurrence d'une récurrente connue et catégorisée (par une règle,
+          // l'aperçu ou le modèle) = transaction de confiance : on la valide
+          // automatiquement, plus besoin de la revoir dans « à valider ».
+          if (subcategoryId != null) {
+            status = "validated";
+          }
         }
         const merchantId =
           explicitMerchant !== undefined

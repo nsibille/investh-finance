@@ -4,7 +4,7 @@ import {
   getAccountDisplayMap,
   getCategoryDisplayMap,
 } from "@/lib/transactions/queries";
-import { matchesPattern, patternStatus, nextExpectedDate } from "./checker";
+import { effectiveLastSeen, patternStatus, nextExpectedDate } from "./checker";
 import type { Database } from "@/types/database.types";
 import type { PatternStatus } from "./checker";
 
@@ -32,8 +32,11 @@ export async function getRecurringPatterns(): Promise<RecurringPatternView[]> {
         .order("created_at", { ascending: true }),
       supabase
         .from("transactions")
-        .select("account_id, raw_label, amount, operation_date")
-        .eq("status", "validated")
+        .select("account_id, raw_label, amount, operation_date, recurring_pattern_id")
+        // Hors ignorées seulement : une occurrence encore « à valider » (statut
+        // pending) compte comme vue — sinon le modèle apparaît « Manquante » alors
+        // que le prélèvement est bien présent (importé mais pas encore validé).
+        .neq("status", "ignored")
         .gte("operation_date", since),
       supabase.from("merchants").select("id, name"),
       getAccountDisplayMap(),
@@ -47,15 +50,13 @@ export async function getRecurringPatterns(): Promise<RecurringPatternView[]> {
     raw_label: t.raw_label,
     amount: Number(t.amount),
     operation_date: t.operation_date,
+    recurring_pattern_id: t.recurring_pattern_id,
   }));
 
   return (patterns ?? []).map((p) => {
-    let latest: string | null = p.last_seen_at;
-    for (const tx of txs) {
-      if (matchesPattern(p, tx) && (!latest || tx.operation_date > latest)) {
-        latest = tx.operation_date;
-      }
-    }
+    // Vu = occurrence rattachée au modèle OU qui le matche, tous statuts sauf
+    // ignorée (cf. `effectiveLastSeen`). `last_seen_at` sert de plancher.
+    const latest = effectiveLastSeen(p, p.id, txs, p.last_seen_at);
     const status = patternStatus(p, latest);
     const next = nextExpectedDate(latest, p.frequency_days);
     const cat = p.subcategory_id ? categories.get(p.subcategory_id) : undefined;

@@ -367,7 +367,9 @@ export async function POST(request: Request) {
         ...(effMerchant
           ? { merchantId: effMerchant, merchantName: merchantNames.get(effMerchant) ?? null }
           : {}),
-        ...(pattern ? { recurringName: pattern.name } : {}),
+        ...(pattern
+          ? { recurringId: pattern.id, recurringName: pattern.name }
+          : {}),
       };
     });
 
@@ -464,7 +466,7 @@ export async function POST(request: Request) {
       ...(effMerchant
         ? { merchantId: effMerchant, merchantName: merchantNames.get(effMerchant) ?? null }
         : {}),
-      ...(pattern ? { recurringName: pattern.name } : {}),
+      ...(pattern ? { recurringId: pattern.id, recurringName: pattern.name } : {}),
     };
   });
   const dupExisting = rows.filter((r) => r.duplicateReason === "existing").length;

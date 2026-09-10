@@ -59,6 +59,37 @@ export function labelPatterns(labelPattern: string | null): string[] {
     .filter(Boolean);
 }
 
+/** Transaction scannée pour l'état d'un modèle : ajoute le rattachement éventuel. */
+export interface ScannedTx extends MatchableTx {
+  recurring_pattern_id?: string | null;
+}
+
+/**
+ * Dernière occurrence effective d'un modèle : la date d'opération la plus récente
+ * parmi les transactions déjà rattachées au modèle OU qui le matchent (libellé +
+ * montant), quel que soit leur statut de validation (les ignorées sont exclues en
+ * amont). `floor` = `last_seen_at` persisté du modèle, utilisé comme plancher.
+ *
+ * On compte aussi les transactions non validées (« Nouvelle ») : une occurrence
+ * importée mais pas encore validée reste une occurrence — l'ignorer faisait
+ * apparaître le modèle « Manquante » alors que le prélèvement a bien eu lieu.
+ */
+export function effectiveLastSeen(
+  pattern: PatternLike,
+  patternId: string,
+  txs: ScannedTx[],
+  floor: string | null,
+): string | null {
+  let latest = floor;
+  for (const tx of txs) {
+    const linked =
+      tx.recurring_pattern_id != null && tx.recurring_pattern_id === patternId;
+    if (!linked && !matchesPattern(pattern, tx)) continue;
+    if (!latest || tx.operation_date > latest) latest = tx.operation_date;
+  }
+  return latest;
+}
+
 export type PatternStatus = "active" | "missing" | "upcoming";
 
 function addDays(date: string, days: number): Date {

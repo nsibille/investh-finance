@@ -4,7 +4,12 @@ import {
   recurringKey,
   type RecurringInput,
 } from "@/lib/recurring/detector";
-import { matchesPattern, patternStatus, labelPatterns } from "@/lib/recurring/checker";
+import {
+  matchesPattern,
+  patternStatus,
+  labelPatterns,
+  effectiveLastSeen,
+} from "@/lib/recurring/checker";
 
 const pat = (over: Partial<Parameters<typeof matchesPattern>[0]>) => ({
   account_id: null,
@@ -108,6 +113,47 @@ describe("matchesPattern", () => {
     expect(
       matchesPattern(pattern, { account_id: "a", raw_label: "AUTRE CHOSE", amount: -90.8, operation_date: "2026-05-07" }),
     ).toBe(false);
+  });
+});
+
+describe("effectiveLastSeen", () => {
+  const pattern = pat({ label_pattern: "GROUPE AGPM", expected_amount: -26.42 });
+  const tx = (over: Partial<{ operation_date: string; recurring_pattern_id: string | null; raw_label: string; amount: number }>) => ({
+    account_id: "a",
+    raw_label: "GROUPE AGPM",
+    amount: -26.42,
+    operation_date: "2026-07-01",
+    ...over,
+  });
+
+  it("counts a matching but not-yet-validated occurrence (avoids false 'missing')", () => {
+    // Occurrence importée en pending : elle doit compter comme « vue ».
+    const latest = effectiveLastSeen(pattern, "p1", [tx({ operation_date: "2026-08-03" })], "2026-07-01");
+    expect(latest).toBe("2026-08-03");
+  });
+
+  it("counts a transaction linked by recurring_pattern_id even if it no longer matches", () => {
+    const latest = effectiveLastSeen(
+      pattern,
+      "p1",
+      [tx({ operation_date: "2026-08-03", raw_label: "AUTRE", amount: -999, recurring_pattern_id: "p1" })],
+      null,
+    );
+    expect(latest).toBe("2026-08-03");
+  });
+
+  it("ignores transactions linked to a different pattern that don't match", () => {
+    const latest = effectiveLastSeen(
+      pattern,
+      "p1",
+      [tx({ operation_date: "2026-08-03", raw_label: "AUTRE", amount: -999, recurring_pattern_id: "p2" })],
+      "2026-07-01",
+    );
+    expect(latest).toBe("2026-07-01");
+  });
+
+  it("keeps the persisted floor when nothing newer is found", () => {
+    expect(effectiveLastSeen(pattern, "p1", [], "2026-07-01")).toBe("2026-07-01");
   });
 });
 

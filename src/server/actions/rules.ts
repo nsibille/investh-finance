@@ -10,6 +10,7 @@ import {
   type RuleApplyScope,
 } from "@/server/rules/apply";
 import { ensureNamelessMerchant } from "@/server/merchants/nameless";
+import { purgeNamelessLabelDuplicates } from "@/server/rules/reassign";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -189,6 +190,10 @@ export async function createRuleFromLabel(
   const supabase = await createClient();
   const merchantId = await ensureNamelessMerchant(supabase, subcategoryId);
   if (!merchantId) return { ok: false, error: "Enseigne sans nom impossible" };
+
+  // Réassignation : ce libellé pointait peut-être vers une autre catégorie côté
+  // « Sans enseigne ». On supprime l'ancien motif avant d'ajouter le nouveau.
+  await purgeNamelessLabelDuplicates(supabase, p, merchantId);
 
   const { data: existing } = await supabase
     .from("categorization_rules")

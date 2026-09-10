@@ -23,6 +23,11 @@ interface CategorySelectProps {
   invalid?: boolean;
   /** Active la création inline d'une catégorie / sous-catégorie depuis le menu. */
   allowCreate?: boolean;
+  /**
+   * Notifie le parent d'une catégorie créée à la volée (pour l'ajouter à ses
+   * propres options, ex. libellés d'une table). Appelé avant `onChange`.
+   */
+  onCreated?: (option: SubcategoryOption) => void;
 }
 
 const normalize = (s: string) =>
@@ -53,6 +58,7 @@ export function CategorySelect({
   placeholder = "Non catégorisée",
   invalid,
   allowCreate,
+  onCreated,
 }: CategorySelectProps) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -388,7 +394,10 @@ export function CategorySelect({
         };
       }
     }
-    if (newOption) setCreatedOptions((prev) => [...prev, newOption!]);
+    if (newOption) {
+      setCreatedOptions((prev) => [...prev, newOption!]);
+      onCreated?.(newOption);
+    }
     onChange(res.id);
     close();
   }

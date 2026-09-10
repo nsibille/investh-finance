@@ -169,6 +169,45 @@ export async function bulkValidate(ids: string[]): Promise<ActionResult> {
   });
 }
 
+export type BulkResult =
+  | { ok: true; applied: string[]; skipped: number }
+  | { ok: false; error: string };
+
+/**
+ * Modification groupée de catégorie. Les transactions rattachées à un achat
+ * (catégorie héritée, verrouillée) sont ignorées et comptées dans `skipped`.
+ * Une catégorie non nulle valide la transaction (même comportement que
+ * l'assignation unitaire depuis le listing) ; `null` retire la catégorie.
+ */
+export async function bulkSetSubcategory(
+  ids: string[],
+  subcategoryId: string | null,
+): Promise<BulkResult> {
+  if (ids.length === 0) return fail("Aucune transaction sélectionnée");
+  return guard("bulkSetSubcategory", async () => {
+    const supabase = await createClient();
+    const { data: txs, error: readErr } = await supabase
+      .from("transactions")
+      .select("id, purchase_id")
+      .in("id", ids);
+    if (readErr) return fail(readErr.message);
+    const targets = (txs ?? []).filter((t) => !t.purchase_id).map((t) => t.id);
+    const skipped = (txs ?? []).length - targets.length;
+    if (targets.length === 0) return { ok: true, applied: [], skipped };
+    const patch = subcategoryId
+      ? {
+          subcategory_id: subcategoryId,
+          status: "validated" as const,
+          validated_at: new Date().toISOString(),
+        }
+      : { subcategory_id: null };
+    const { error } = await supabase.from("transactions").update(patch).in("id", targets);
+    if (error) return fail(error.message);
+    revalidate();
+    return { ok: true, applied: targets, skipped };
+  });
+}
+
 /** Counts existing transactions whose raw label would match a candidate rule. */
 export async function previewRuleMatches(input: {
   match_type?: "regex" | "contains" | "exact";

@@ -103,6 +103,8 @@ export function PurchaseAttachModal({
   purchaseOptions,
   onAttach,
   fromTransaction,
+  simple = false,
+  title = "Rattacher à un achat",
 }: {
   open: boolean;
   onClose: () => void;
@@ -110,6 +112,12 @@ export function PurchaseAttachModal({
   onAttach: (option: PurchaseOption, choice: InstallmentChoice) => void;
   /** Si fourni, la création propose un plan de mensualités pré-rempli. */
   fromTransaction?: FromTransaction | null;
+  /**
+   * Mode simple (modification groupée) : pas d'étape « choisir l'échéance »,
+   * tout achat est rattaché en appariement auto.
+   */
+  simple?: boolean;
+  title?: string;
 }) {
   const toast = useToast();
   const [query, setQuery] = useState("");
@@ -143,7 +151,7 @@ export function PurchaseAttachModal({
   // Clic sur un achat existant : achat à échéancier → on choisit l'échéance ;
   // achat direct (sans mensualité) → rattachement simple immédiat.
   function pick(option: PurchaseOption) {
-    if (option.installmentMonths.length > 0) {
+    if (!simple && option.installmentMonths.length > 0) {
       setSelected(option);
     } else {
       attach(option, { mode: "auto" });
@@ -209,7 +217,7 @@ export function PurchaseAttachModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={selected ? "Choisir l'échéance à remplir" : "Rattacher à un achat"}
+      title={selected ? "Choisir l'échéance à remplir" : title}
     >
       {selected ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>

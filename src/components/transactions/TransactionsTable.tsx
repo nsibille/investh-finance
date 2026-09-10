@@ -16,8 +16,11 @@ import {
 } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { IconButton } from "@/components/ui/IconButton";
 import { CategoryInlineEditor } from "./CategoryInlineEditor";
+import { BulkActionBar } from "./BulkActionBar";
+import { useRowSelection } from "./useRowSelection";
 import { MerchantQuickView } from "@/components/merchants/MerchantQuickView";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
@@ -105,7 +108,9 @@ export function TransactionsTable({
   );
   const rowByKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
 
-  const keys = rows.map((r) => r.key);
+  const keys = useMemo(() => rows.map((r) => r.key), [rows]);
+  const selection = useRowSelection(keys);
+  const bulk = handlers.bulk;
   function nextKey(key: string): string | null {
     const i = keys.indexOf(key);
     return i >= 0 && i + 1 < keys.length ? keys[i + 1] : null;
@@ -117,9 +122,36 @@ export function TransactionsTable({
 
   return (
     <>
+      {bulk && (
+        <BulkActionBar
+          selectedKeys={selection.selectedKeys}
+          visibleCount={keys.length}
+          onToggleAll={selection.toggleAll}
+          onClear={selection.clear}
+          handlers={bulk}
+          subcategoryOptions={subcategoryOptions}
+          merchantOptions={merchantOptions}
+          purchaseOptions={purchaseOptions}
+        />
+      )}
       <table className="table-transactions-list">
         <thead>
           <tr>
+            {bulk && (
+              <th data-col="select">
+                <Checkbox
+                  checked={keys.length > 0 && selection.selectedKeys.length === keys.length}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        selection.selectedKeys.length > 0 &&
+                        selection.selectedKeys.length < keys.length;
+                  }}
+                  onChange={selection.toggleAll}
+                  aria-label="Tout sélectionner"
+                />
+              </th>
+            )}
             <th>Transaction</th>
             <th style={{ width: 160 }}>Compte · date</th>
             <th style={{ width: 208 }}>Catégorie</th>
@@ -140,7 +172,17 @@ export function TransactionsTable({
             const rawLabel = r.rawLabel ?? r.label;
 
             return (
-              <tr key={r.key}>
+              <tr key={r.key} data-selected={bulk && selection.isSelected(r.key) ? "true" : undefined}>
+                {bulk && (
+                  <td data-col="select">
+                    <Checkbox
+                      checked={selection.isSelected(r.key)}
+                      onClick={(e) => selection.toggle(r.key, e.shiftKey)}
+                      onChange={() => undefined}
+                      aria-label="Sélectionner la transaction"
+                    />
+                  </td>
+                )}
                 {/* — Colonne principale — */}
                 <td data-col="main">
                   <div className="tx-main">

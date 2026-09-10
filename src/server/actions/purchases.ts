@@ -371,6 +371,46 @@ export async function attachTransactionToPurchase(
   return { ok: true };
 }
 
+export type BulkAttachPurchaseResult =
+  | { ok: true; applied: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Rattachement groupé à un achat (mode « auto » : pas de choix d'échéance par
+ * transaction). La catégorie de l'achat est héritée et valide les transactions ;
+ * l'appariement automatique des échéances est rejoué une fois pour l'achat.
+ */
+export async function bulkAttachPurchase(
+  ids: string[],
+  purchaseId: string,
+): Promise<BulkAttachPurchaseResult> {
+  if (ids.length === 0) return fail("Aucune transaction sélectionnée");
+  const supabase = await createClient();
+  const { data: purchase } = await supabase
+    .from("purchases")
+    .select("subcategory_id")
+    .eq("id", purchaseId)
+    .maybeSingle();
+  if (!purchase) return fail("Achat introuvable");
+
+  const patch: TransactionUpdate = { purchase_id: purchaseId };
+  if (purchase.subcategory_id) {
+    patch.subcategory_id = purchase.subcategory_id;
+    patch.status = "validated";
+    patch.validated_at = new Date().toISOString();
+  }
+  const { data, error } = await supabase
+    .from("transactions")
+    .update(patch)
+    .in("id", ids)
+    .select("id");
+  if (error) return fail(error.message);
+  await matchPurchaseInstallments(purchaseId);
+  await touchPurchase(supabase, purchaseId);
+  revalidate();
+  return { ok: true, applied: (data ?? []).map((t) => t.id) };
+}
+
 /**
  * Rattache une transaction à un achat en remplissant une échéance
  * prévisionnelle précise (« transaction non matchée » de l'achat). L'échéance

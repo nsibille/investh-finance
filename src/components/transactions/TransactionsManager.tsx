@@ -16,6 +16,7 @@ import {
   validateTransaction,
   updateTransactionNote,
   deleteTransaction,
+  bulkSetSubcategory,
 } from "@/server/actions/transactions";
 import { Alert } from "@/components/ui/Alert";
 import { createCategoryOnTheFly } from "@/server/actions/categories";
@@ -24,11 +25,13 @@ import {
   attachTransactionToInstallment,
   createInstallmentForTransaction,
   detachTransaction,
+  bulkAttachPurchase,
 } from "@/server/actions/purchases";
 import {
   attachTransactionToMerchant,
   detachTransactionFromMerchant,
   addMerchantRule,
+  bulkAttachMerchant,
 } from "@/server/actions/merchants";
 import { deleteRule } from "@/server/actions/rules";
 import { installmentOccurrence } from "@/lib/purchases/installments";
@@ -456,7 +459,84 @@ export function TransactionsManager({
     router.refresh();
   }
 
+  // --- Modification groupée --------------------------------------------------
+  const plural = (n: number) => (n > 1 ? "s" : "");
+
+  async function bulkAssignCategory(ids: string[], subId: string | null) {
+    const res = await bulkSetSubcategory(ids, subId);
+    if (!res.ok) return toast.error(res.error);
+    for (const id of res.applied) {
+      patch(id, subId ? { subcategory_id: subId, status: "validated" } : { subcategory_id: null });
+    }
+    router.refresh();
+    const n = res.applied.length;
+    const skipped =
+      res.skipped > 0
+        ? ` · ${res.skipped} ignorée${plural(res.skipped)} (catégorie héritée d'un achat)`
+        : "";
+    toast.success(
+      subId
+        ? `${n} transaction${plural(n)} catégorisée${plural(n)} et validée${plural(n)}${skipped}`
+        : `Catégorie retirée sur ${n} transaction${plural(n)}${skipped}`,
+    );
+  }
+
+  async function bulkAttachMerchantAll(ids: string[], option: MerchantOption) {
+    const res = await bulkAttachMerchant(ids, option.id);
+    if (!res.ok) return toast.error(res.error);
+    for (const id of res.applied) {
+      patch(id, {
+        merchant: { id: option.id, name: option.name },
+        ...(res.subcategoryId
+          ? { subcategory_id: res.subcategoryId, status: "validated" as const }
+          : {}),
+      });
+    }
+    router.refresh();
+    const n = res.applied.length;
+    toast.success(
+      `Enseigne « ${option.name} » rattachée à ${n} transaction${plural(n)}` +
+        (res.subcategoryId ? " · catégorie de l'enseigne appliquée" : ""),
+    );
+  }
+
+  async function bulkAttachPurchaseAll(ids: string[], option: PurchaseOption) {
+    const res = await bulkAttachPurchase(ids, option.id);
+    if (!res.ok) return toast.error(res.error);
+    const startMonth = option.installmentMonths[0] ?? null;
+    for (const id of res.applied) {
+      const row = rowById.get(id);
+      const refMonth = row?.operation_date.slice(0, 7) ?? null;
+      patch(id, {
+        purchase: {
+          id: option.id,
+          name: option.name,
+          occurrence:
+            startMonth && refMonth ? installmentOccurrence(startMonth, refMonth) : null,
+          installmentTotal: option.installmentMonths.length,
+          endless: option.endless,
+        },
+        ...(option.subcategoryId
+          ? { subcategory_id: option.subcategoryId, status: "validated" as const }
+          : {}),
+        ...(option.merchantId
+          ? { merchant: { id: option.merchantId, name: option.merchantName ?? "" } }
+          : {}),
+      });
+    }
+    router.refresh();
+    const n = res.applied.length;
+    toast.success(`${n} transaction${plural(n)} rattachée${plural(n)} à l'achat « ${option.name} »`);
+  }
+
   const handlers: ListHandlers = {
+    bulk: {
+      onBulkAssignCategory: bulkAssignCategory,
+      onBulkAttachMerchant: bulkAttachMerchantAll,
+      onBulkAttachPurchase: bulkAttachPurchaseAll,
+      onCategoryCreated: (option) =>
+        setExtraOptions((prev) => (prev.some((o) => o.id === option.id) ? prev : [...prev, option])),
+    },
     onAssignCategory: assignCategory,
     onCreateCategory: createCategory,
     onAttachPurchase: attachPurchase,

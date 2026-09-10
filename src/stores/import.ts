@@ -61,6 +61,15 @@ interface ImportState {
   preview: ImportPreview | null;
   setPreview: (preview: ImportPreview | null) => void;
   patchRow: (index: number, patch: Partial<ImportPreviewRow>) => void;
+  /**
+   * Modification groupée : applique `fn` à chaque ligne dont l'index est dans
+   * `indices` (un seul `set`, quel que soit le nombre de lignes). `fn` renvoie
+   * `null` pour laisser la ligne intacte.
+   */
+  patchRows: (
+    indices: number[],
+    fn: (row: ImportPreviewRow, index: number) => Partial<ImportPreviewRow> | null,
+  ) => void;
   clear: () => void;
 }
 
@@ -85,5 +94,20 @@ export const useImportStore = create<ImportState>((set) => ({
           }
         : {},
     ),
+  patchRows: (indices, fn) =>
+    set((s) => {
+      if (!s.preview) return {};
+      const wanted = new Set(indices);
+      return {
+        preview: {
+          ...s.preview,
+          rows: s.preview.rows.map((r, i) => {
+            if (!wanted.has(i)) return r;
+            const patch = fn(r, i);
+            return patch ? { ...r, ...patch } : r;
+          }),
+        },
+      };
+    }),
   clear: () => set({ preview: null }),
 }));

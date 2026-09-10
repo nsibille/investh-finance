@@ -260,6 +260,12 @@ export function StatementImport({
     patchRow(index, { merchantId: null, merchantName: null });
   }
 
+  // Détache la ligne de sa récurrente (détectée ou choisie) : l'aperçu fait
+  // foi à l'import, le matching automatique ne la ré-attachera pas.
+  function detachRecurring(index: number) {
+    patchRow(index, { recurringId: null, recurringName: null });
+  }
+
   // Crée une récurrente à la volée depuis la ligne (nom libre) puis l'associe.
   async function createRecurring(index: number, name: string) {
     const row = useImportStore.getState().preview?.rows[index];
@@ -554,6 +560,8 @@ export function StatementImport({
       // L'aperçu fait foi pour l'enseigne (règle, achat ou choix manuel), y
       // compris le détachement explicite (null).
       base.merchant_id = r.merchantId ?? null;
+      // Idem pour la récurrente (détection, choix manuel ou détachement).
+      base.recurring_pattern_id = r.recurringId ?? null;
       if (r.persons && r.persons.personIds.length > 0) base.persons = r.persons;
       if (r.note?.trim()) base.note = r.note.trim();
       // Doublon déjà en base ré-inclus manuellement (déflagué) : force l'import
@@ -665,6 +673,7 @@ export function StatementImport({
     onDetachMerchant: (key) => detachMerchant(Number(key)),
     onAttachRecurring: (key, option) => attachRecurring(Number(key), option),
     onCreateRecurring: (key, name) => createRecurring(Number(key), name),
+    onDetachRecurring: (key) => detachRecurring(Number(key)),
     onSharePersons: (key, value) => patchRow(Number(key), { persons: value }),
     onSaveNote: (key, note) => patchRow(Number(key), { note }),
   };

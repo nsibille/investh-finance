@@ -112,19 +112,34 @@ export async function importParsedTransactions(
               ? null
               : outcome.merchant_id;
 
-        // Récurrentes : une transaction qui correspond à un modèle récurrent
-        // (libellé + montant) est marquée récurrente — à condition que
-        // l'enseigne du modèle ne contredise pas celle de la transaction.
-        const pattern = patterns.find(
-          (pat) =>
-            matchesPattern(pat, {
-              account_id: accountId,
-              raw_label: p.raw_label,
-              amount: p.amount,
-              operation_date: p.operation_date,
-            }) &&
-            merchantCompatible(authorityMerchant, recurringAcceptableMerchants(pat.merchant_id)),
-        );
+        // Récurrentes : l'aperçu fait foi quand il fournit `recurring_pattern_id`
+        // (détection, choix manuel ou détachement explicite = null). Sinon, une
+        // transaction qui correspond à un modèle récurrent (libellé + montant)
+        // est marquée récurrente — à condition que l'enseigne du modèle ne
+        // contredise pas celle de la transaction.
+        const explicitRecurring =
+          "recurring_pattern_id" in p ? (p.recurring_pattern_id ?? null) : undefined;
+        const pattern =
+          explicitRecurring !== undefined
+            ? explicitRecurring
+              ? patterns.find((pat) => pat.id === explicitRecurring)
+              : undefined
+            : patterns.find(
+                (pat) =>
+                  matchesPattern(pat, {
+                    account_id: accountId,
+                    raw_label: p.raw_label,
+                    amount: p.amount,
+                    operation_date: p.operation_date,
+                  }) &&
+                  merchantCompatible(
+                    authorityMerchant,
+                    recurringAcceptableMerchants(pat.merchant_id),
+                  ),
+              );
+        // Id retenu : choix explicite (même si le modèle n'est plus actif),
+        // sinon modèle détecté.
+        const recurringPatternId = explicitRecurring ?? pattern?.id ?? null;
         if (pattern) {
           // Catégorie héritée du modèle si la ligne n'en a pas encore.
           if (subcategoryId == null && pattern.subcategory_id) {
@@ -159,8 +174,8 @@ export async function importParsedTransactions(
           purchase_id: p.purchase_id ?? null,
           // Note libre saisie dans l'aperçu (annotation directe).
           note: p.note?.trim() ? p.note.trim() : null,
-          is_recurring: Boolean(pattern),
-          recurring_pattern_id: pattern?.id ?? null,
+          is_recurring: recurringPatternId != null,
+          recurring_pattern_id: recurringPatternId,
           // Ventilation entre personnes choisie dans l'aperçu (nature globale).
           split_nature:
             p.persons && p.persons.personIds.length > 0 ? p.persons.nature : null,

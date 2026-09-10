@@ -77,7 +77,7 @@ export interface EditorHandlers {
   onDetachMerchant: (key: string) => void;
   onAttachRecurring: (key: string, option: RecurringOption) => void;
   onCreateRecurring: (key: string, name: string) => void;
-  /** Détacher une récurrente (liste). Absent ⇒ pas de bouton détacher. */
+  /** Détacher une récurrente (liste et aperçu d'import). Absent ⇒ pas de bouton détacher. */
   onDetachRecurring?: (key: string) => void;
   onSharePersons: (
     key: string,

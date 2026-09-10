@@ -44,6 +44,12 @@ export interface ParsedTransaction {
    */
   merchant_id?: string | null;
   /**
+   * Récurrente choisie dans l'aperçu (détection automatique, choix manuel ou
+   * détachement explicite via `null`). Présente ⇒ fait foi ; absente ⇒ le
+   * matching des modèles récurrents décide à l'import.
+   */
+  recurring_pattern_id?: string | null;
+  /**
    * Ventilation entre personnes choisie dans l'aperçu : nature globale
    * (dette/cadeau) + personnes concernées. Le montant est réparti à parts
    * égales à l'import (ajustable ensuite à l'édition de la transaction).

@@ -32,11 +32,13 @@ export function MerchantAttachModal({
   merchantOptions,
   onAttach,
   defaultSubcategoryId = null,
+  title = "Rattacher à une enseigne",
 }: {
   open: boolean;
   onClose: () => void;
   merchantOptions: MerchantOption[];
   onAttach: (option: MerchantOption) => void;
+  title?: string;
   /**
    * Catégorie héritée à la création « à la volée » : l'enseigne créée depuis une
    * transaction hérite de la catégorie de celle-ci.
@@ -79,7 +81,7 @@ export function MerchantAttachModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Rattacher à une enseigne">
+    <Modal open={open} onClose={onClose} title={title}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
         <Input
           autoFocus

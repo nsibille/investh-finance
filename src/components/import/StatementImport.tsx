@@ -65,6 +65,7 @@ export function StatementImport({
   const preview = useImportStore((s) => s.preview);
   const setPreview = useImportStore((s) => s.setPreview);
   const patchRow = useImportStore((s) => s.patchRow);
+  const patchRows = useImportStore((s) => s.patchRows);
   const [accountId, setAccountId] = useState(accountOptions[0]?.id ?? "");
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -258,6 +259,12 @@ export function StatementImport({
 
   function detachMerchant(index: number) {
     patchRow(index, { merchantId: null, merchantName: null });
+  }
+
+  // Détache la ligne de sa récurrente (détectée ou choisie) : l'aperçu fait
+  // foi à l'import, le matching automatique ne la ré-attachera pas.
+  function detachRecurring(index: number) {
+    patchRow(index, { recurringId: null, recurringName: null });
   }
 
   // Crée une récurrente à la volée depuis la ligne (nom libre) puis l'associe.
@@ -554,6 +561,8 @@ export function StatementImport({
       // L'aperçu fait foi pour l'enseigne (règle, achat ou choix manuel), y
       // compris le détachement explicite (null).
       base.merchant_id = r.merchantId ?? null;
+      // Idem pour la récurrente (détection, choix manuel ou détachement).
+      base.recurring_pattern_id = r.recurringId ?? null;
       if (r.persons && r.persons.personIds.length > 0) base.persons = r.persons;
       if (r.note?.trim()) base.note = r.note.trim();
       // Doublon déjà en base ré-inclus manuellement (déflagué) : force l'import
@@ -653,9 +662,81 @@ export function StatementImport({
     [preview],
   );
 
+  // --- Modification groupée (aperçu) ---------------------------------------
+  // Action de masse explicite : on patche les lignes sans créer de règle ni
+  // d'apprentissage implicite (contrairement à l'assignation unitaire).
+  const plural = (n: number) => (n > 1 ? "s" : "");
+  const toIndices = (keys: string[]) => keys.map(Number).filter(Number.isInteger);
+
+  function bulkAssignCategory(keys: string[], subcategoryId: string | null) {
+    const indices = toIndices(keys);
+    patchRows(indices, () => ({ categoryId: subcategoryId }));
+    const n = indices.length;
+    toast.info(
+      subcategoryId
+        ? `${n} ligne${plural(n)} catégorisée${plural(n)} dans l'import.`
+        : `Catégorie retirée sur ${n} ligne${plural(n)}.`,
+    );
+  }
+
+  function bulkAttachMerchant(keys: string[], option: MerchantOption) {
+    setExtraMerchants((prev) => (prev.some((m) => m.id === option.id) ? prev : [...prev, option]));
+    let applied = 0;
+    let locked = 0;
+    patchRows(toIndices(keys), (row) => {
+      // Enseigne imposée par un achat : intouchable.
+      if (row.merchantLocked) {
+        locked += 1;
+        return null;
+      }
+      applied += 1;
+      return {
+        merchantId: option.id,
+        merchantName: option.name,
+        ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+      };
+    });
+    toast.info(
+      `Enseigne « ${option.name} » rattachée à ${applied} ligne${plural(applied)} dans l'import.` +
+        (locked > 0 ? ` ${locked} ignorée${plural(locked)} (enseigne imposée par un achat).` : ""),
+    );
+  }
+
+  function bulkAttachPurchase(keys: string[], option: PurchaseOption) {
+    setExtraPurchases((prev) => (prev.some((p) => p.id === option.id) ? prev : [...prev, option]));
+    const startMonth = option.installmentMonths[0] ?? null;
+    const indices = toIndices(keys);
+    patchRows(indices, (row) => {
+      const refMonth = row.operation_date.slice(0, 7);
+      return {
+        purchaseId: option.id,
+        purchaseName: option.name,
+        purchaseOccurrence: startMonth ? installmentOccurrence(startMonth, refMonth) : null,
+        purchaseInstallmentTotal: option.installmentMonths.length,
+        purchaseEndless: option.endless,
+        // Groupé = appariement auto (pas de choix d'échéance par ligne).
+        installmentId: null,
+        installmentCreate: false,
+        ...(option.subcategoryId ? { categoryId: option.subcategoryId } : {}),
+        ...(option.merchantId
+          ? { merchantId: option.merchantId, merchantName: option.merchantName, merchantLocked: true }
+          : {}),
+      };
+    });
+    const n = indices.length;
+    toast.info(`${n} ligne${plural(n)} rattachée${plural(n)} à l'achat « ${option.name} » dans l'import.`);
+  }
+
   // Adaptateur import : chaque action patche le store (persistance différée au
   // clic « Importer »), en réutilisant la logique existante (règles, toasts…).
   const editorHandlers: EditorHandlers = {
+    bulk: {
+      onBulkAssignCategory: bulkAssignCategory,
+      onBulkAttachMerchant: bulkAttachMerchant,
+      onBulkAttachPurchase: bulkAttachPurchase,
+      onCategoryCreated: (option) =>
+        setExtraOptions((prev) => (prev.some((o) => o.id === option.id) ? prev : [...prev, option])),
+    },
     onAssignCategory: (key, subId) => assignCategory(Number(key), subId),
     onCreateCategory: (key, name) => handleCreateCategory(Number(key), name),
     onAttachPurchase: (key, option, choice) =>
@@ -665,6 +746,7 @@ export function StatementImport({
     onDetachMerchant: (key) => detachMerchant(Number(key)),
     onAttachRecurring: (key, option) => attachRecurring(Number(key), option),
     onCreateRecurring: (key, name) => createRecurring(Number(key), name),
+    onDetachRecurring: (key) => detachRecurring(Number(key)),
     onSharePersons: (key, value) => patchRow(Number(key), { persons: value }),
     onSaveNote: (key, note) => patchRow(Number(key), { note }),
   };

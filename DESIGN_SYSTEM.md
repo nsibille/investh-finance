@@ -792,6 +792,33 @@ Variante pour confirmer une action destructive (avec `btn-danger-md`).
 .table-transactions tbody tr[data-selected="true"] { background: var(--color-brand-primary-50); }
 ```
 
+### `bulk-action-bar`
+**Barre de modification groupée** — partagée par l'aperçu d'import
+(`table-transaction-editor`) et la liste `/transactions`
+(`table-transactions-list`). Les deux tables gagnent une **colonne de sélection**
+(`th/td[data-col="select"]`, `input-checkbox` ; en-tête = tout sélectionner,
+état indéterminé si sélection partielle ; Maj+clic étend la sélection ; ligne
+cochée = `tr[data-selected="true"]` fond `--color-brand-primary-50`). Dès qu'une
+ligne est cochée, la barre apparaît au-dessus de la table (sticky `--z-sticky`,
+fond `--color-brand-primary-50`, bord `--color-brand-primary-200`, `radius-lg`) :
+- `bulk-action-bar__all` : case « tout » + compteur `bulk-action-bar__count`
+  (« N sélectionnées », tabular-nums) ;
+- `bulk-action-bar__actions` : `btn-secondary-sm` **Catégorie…** (modale
+  `modal-surface` avec `input-category-combobox` + Appliquer), **Enseigne…**
+  (`MerchantAttachModal`), **Achat…** (`PurchaseAttachModal` en mode `simple` :
+  appariement auto, pas de choix d'échéance par ligne) ;
+- `btn-ghost-sm` **Désélectionner**.
+- Sémantique : action de masse explicite → **aucune règle créée** (contrairement
+  à l'assignation unitaire). Liste : les transactions rattachées à un achat
+  gardent la catégorie de l'achat (comptées « ignorées » dans le toast) ; import :
+  les enseignes imposées par un achat (`merchantLocked`) ne sont pas écrasées.
+- La sélection est recoupée avec les lignes visibles (filtre « sans catégorie »
+  à l'import, pagination en liste) et se vide au changement de page.
+> Implémentation : `src/components/transactions/BulkActionBar.tsx` +
+> `useRowSelection.ts` ; handlers `EditorHandlers.bulk` fournis par
+> `StatementImport` (patch du store) et `TransactionsManager` (actions serveur
+> `bulkSetSubcategory` / `bulkAttachMerchant` / `bulkAttachPurchase`).
+
 ### `table-transaction-editor`
 **Table éditrice mutualisée** — partagée par l'aperçu d'import ET la liste des
 transactions (même niveau d'information, mêmes actions). Colonnes communes :
@@ -1233,6 +1260,7 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-status-validated` | Status | Badge transaction validée | auto |
 | `badge-tag-md` | Status | Badge tag libre | auto |
 | `btn-danger-md` | Bouton | Action destructive | auto |
+| `bulk-action-bar` | Tables | Barre de modification groupée (sélection multiple : catégorie / enseigne / achat) | auto |
 | `btn-ghost-md` | Bouton | Action tertiaire transparente md | auto |
 | `btn-ghost-sm` | Bouton | Action tertiaire transparente sm | auto |
 | `btn-icon-md` | Bouton | Bouton icône carré md | auto |

@@ -4,8 +4,11 @@ import { useMemo, useState } from "react";
 import { ShoppingBag, Store, Repeat, Users, X } from "lucide-react";
 import { Amount } from "@/components/ui/Amount";
 import { Dot } from "@/components/ui/Badge";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { CategoryInlineEditor } from "./CategoryInlineEditor";
 import { NoteCell } from "./NoteCell";
+import { BulkActionBar, type BulkHandlers } from "./BulkActionBar";
+import { useRowSelection } from "./useRowSelection";
 import { PurchaseAttachModal } from "@/components/import/PurchaseAttachModal";
 import { MerchantAttachModal } from "@/components/import/MerchantAttachModal";
 import { RecurringAttachModal } from "@/components/import/RecurringAttachModal";
@@ -77,13 +80,18 @@ export interface EditorHandlers {
   onDetachMerchant: (key: string) => void;
   onAttachRecurring: (key: string, option: RecurringOption) => void;
   onCreateRecurring: (key: string, name: string) => void;
-  /** Détacher une récurrente (liste). Absent ⇒ pas de bouton détacher. */
+  /** Détacher une récurrente (liste et aperçu d'import). Absent ⇒ pas de bouton détacher. */
   onDetachRecurring?: (key: string) => void;
   onSharePersons: (
     key: string,
     value: { nature: SplitNature; personIds: string[] } | null,
   ) => void;
   onSaveNote: (key: string, note: string) => void | Promise<void>;
+  /**
+   * Modification groupée (`bulk-action-bar`). Absent ⇒ pas de colonne de
+   * sélection.
+   */
+  bulk?: BulkHandlers;
 }
 
 /**
@@ -140,8 +148,13 @@ export function TransactionEditorTable({
   );
   const rowByKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
 
-  const visible = filterRow ? rows.filter(filterRow) : rows;
-  const visibleKeys = visible.map((r) => r.key);
+  const visible = useMemo(
+    () => (filterRow ? rows.filter(filterRow) : rows),
+    [rows, filterRow],
+  );
+  const visibleKeys = useMemo(() => visible.map((r) => r.key), [visible]);
+  const selection = useRowSelection(visibleKeys);
+  const bulk = handlers.bulk;
   function nextKey(key: string): string | null {
     const i = visibleKeys.indexOf(key);
     return i >= 0 && i + 1 < visibleKeys.length ? visibleKeys[i + 1] : null;
@@ -153,9 +166,36 @@ export function TransactionEditorTable({
 
   return (
     <>
+      {bulk && (
+        <BulkActionBar
+          selectedKeys={selection.selectedKeys}
+          visibleCount={visibleKeys.length}
+          onToggleAll={selection.toggleAll}
+          onClear={selection.clear}
+          handlers={bulk}
+          subcategoryOptions={subcategoryOptions}
+          merchantOptions={merchantOptions}
+          purchaseOptions={purchaseOptions}
+        />
+      )}
       <table className="table-transaction-editor">
         <thead>
           <tr>
+            {bulk && (
+              <th data-col="select">
+                <Checkbox
+                  checked={visibleKeys.length > 0 && selection.selectedKeys.length === visibleKeys.length}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        selection.selectedKeys.length > 0 &&
+                        selection.selectedKeys.length < visibleKeys.length;
+                  }}
+                  onChange={selection.toggleAll}
+                  aria-label="Tout sélectionner"
+                />
+              </th>
+            )}
             <th style={{ width: 104 }}>Date</th>
             {showAccount && <th style={{ width: 128 }}>Compte</th>}
             <th>Libellé</th>
@@ -171,7 +211,18 @@ export function TransactionEditorTable({
               key={r.key}
               data-excluded={r.dimmed || undefined}
               data-duplicate={r.isExistingDuplicate ? "existing" : undefined}
+              data-selected={bulk && selection.isSelected(r.key) ? "true" : undefined}
             >
+              {bulk && (
+                <td data-col="select">
+                  <Checkbox
+                    checked={selection.isSelected(r.key)}
+                    onClick={(e) => selection.toggle(r.key, e.shiftKey)}
+                    onChange={() => undefined}
+                    aria-label="Sélectionner la ligne"
+                  />
+                </td>
+              )}
               <td>{formatShortDate(r.operationDate)}</td>
 
               {showAccount && (

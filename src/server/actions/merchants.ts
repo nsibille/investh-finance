@@ -207,6 +207,49 @@ export async function attachTransactionToMerchant(
   return { ok: true, subcategoryId, merchantCategorized };
 }
 
+export type BulkAttachMerchantResult =
+  | { ok: true; applied: string[]; subcategoryId: string | null }
+  | { ok: false; error: string };
+
+/**
+ * Rattachement groupé d'une enseigne. Si l'enseigne a une catégorie par défaut,
+ * elle est appliquée et les transactions validées (comme le rattachement
+ * unitaire) ; sinon les transactions gardent leur catégorie. Aucune règle n'est
+ * créée (action de masse explicite, pas d'apprentissage implicite).
+ */
+export async function bulkAttachMerchant(
+  ids: string[],
+  merchantId: string,
+): Promise<BulkAttachMerchantResult> {
+  if (ids.length === 0) return fail("Aucune transaction sélectionnée");
+  const supabase = await createClient();
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("subcategory_id")
+    .eq("id", merchantId)
+    .maybeSingle();
+  if (!merchant) return fail("Enseigne introuvable");
+
+  const patch: TransactionUpdate = { merchant_id: merchantId };
+  if (merchant.subcategory_id) {
+    patch.subcategory_id = merchant.subcategory_id;
+    patch.status = "validated";
+    patch.validated_at = new Date().toISOString();
+  }
+  const { data, error } = await supabase
+    .from("transactions")
+    .update(patch)
+    .in("id", ids)
+    .select("id");
+  if (error) return fail(error.message);
+  revalidate();
+  return {
+    ok: true,
+    applied: (data ?? []).map((t) => t.id),
+    subcategoryId: merchant.subcategory_id,
+  };
+}
+
 export async function detachTransactionFromMerchant(
   transactionId: string,
 ): Promise<ActionResult> {

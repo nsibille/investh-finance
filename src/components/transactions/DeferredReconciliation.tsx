@@ -14,7 +14,7 @@ import {
   type DeferredAccountReconciliation,
   type DeferredMonth,
   type DeferredMonthStatus,
-} from "@/lib/transactions/deferredReconciliation";
+} from "@/lib/transactions/deferredTypes";
 
 const STATUS_LABEL: Record<DeferredMonthStatus, string> = {
   ok: "Concordant",

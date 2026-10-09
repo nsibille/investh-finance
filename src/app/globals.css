@@ -1650,6 +1650,56 @@ button.tx-meta--persons:hover { text-decoration: underline; }
   background: var(--color-bg-subtle); border-radius: var(--radius-sm); padding: 1px var(--space-2);
 }
 
+
+/* ── deferred-reconcile : contrôle des cartes à débit différé ── */
+.deferred-check {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2);
+  font-size: var(--text-xs); color: var(--color-text-secondary);
+  background: var(--color-bg-subtle); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3);
+}
+.deferred-check__gap, .deferred-month__gap { font-family: var(--font-mono); font-size: var(--text-sm); }
+
+.deferred-month {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border); border-left: 3px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.deferred-month[data-status="ok"] { border-left-color: var(--color-success, #10B981); }
+.deferred-month[data-status="gap"] { border-left-color: var(--color-warning, #F59E0B); }
+.deferred-month[data-status="missing"] { border-left-color: var(--color-danger, #EF4444); }
+.deferred-month[data-status="open"] { border-left-color: var(--color-brand-primary); }
+.deferred-month__head {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; width: 100%;
+  background: none; border: none; cursor: pointer; text-align: left; font: inherit;
+  padding: var(--space-3) var(--space-4); color: var(--color-text-primary);
+}
+.deferred-month__label { font-size: var(--text-sm); font-weight: var(--fw-semibold); min-width: 110px; }
+.deferred-month__label::first-letter { text-transform: uppercase; }
+.deferred-month__status {
+  font-size: var(--text-xs); font-weight: var(--fw-medium); border-radius: var(--radius-sm);
+  padding: 1px var(--space-2); background: var(--color-bg-subtle); color: var(--color-text-secondary);
+}
+.deferred-month[data-status="ok"] .deferred-month__status { background: var(--color-success-light); color: var(--color-success-dark); }
+.deferred-month[data-status="gap"] .deferred-month__status { background: var(--color-warning-light); color: var(--color-warning-dark); }
+.deferred-month[data-status="missing"] .deferred-month__status { background: var(--color-danger-light); color: var(--color-danger-dark); }
+.deferred-month[data-status="open"] .deferred-month__status { background: var(--color-brand-primary-50); color: var(--color-brand-primary); }
+.deferred-month__figures { display: flex; gap: var(--space-5); margin-left: auto; flex-wrap: wrap; }
+.deferred-month__figure { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 90px; }
+.deferred-month__caption { font-size: var(--text-xs); color: var(--color-text-muted); }
+.deferred-month__none { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-muted); }
+.deferred-month[data-status="gap"] .deferred-month__gap { color: var(--color-warning-dark); }
+.deferred-month__body {
+  display: flex; flex-direction: column; gap: var(--space-1);
+  border-top: 1px solid var(--color-border); padding: var(--space-2) var(--space-4) var(--space-3);
+}
+.deferred-line { display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 2px 0; }
+.deferred-line .tx-label-code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deferred-line__date { font-size: var(--text-xs); color: var(--color-text-muted); font-family: var(--font-mono); flex-shrink: 0; }
+.deferred-line[data-debit] { font-weight: var(--fw-semibold); border-bottom: 1px dashed var(--color-border); padding-bottom: var(--space-1); margin-bottom: var(--space-1); }
+@media (max-width: 640px) {
+  .deferred-month__figures { margin-left: 0; width: 100%; justify-content: space-between; gap: var(--space-2); }
+  .deferred-month__figure { min-width: 0; }
+}
 /* ================================================================
    merchant-quick-view — aperçu (lecture seule) d'une enseigne depuis la liste.
    Popover en portal : KPIs, 12 derniers mois, top catégories, lien fiche.

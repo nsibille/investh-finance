@@ -1071,6 +1071,13 @@ Composition : `deco-aurora-gradient` en background + `input-month-picker` + grid
 - **`transfer-pair`** (section repliable « Paires réconciliées », `transfer-section__toggle`) : les deux jambes empilées (`transfer-pair__legs`) + **Dissocier** (`btn-ghost-sm`).
 > Actions serveur `src/server/actions/transfers.ts` : `pairInternalTransfer` (apparie + catégorise + valide + groupe), `unpairInternalTransfer` (casse le groupe), `removeFromInternalTransfers` (sort des virements). Données : `src/lib/transactions/transfersReconciliation.ts`. Composant : `src/components/transactions/TransferReconciliation.tsx`. Badge de l'onglet = `countTransferOrphans()` (orphelins sans groupe).
 
+### `deferred-reconcile`
+**Contrôle des cartes à débit différé (`/transactions/deferred`, 4ᵉ onglet « Différés » de `nav-tabs`)** — sur un compte `is_deferred_card`, les paiements carte du mois M sont prélevés en une ligne « DEBIT DIFFERE » en fin de mois. Le solde du compte (vue `account_balances`) compte les paiements et **ignore** le prélèvement ; cet écran vérifie automatiquement (aucune saisie) que chaque mois a son prélèvement et que les montants concordent. Association au **mois civil** (un prélèvement daté du 1er au 5 solde le mois précédent) ; virements (`transfer_group_id` ou « Virement interne ») exclus des paiements. Un bloc par compte :
+- **`transfer-balance`** (réutilisé) : « écart non expliqué » = écarts des mois clos + paiements non prélevés ; vert quand 0.
+- **`deferred-check`** : le calcul final sur une ligne — Paiements carte = Prélevés + En cours + Non prélevés + Écarts.
+- **`deferred-month`** : une ligne repliable par mois, bord gauche coloré par `data-status` (`ok` vert, `gap` orange, `missing` rouge, `open` indigo = mois en cours non encore prélevé) ; en-tête = mois + `deferred-month__status` + chiffres (`deferred-month__figure` : nb paiements + total, prélevé, écart). Déplié : `deferred-line` (date mono + `tx-label-code` + `amount-display`), le prélèvement en premier (`data-debit`).
+> Données : `src/lib/transactions/deferredReconciliation.ts` (`reconcileDeferredAccount` pure, testée). Composant : `src/components/transactions/DeferredReconciliation.tsx`.
+
 ### `merchant-quick-view`
 **Aperçu (lecture seule) d'une enseigne** ouvert au clic sur son nom dans la liste (`tx-merchant`). Popover en portal (`mq-popover`, `position: fixed`, `z-popover`), stats chargées à la demande (`getMerchantQuickStats`) : en-tête (icône `Store` + nom + catégorie par défaut + En ligne/pays) → `mq-kpis` (Total dépensé · Transactions · Moy./mois, mono) → `mq-bars` (12 derniers mois, barres CSS normalisées) → `mq-cats` (top 4 catégories : pastille + nom + compteur + montant) → lien `mq-popover__link` « Voir la fiche de l'enseigne » (→ `entity-stats-page`). Pas d'édition. Ferme au clic dehors / Échap.
 > Implémentation : `src/components/merchants/MerchantQuickView.tsx` + `src/lib/merchants/stats.ts`.
@@ -1252,6 +1259,9 @@ Item résultat recherche : icône type + libellé + contexte (compte, date, cat�
 | `badge-status-duplicate` | Status | Badge import row doublon (en base) | auto |
 | `badge-status-duplicate-file` | Status | Badge import row doublon (dans le fichier) | auto |
 | `badge-status-forced` | Status | Badge import row doublon déflagué (ré-inclus, sera importé) | auto |
+| `deferred-check` | Métier | Calcul final du contrôle débit différé | auto |
+| `deferred-month` | Métier | Ligne mensuelle (paiements vs prélèvement) d'une carte différée | auto |
+| `deferred-reconcile` | Métier | Écran de contrôle des cartes à débit différé | auto |
 | `dup-badge-btn` | Status | Badge doublon cliquable (aperçu import) → `modal-duplicate-detail` | auto |
 | `dup-realign-hint` | Status | Indice « date recalée » (doublon carte à débit différé) | auto |
 | `badge-status-ignored` | Status | Badge transaction ignorée | auto |

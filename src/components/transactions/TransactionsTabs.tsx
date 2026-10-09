@@ -14,7 +14,8 @@ export function TransactionsTabs({
   const pathname = usePathname();
   const isPending = pathname.startsWith("/transactions/pending");
   const isTransfers = pathname.startsWith("/transactions/transfers");
-  const isAll = !isPending && !isTransfers;
+  const isDeferred = pathname.startsWith("/transactions/deferred");
+  const isAll = !isPending && !isTransfers && !isDeferred;
 
   return (
     <div className="nav-tabs" style={{ marginBottom: "var(--space-5)" }}>
@@ -38,6 +39,9 @@ export function TransactionsTabs({
       >
         Virements
         {transferAlerts > 0 && <CountBadge count={transferAlerts} />}
+      </Link>
+      <Link href="/transactions/deferred" className="nav-tabs-item" data-active={isDeferred}>
+        Différés
       </Link>
     </div>
   );
